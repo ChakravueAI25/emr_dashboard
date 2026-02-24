@@ -1,0 +1,2930 @@
+﻿import React, { useState, useEffect, useRef } from 'react';
+import {
+  Plus,
+  Trash2,
+  DollarSign,
+  Printer,
+  Download,
+  Save,
+  X,
+  Search,
+  CreditCard,
+  CheckCircle,
+  AlertCircle,
+  ChevronRight,
+  ChevronDown,
+  ChevronUp,
+  ArrowLeft,
+  User,
+  Calendar
+} from 'lucide-react';
+import { Card } from './ui/card';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { SurgerySelectionModal } from './SurgerySelectionModal';
+import API_ENDPOINTS from '../config/api';
+
+type InsuranceCategory = 'CGHS' | 'SGHS' | 'PRIVATE' | null;
+
+interface InsurancePlan {
+  company: string;
+  tpas: string[];
+  coveragePercent: number;
+}
+
+const MOCK_INSURANCE_PLANS: Record<
+  Exclude<InsuranceCategory, null>,
+  InsurancePlan[]
+> = {
+  CGHS: [
+    { company: 'CGHS Central', tpas: ['Gov TPA 1', 'Gov TPA 2'], coveragePercent: 90 }
+  ],
+  SGHS: [
+    { company: 'State Health Scheme', tpas: ['State TPA A', 'State TPA B'], coveragePercent: 85 }
+  ],
+  PRIVATE: [
+    { company: 'Star Health', tpas: ['MediAssist', 'FHPL'], coveragePercent: 80 },
+    { company: 'ICICI Lombard', tpas: ['Vidal', 'HealthIndia'], coveragePercent: 75 }
+  ]
+};
+
+// Surgery breakdown particular interface
+interface SurgeryParticular {
+  sNo: number;
+  particular: string;
+  cost: number;
+  qty: number;
+  netAmt: number;
+  grossAmt: number;
+}
+
+interface BillingItem {
+  id: string;
+  name: string;
+  category: string;
+  price: number;
+  quantity: number;
+  discount: number;
+  tax: number;
+  total: number;
+  surgeryBreakdown?: SurgeryParticular[];
+  totalGrossAmt?: number;
+  mouDiscount?: number;
+  receivedAmt?: number;
+  isExpanded?: boolean;
+  selectedPackage?: number; // Track which package is selected (35000, 40000, etc.)
+}
+
+// ============ SURGERY PACKAGE PRICING DATA ============
+// 18 Particulars with prices for each package (35K, 40K, 50K, 60K, 75K)
+type PackageAmount = 35000 | 40000 | 50000 | 60000 | 75000;
+
+interface PackageParticulars {
+  particulars: { particular: string; cost: number; qty: number }[];
+}
+
+const SURGERY_PACKAGES: Record<PackageAmount, PackageParticulars> = {
+  35000: {
+    particulars: [
+      { particular: 'SURGEON CHARGES', cost: 10000, qty: 1 },
+      { particular: 'ROOM CHARGES', cost: 1500, qty: 1 },
+      { particular: 'NURSING CHARGES', cost: 1500, qty: 1 },
+      { particular: 'Consumable Charges - 15\'LANCE TIP', cost: 170, qty: 1 },
+      { particular: 'Consumable Charges - 2.8MM SLIT KNIFE', cost: 500, qty: 1 },
+      { particular: 'Consumable Charges - DRAPES & SILICON SPEARS', cost: 120, qty: 1 },
+      { particular: 'Consumable Charges - STERILE GLOVES', cost: 115, qty: 3 },
+      { particular: 'Consumable Charges - STERILE GOWN SURGEON', cost: 355, qty: 1 },
+      { particular: 'Consumable Charges - EYE DRAPE', cost: 65, qty: 1 },
+      { particular: 'Consumable Charges - INTRA CATH', cost: 90, qty: 1 },
+      { particular: 'Consumable Charges - BSS POUCH', cost: 450, qty: 1 },
+      { particular: 'Consumable Charges - TROLLEY SHEET', cost: 45, qty: 1 },
+      { particular: 'Consumable Charges - VISCOMET', cost: 360, qty: 1 },
+      { particular: 'Consumable Charges - PHACO MICS TIP GENERIC', cost: 600, qty: 1 },
+      { particular: 'Consumable Charges - PHACO MICS CHAMBER', cost: 300, qty: 1 },
+      { particular: 'Consumable Charges - PHACO MICS SLEEVE', cost: 600, qty: 1 },
+      { particular: 'IOL CHARGES', cost: 12000, qty: 1 },
+      { particular: 'OPERATION THEATER CHARGES', cost: 6000, qty: 1 },
+    ]
+  },
+  40000: {
+    particulars: [
+      { particular: 'SURGEON CHARGES', cost: 10000, qty: 1 },
+      { particular: 'ROOM CHARGES', cost: 2000, qty: 1 },
+      { particular: 'NURSING CHARGES', cost: 2000, qty: 1 },
+      { particular: 'Consumable Charges - 15\'LANCE TIP', cost: 170, qty: 1 },
+      { particular: 'Consumable Charges - 2.8MM SLIT KNIFE', cost: 500, qty: 1 },
+      { particular: 'Consumable Charges - DRAPES & SILICON SPEARS', cost: 120, qty: 1 },
+      { particular: 'Consumable Charges - STERILE GLOVES', cost: 115, qty: 3 },
+      { particular: 'Consumable Charges - STERILE GOWN SURGEON', cost: 355, qty: 1 },
+      { particular: 'Consumable Charges - EYE DRAPE', cost: 65, qty: 1 },
+      { particular: 'Consumable Charges - INTRA CATH', cost: 90, qty: 1 },
+      { particular: 'Consumable Charges - BSS POUCH', cost: 450, qty: 1 },
+      { particular: 'Consumable Charges - TROLLEY SHEET', cost: 45, qty: 1 },
+      { particular: 'Consumable Charges - VISCOMET', cost: 360, qty: 1 },
+      { particular: 'Consumable Charges - PHACO MICS TIP GENERIC', cost: 600, qty: 1 },
+      { particular: 'Consumable Charges - PHACO MICS CHAMBER', cost: 300, qty: 1 },
+      { particular: 'Consumable Charges - PHACO MICS SLEEVE', cost: 600, qty: 1 },
+      { particular: 'IOL CHARGES', cost: 17000, qty: 1 },
+      { particular: 'OPERATION THEATER CHARGES', cost: 6000, qty: 1 },
+    ]
+  },
+  50000: {
+    particulars: [
+      { particular: 'SURGEON CHARGES', cost: 7500, qty: 1 },
+      { particular: 'ROOM CHARGES', cost: 500, qty: 1 },
+      { particular: 'NURSING CHARGES', cost: 1200, qty: 1 },
+      { particular: 'Consumable Charges - 15\'LANCE TIP', cost: 170, qty: 1 },
+      { particular: 'Consumable Charges - 2.8MM SLIT KNIFE', cost: 500, qty: 1 },
+      { particular: 'Consumable Charges - DRAPES & SILICON SPEARS', cost: 100, qty: 1 },
+      { particular: 'Consumable Charges - STERILE GLOVES', cost: 110, qty: 3 },
+      { particular: 'Consumable Charges - STERILE GOWN SURGEON', cost: 360, qty: 1 },
+      { particular: 'Consumable Charges - EYE DRAPE', cost: 60, qty: 1 },
+      { particular: 'Consumable Charges - INTRA CATH', cost: 90, qty: 1 },
+      { particular: 'Consumable Charges - BSS POUCH', cost: 450, qty: 1 },
+      { particular: 'Consumable Charges - TROLLEY SHEET', cost: 45, qty: 1 },
+      { particular: 'Consumable Charges - VISCOMET', cost: 360, qty: 1 },
+      { particular: 'Consumable Charges - PHACO MICS TIP GENERIC', cost: 600, qty: 1 },
+      { particular: 'Consumable Charges - PHACO MICS CHAMBER', cost: 300, qty: 1 },
+      { particular: 'Consumable Charges - PHACO MICS SLEEVE', cost: 600, qty: 1 },
+      { particular: 'IOL CHARGES', cost: 32835, qty: 1 },
+      { particular: 'OPERATION THEATER CHARGES', cost: 4000, qty: 1 },
+    ]
+  },
+  60000: {
+    particulars: [
+      { particular: 'SURGEON CHARGES', cost: 16000, qty: 1 },
+      { particular: 'ROOM CHARGES', cost: 2000, qty: 1 },
+      { particular: 'NURSING CHARGES', cost: 4000, qty: 1 },
+      { particular: 'Consumable Charges - 15\'LANCE TIP', cost: 180, qty: 1 },
+      { particular: 'Consumable Charges - 2.8MM SLIT KNIFE', cost: 500, qty: 1 },
+      { particular: 'Consumable Charges - DRAPES & SILICON SPEARS', cost: 120, qty: 1 },
+      { particular: 'Consumable Charges - STERILE GLOVES', cost: 110, qty: 3 },
+      { particular: 'Consumable Charges - STERILE GOWN SURGEON', cost: 360, qty: 1 },
+      { particular: 'Consumable Charges - EYE DRAPE', cost: 65, qty: 1 },
+      { particular: 'Consumable Charges - INTRA CATH', cost: 90, qty: 1 },
+      { particular: 'Consumable Charges - BSS POUCH', cost: 450, qty: 1 },
+      { particular: 'Consumable Charges - TROLLEY SHEET', cost: 45, qty: 1 },
+      { particular: 'Consumable Charges - VISCOMET', cost: 360, qty: 1 },
+      { particular: 'Consumable Charges - PHACO MICS TIP GENERIC', cost: 600, qty: 1 },
+      { particular: 'Consumable Charges - PHACO MICS CHAMBER', cost: 300, qty: 1 },
+      { particular: 'Consumable Charges - PHACO MICS SLEEVE', cost: 600, qty: 1 },
+      { particular: 'IOL CHARGES', cost: 24000, qty: 1 },
+      { particular: 'OPERATION THEATER CHARGES', cost: 10000, qty: 1 },
+    ]
+  },
+  75000: {
+    particulars: [
+      { particular: 'SURGEON CHARGES', cost: 16000, qty: 1 },
+      { particular: 'ROOM CHARGES', cost: 3000, qty: 1 },
+      { particular: 'NURSING CHARGES', cost: 4500, qty: 1 },
+      { particular: 'Consumable Charges - 15\'LANCE TIP', cost: 170, qty: 1 },
+      { particular: 'Consumable Charges - 2.8MM SLIT KNIFE', cost: 500, qty: 1 },
+      { particular: 'Consumable Charges - DRAPES & SILICON SPEARS', cost: 120, qty: 1 },
+      { particular: 'Consumable Charges - STERILE GLOVES', cost: 110, qty: 3 },
+      { particular: 'Consumable Charges - STERILE GOWN SURGEON', cost: 370, qty: 1 },
+      { particular: 'Consumable Charges - EYE DRAPE', cost: 65, qty: 1 },
+      { particular: 'Consumable Charges - INTRA CATH', cost: 90, qty: 1 },
+      { particular: 'Consumable Charges - BSS POUCH', cost: 550, qty: 1 },
+      { particular: 'Consumable Charges - TROLLEY SHEET', cost: 45, qty: 1 },
+      { particular: 'Consumable Charges - VISCOMET', cost: 360, qty: 1 },
+      { particular: 'Consumable Charges - PHACO MICS TIP GENERIC', cost: 700, qty: 1 },
+      { particular: 'Consumable Charges - PHACO MICS CHAMBER', cost: 500, qty: 1 },
+      { particular: 'Consumable Charges - PHACO MICS SLEEVE', cost: 700, qty: 1 },
+      { particular: 'IOL CHARGES', cost: 34000, qty: 1 },
+      { particular: 'OPERATION THEATER CHARGES', cost: 13000, qty: 1 },
+    ]
+  }
+};
+
+// Helper function to generate surgery breakdown from package
+const generateSurgeryBreakdown = (packageAmount: PackageAmount): SurgeryParticular[] => {
+  const packageData = SURGERY_PACKAGES[packageAmount];
+  return packageData.particulars.map((p, idx) => ({
+    sNo: idx + 1,
+    particular: p.particular,
+    cost: p.cost,
+    qty: p.qty,
+    netAmt: p.cost * p.qty,
+    grossAmt: p.cost * p.qty,
+  }));
+};
+
+// Default surgery breakdown templates (keep for backward compatibility)
+const DEFAULT_SURGERY_BREAKDOWN: Record<string, SurgeryParticular[]> = {
+  'Cataract Surgery (Phaco)': generateSurgeryBreakdown(35000),
+  'LASIK Surgery': [
+    { sNo: 1, particular: 'SURGEON CHARGES', cost: 15000, qty: 1, netAmt: 15000, grossAmt: 15000 },
+    { sNo: 2, particular: 'LASER CHARGES', cost: 25000, qty: 1, netAmt: 25000, grossAmt: 25000 },
+    { sNo: 3, particular: 'ROOM CHARGES', cost: 1000, qty: 1, netAmt: 1000, grossAmt: 1000 },
+    { sNo: 4, particular: 'NURSING CHARGES', cost: 2000, qty: 1, netAmt: 2000, grossAmt: 2000 },
+    { sNo: 5, particular: 'Consumable Charges - EYE DRAPE', cost: 500, qty: 2, netAmt: 1000, grossAmt: 1000 },
+    { sNo: 6, particular: 'Consumable Charges - STERILE GLOVES', cost: 110, qty: 4, netAmt: 440, grossAmt: 440 },
+    { sNo: 7, particular: 'MEDICATION', cost: 2500, qty: 1, netAmt: 2500, grossAmt: 2500 },
+    { sNo: 8, particular: 'OPERATION THEATER CHARGES', cost: 8000, qty: 1, netAmt: 8000, grossAmt: 8000 },
+  ]
+}
+
+interface IndividualBillingViewProps {
+  registrationId?: string;
+  onBack?: () => void;
+  currentUser?: string;
+}
+
+interface PatientSearchResult {
+  name: string;
+  registrationId: string;
+  phone?: string;
+  email?: string;
+}
+
+const COMMON_SERVICES = [
+  { id: 'S1', name: 'Consultation Fee', category: 'Service', price: 500 },
+  { id: 'S2', name: 'Follow-up Visit', category: 'Service', price: 300 },
+  { id: 'S3', name: 'OCT Scan - Bilateral', category: 'Investigation', price: 2500 },
+  { id: 'S4', name: 'Visual Field Test', category: 'Investigation', price: 1200 },
+  { id: 'S5', name: 'Fundus Photography', category: 'Investigation', price: 800 },
+  { id: 'S6', name: 'IOP Measurement', category: 'Investigation', price: 200 },
+  { id: 'S7', name: 'Refraction', category: 'Investigation', price: 150 },
+  { id: 'S8', name: 'Cataract Surgery (Phaco)', category: 'Surgery', price: 45000 },
+  { id: 'S9', name: 'LASIK Surgery', category: 'Surgery', price: 65000 },
+];
+
+export function IndividualBillingView({ registrationId: initialRegistrationId, onBack, currentUser }: IndividualBillingViewProps) {
+  const [patient, setPatient] = useState<any>(null);
+  const [items, setItems] = useState<BillingItem[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'Card' | 'UPI' | 'Insurance'>('Cash');
+  const [loading, setLoading] = useState(true);
+  const [selectedDoctor, setSelectedDoctor] = useState<string>('');
+  const [showCompanyTpaModal, setShowCompanyTpaModal] = useState(false);
+  const [newCompanyName, setNewCompanyName] = useState('');
+  const [newTpaNames, setNewTpaNames] = useState('');
+
+  // Patient search state
+  const [currentRegId, setCurrentRegId] = useState<string | undefined>(initialRegistrationId);
+  const [patientSearchQuery, setPatientSearchQuery] = useState('');
+  const [patientSearchResults, setPatientSearchResults] = useState<PatientSearchResult[]>([]);
+  const [showPatientDropdown, setShowPatientDropdown] = useState(false);
+  const [isSearchingPatient, setIsSearchingPatient] = useState(false);
+  const searchTimeoutRef = useRef<number | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Surgery breakdown expanded state
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+
+  // New Insurance & Coupon State
+  const [govtInsuranceEnabled, setGovtInsuranceEnabled] = useState(false);
+
+  const [insuranceCategory, setInsuranceCategory] = useState<InsuranceCategory>(null);
+  const [insuranceCompany, setInsuranceCompany] = useState('');
+  const [insuranceTPA, setInsuranceTPA] = useState('');
+  const [claimNumber, setClaimNumber] = useState('');
+
+  const [insuranceCovered, setInsuranceCovered] = useState(0);
+  const [patientPayable, setPatientPayable] = useState(0);
+
+  const [couponCode, setCouponCode] = useState('');
+  const [workerQuota, setWorkerQuota] = useState<any>(null);
+  const [discountAmount, setDiscountAmount] = useState(0);
+
+  // ============ SAVE AS PACKAGE STATE ============
+  const [showSaveAsPackagePopup, setShowSaveAsPackagePopup] = useState(false);
+  const [packageName, setPackageName] = useState('');
+  const [isSavingAsPackage, setIsSavingAsPackage] = useState(false);
+  const [savedPackages, setSavedPackages] = useState<any[]>([]);
+  const [loadingPackages, setLoadingPackages] = useState(false);
+
+  // ============ SURGERY TWO-BILL SYSTEM STATE ============
+  const [isSurgeryBillingMode, setIsSurgeryBillingMode] = useState(false);
+  const [surgeryBillStage, setSurgeryBillStage] = useState<'initial' | 'final'>('initial');
+  const [securityDeposit, setSecurityDeposit] = useState(0);
+  const [insuranceApprovedAmount, setInsuranceApprovedAmount] = useState(0);
+  const [existingInitialBill, setExistingInitialBill] = useState<any>(null);
+  const [existingSurgeryBills, setExistingSurgeryBills] = useState<any[]>([]);
+  const [showBillHistory, setShowBillHistory] = useState(false);
+
+  // Calculated amounts for final bill
+  const totalSurgeryCost = items.filter(i => i.category === 'Surgery').reduce((sum, i) => sum + i.total, 0);
+  const patientTotalShare = totalSurgeryCost - insuranceApprovedAmount;
+  const balancePayable = Math.max(0, patientTotalShare - securityDeposit);
+  const refundAmount = Math.abs(Math.min(0, patientTotalShare - securityDeposit));
+
+  // ============ DATE FIELDS & SURGERY SELECTION STATE ============
+  const [dateOfSurgery, setDateOfSurgery] = useState('');
+  const [dateOfDischarge, setDateOfDischarge] = useState('');
+  const [showSurgerySelectionModal, setShowSurgerySelectionModal] = useState(false);
+
+  // Fetch saved surgery packages when component mounts
+  useEffect(() => {
+    const fetchSavedPackages = async () => {
+      setLoadingPackages(true);
+      try {
+        const response = await fetch(API_ENDPOINTS.SURGERY_PACKAGES.GET_ALL);
+        if (response.ok) {
+          const data = await response.json();
+          setSavedPackages(data);
+        }
+      } catch (err) {
+        console.error('Error fetching packages:', err);
+      } finally {
+        setLoadingPackages(false);
+      }
+    };
+    fetchSavedPackages();
+  }, []);
+
+  // Patient search with debounce
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      window.clearTimeout(searchTimeoutRef.current);
+    }
+
+    if (!patientSearchQuery.trim()) {
+      setPatientSearchResults([]);
+      setShowPatientDropdown(false);
+      return;
+    }
+
+    setIsSearchingPatient(true);
+    searchTimeoutRef.current = window.setTimeout(async () => {
+      try {
+        const response = await fetch(`${API_ENDPOINTS.PATIENTS_SEARCH}?q=${encodeURIComponent(patientSearchQuery)}`);
+        if (response.ok) {
+          const data = await response.json();
+          setPatientSearchResults(data.results || []);
+          setShowPatientDropdown(true);
+        }
+      } catch (err) {
+        console.error('Patient search error:', err);
+      } finally {
+        setIsSearchingPatient(false);
+      }
+    }, 300);
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        window.clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [patientSearchQuery]);
+
+  // Select patient from search
+  const handleSelectPatient = async (selectedPatient: PatientSearchResult) => {
+    setCurrentRegId(selectedPatient.registrationId);
+    setPatientSearchQuery('');
+    setShowPatientDropdown(false);
+    setPatientSearchResults([]);
+
+    // Fetch full patient details
+    try {
+      setLoading(true);
+      const response = await fetch(API_ENDPOINTS.PATIENT(selectedPatient.registrationId));
+      if (response.ok) {
+        const data = await response.json();
+        setPatient(data);
+      }
+    } catch (err) {
+      console.error('Error fetching patient:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (currentRegId && currentRegId !== 'Not Assigned') {
+      fetchPatientDetails();
+      fetchWorkerQuota();
+      fetchSurgeryBills();
+    } else {
+      setLoading(false);
+    }
+  }, [currentRegId]);
+
+  const fetchWorkerQuota = async () => {
+    try {
+      const response = await fetch(API_ENDPOINTS.COUPONS.GET_QUOTA(currentUser || 'Admin'));
+      if (response.ok) {
+        const data = await response.json();
+        setWorkerQuota(data);
+      }
+    } catch (err) {
+      console.error('Error fetching quota:', err);
+    }
+  };
+
+  // Fetch existing surgery bills for the patient
+  const fetchSurgeryBills = async () => {
+    if (!currentRegId) return;
+    try {
+      const response = await fetch(API_ENDPOINTS.BILLING_SURGERY.GET_BILLS(currentRegId));
+      if (response.ok) {
+        const bills = await response.json();
+        setExistingSurgeryBills(bills);
+
+        // Check if there's a pending initial bill (for continuing to final bill)
+        const pendingInitial = bills.find((b: any) => b.billType === 'initial' && b.status !== 'settled');
+        if (pendingInitial) {
+          setExistingInitialBill(pendingInitial);
+          setDateOfDischarge(pendingInitial.dateOfDischarge || '');
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching surgery bills:', err);
+    }
+  };
+
+  const fetchPatientDetails = async () => {
+    if (!currentRegId || currentRegId === 'Not Assigned') {
+      setLoading(false);
+      return;
+    }
+    try {
+      setLoading(true);
+      const response = await fetch(API_ENDPOINTS.PATIENT(currentRegId));
+      if (!response.ok) throw new Error('Failed to fetch patient');
+      const data = await response.json();
+      setPatient(data);
+
+      // Auto-apply insurance details if present in patient data
+      const insurance = data.patientDetails?.insurance;
+      if (insurance && insurance.hasInsurance === true) {
+        setGovtInsuranceEnabled(true);
+
+        // Set insurance type (CGHS, SGHS, PRIVATE)
+        if (insurance.insuranceType) {
+          setInsuranceCategory(insurance.insuranceType as InsuranceCategory);
+        }
+
+        // Set company name
+        if (insurance.companyName) {
+          setInsuranceCompany(insurance.companyName);
+        }
+
+        // Set TPA name
+        if (insurance.tpaName) {
+          setInsuranceTPA(insurance.tpaName);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching patient:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const addItem = (service: typeof COMMON_SERVICES[0]) => {
+    const existing = items.find(i => i.id === service.id);
+    if (existing) {
+      setItems(items.map(i => i.id === service.id ? { ...i, quantity: i.quantity + 1, total: (i.quantity + 1) * i.price } : i));
+    } else {
+      // For surgery items, add default breakdown
+      const isSurgery = service.category === 'Surgery';
+      const defaultBreakdown = isSurgery ? DEFAULT_SURGERY_BREAKDOWN[service.name] : undefined;
+      const totalFromBreakdown = defaultBreakdown ? defaultBreakdown.reduce((sum, p) => sum + p.grossAmt, 0) : service.price;
+
+      setItems([...items, {
+        id: service.id,
+        name: service.name,
+        category: service.category,
+        price: isSurgery ? totalFromBreakdown : service.price,
+        quantity: 1,
+        discount: 0,
+        tax: 0,
+        total: isSurgery ? totalFromBreakdown : service.price,
+        surgeryBreakdown: defaultBreakdown ? [...defaultBreakdown] : undefined,
+        totalGrossAmt: defaultBreakdown ? totalFromBreakdown : undefined,
+        mouDiscount: 0,
+        receivedAmt: defaultBreakdown ? totalFromBreakdown : undefined,
+        isExpanded: false
+      }]);
+
+      // If surgery item is added, enable surgery billing mode
+      if (isSurgery) {
+        setIsSurgeryBillingMode(true);
+      }
+    }
+  };
+
+  // Check if any surgery item exists in the bill
+  useEffect(() => {
+    const hasSurgery = items.some(i => i.category === 'Surgery');
+    setIsSurgeryBillingMode(hasSurgery);
+  }, [items]);
+
+  // Toggle surgery breakdown expansion
+  const toggleItemExpansion = (itemId: string) => {
+    setExpandedItems(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(itemId)) {
+        newSet.delete(itemId);
+      } else {
+        newSet.add(itemId);
+      }
+      return newSet;
+    });
+  };
+
+  // Update surgery breakdown particular
+  const updateSurgeryParticular = (itemId: string, sNo: number, field: keyof SurgeryParticular, value: number | string) => {
+    setItems(items.map(item => {
+      if (item.id !== itemId || !item.surgeryBreakdown) return item;
+
+      const updatedBreakdown = item.surgeryBreakdown.map(p => {
+        if (p.sNo !== sNo) return p;
+        const updated = { ...p, [field]: value };
+        // Recalculate net and gross amounts
+        if (field === 'cost' || field === 'qty') {
+          updated.netAmt = Number(updated.cost) * Number(updated.qty);
+          updated.grossAmt = updated.netAmt;
+        }
+        return updated;
+      });
+
+      const totalGross = updatedBreakdown.reduce((sum, p) => sum + p.grossAmt, 0);
+      return {
+        ...item,
+        surgeryBreakdown: updatedBreakdown,
+        totalGrossAmt: totalGross,
+        total: totalGross - (item.mouDiscount || 0),
+        price: totalGross,
+        receivedAmt: totalGross - (item.mouDiscount || 0)
+      };
+    }));
+  };
+
+  // Apply package to surgery item - replaces all particulars with package prices
+  const applySurgeryPackage = (itemId: string, packageAmount: PackageAmount) => {
+    setItems(items.map(item => {
+      if (item.id !== itemId) return item;
+
+      const newBreakdown = generateSurgeryBreakdown(packageAmount);
+      const totalGross = newBreakdown.reduce((sum, p) => sum + p.grossAmt, 0);
+
+      return {
+        ...item,
+        surgeryBreakdown: newBreakdown,
+        selectedPackage: packageAmount,
+        totalGrossAmt: totalGross,
+        total: totalGross - (item.mouDiscount || 0),
+        price: totalGross,
+        receivedAmt: totalGross - (item.mouDiscount || 0)
+      };
+    }));
+  };
+
+  // Add new particular to surgery breakdown
+  const addSurgeryParticular = (itemId: string) => {
+    setItems(items.map(item => {
+      if (item.id !== itemId || !item.surgeryBreakdown) return item;
+
+      const newSNo = item.surgeryBreakdown.length + 1;
+      const newParticular: SurgeryParticular = {
+        sNo: newSNo,
+        particular: 'New Item',
+        cost: 0,
+        qty: 1,
+        netAmt: 0,
+        grossAmt: 0
+      };
+
+      return {
+        ...item,
+        surgeryBreakdown: [...item.surgeryBreakdown, newParticular]
+      };
+    }));
+  };
+
+  // Remove particular from surgery breakdown
+  const removeSurgeryParticular = (itemId: string, sNo: number) => {
+    setItems(items.map(item => {
+      if (item.id !== itemId || !item.surgeryBreakdown) return item;
+
+      const updatedBreakdown = item.surgeryBreakdown
+        .filter(p => p.sNo !== sNo)
+        .map((p, idx) => ({ ...p, sNo: idx + 1 }));
+
+      const totalGross = updatedBreakdown.reduce((sum, p) => sum + p.grossAmt, 0);
+      return {
+        ...item,
+        surgeryBreakdown: updatedBreakdown,
+        totalGrossAmt: totalGross,
+        total: totalGross - (item.mouDiscount || 0),
+        price: totalGross,
+        receivedAmt: totalGross - (item.mouDiscount || 0)
+      };
+    }));
+  };
+
+  // Update MOU discount for surgery
+  const updateMouDiscount = (itemId: string, discount: number) => {
+    setItems(items.map(item => {
+      if (item.id !== itemId) return item;
+      const totalGross = item.totalGrossAmt || item.total;
+      return {
+        ...item,
+        mouDiscount: discount,
+        total: totalGross - discount,
+        receivedAmt: totalGross - discount
+      };
+    }));
+  };
+
+  const removeItem = (id: string) => {
+    setItems(items.filter(i => i.id !== id));
+  };
+
+  const updateQuantity = (id: string, q: number) => {
+    setItems(items.map(i => i.id === id ? { ...i, quantity: Math.max(1, q), total: Math.max(1, q) * i.price } : i));
+  };
+
+  const subtotal = items.reduce((sum, i) => sum + i.total, 0);
+  const totalDiscount = items.reduce((sum, i) => sum + i.discount, 0);
+  const totalTax = 0; // FIXED: Removed GST calculation
+  const grandTotal = subtotal - totalDiscount - discountAmount;
+
+  // ============ SURGERY BILL FUNCTIONS ============
+
+  // Create Initial/Provisional Surgery Bill
+  const handleCreateInitialBill = async () => {
+    if (!patient || !currentRegId) {
+      alert('Please select a patient first');
+      return;
+    }
+
+    const surgeryItems = items.filter(i => i.category === 'Surgery');
+    if (surgeryItems.length === 0) {
+      alert('Please add at least one surgery item');
+      return;
+    }
+
+    if (!govtInsuranceEnabled) {
+      alert('Please enable insurance to create a surgery bill');
+      return;
+    }
+
+    if (securityDeposit <= 0) {
+      alert('Please enter the Security Deposit / Upfront Amount');
+      return;
+    }
+
+    try {
+      const billData = {
+        patientName: patient.name || '',
+        surgeryName: surgeryItems.map(s => s.name).join(', '),
+        surgeryBreakdown: surgeryItems.flatMap(s => s.surgeryBreakdown || []),
+        totalSurgeryCost: totalSurgeryCost,
+        hasInsurance: true,
+        insuranceType: insuranceCategory,
+        insuranceCompany: insuranceCompany,
+        insuranceTPA: insuranceTPA,
+        claimNumber: claimNumber,
+        estimatedInsuranceCoverage: insuranceCovered,
+        securityDeposit: securityDeposit,
+        securityDepositPaid: true,
+        securityDepositPaymentMethod: paymentMethod,
+        securityDepositDate: new Date().toISOString(),
+        estimatedPatientShare: patientPayable,
+        notes: 'Insurance Approval Pending',
+        createdBy: currentUser || 'BillingStaff',
+        dateOfSurgery: dateOfSurgery,
+        dateOfDischarge: dateOfDischarge,
+        items: surgeryItems.map(item => ({
+          description: item.name,
+          amount: item.price,
+          quantity: item.quantity
+        }))
+      };
+
+      const response = await fetch(API_ENDPOINTS.BILLING_SURGERY.CREATE_INITIAL(currentRegId), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(billData)
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        alert(`âœ… Initial Bill Created!\n\nBill ID: ${result.billId}\n\nSecurity Deposit of ₹${securityDeposit.toLocaleString('en-IN')} collected.\n\nInsurance approval pending.`);
+        handlePrintInitialBill(billData, result.billId);
+        fetchSurgeryBills(); // Refresh the list
+      } else {
+        const error = await response.json();
+        alert(`Error: ${error.detail || 'Failed to create initial bill'}`);
+      }
+    } catch (err) {
+      console.error('Error creating initial bill:', err);
+      alert('Failed to create initial bill. Please try again.');
+    }
+  };
+
+  // Create Final Settlement Surgery Bill
+  const handleCreateFinalBill = async () => {
+    if (!patient || !currentRegId) {
+      alert('Please select a patient first');
+      return;
+    }
+
+    if (!existingInitialBill && !surgeryBillStage) {
+      alert('No initial bill found. Please create an initial bill first.');
+      return;
+    }
+
+    if (insuranceApprovedAmount <= 0) {
+      alert('Please enter the Insurance Approved Amount (as per approval letter)');
+      return;
+    }
+
+    try {
+      const surgeryItems = items.filter(i => i.category === 'Surgery');
+
+      const billData = {
+        initialBillId: existingInitialBill?.billId || '',
+        patientName: patient.name || '',
+        surgeryName: existingInitialBill?.surgeryName || surgeryItems.map(s => s.name).join(', '),
+        surgeryBreakdown: existingInitialBill?.surgeryBreakdown || surgeryItems.flatMap(s => s.surgeryBreakdown || []),
+        totalSurgeryCost: existingInitialBill?.totalSurgeryCost || totalSurgeryCost,
+        hasInsurance: true,
+        insuranceType: existingInitialBill?.insuranceType || insuranceCategory,
+        insuranceCompany: existingInitialBill?.insuranceCompany || insuranceCompany,
+        insuranceTPA: existingInitialBill?.insuranceTPA || insuranceTPA,
+        claimNumber: claimNumber,
+        insuranceApprovedAmount: insuranceApprovedAmount,
+        insuranceClaimReference: '', // Can be added as input
+        insuranceApprovalDate: new Date().toISOString(),
+        securityDepositPaid: existingInitialBill?.securityDeposit || securityDeposit,
+        finalPaymentMethod: paymentMethod,
+        notes: '',
+        createdBy: currentUser || 'BillingStaff',
+        dateOfSurgery: dateOfSurgery,
+        dateOfDischarge: dateOfDischarge,
+        items: surgeryItems.map(item => ({
+          description: item.name,
+          amount: item.price,
+          quantity: item.quantity
+        }))
+      };
+
+      const response = await fetch(API_ENDPOINTS.BILLING_SURGERY.CREATE_FINAL(currentRegId), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(billData)
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        const calc = result.calculation;
+
+        let message = `âœ… Final Settlement Bill Created!\n\nBill ID: ${result.billId}\n\n`;
+        message += `ðŸ“Š Calculation Summary:\n`;
+        message += `• Total Surgery Cost: ₹${calc.totalSurgeryCost.toLocaleString('en-IN')}\n`;
+        message += `• Insurance Approved: ₹${calc.insuranceApprovedAmount.toLocaleString('en-IN')}\n`;
+        message += `• Patient's Share: ₹${calc.patientTotalShare.toLocaleString('en-IN')}\n`;
+        message += `• Security Deposit Paid: ₹${calc.securityDepositPaid.toLocaleString('en-IN')}\n\n`;
+
+        if (calc.balancePayable > 0) {
+          message += `ðŸ’° Balance Payable by Patient: ₹${calc.balancePayable.toLocaleString('en-IN')}`;
+        } else if (calc.refundAmount > 0) {
+          message += `ðŸ’µ Refund Due to Patient: ₹${calc.refundAmount.toLocaleString('en-IN')}`;
+        } else {
+          message += `âœ“ Bill Fully Settled - No Balance Due`;
+        }
+
+        alert(message);
+        handlePrintFinalBill(billData, result.billId, calc);
+        fetchSurgeryBills();
+        setExistingInitialBill(null); // Clear since it's now settled
+      } else {
+        const error = await response.json();
+        alert(`Error: ${error.detail || 'Failed to create final bill'}`);
+      }
+    } catch (err) {
+      console.error('Error creating final bill:', err);
+      alert('Failed to create final bill. Please try again.');
+    }
+  };
+
+  // Load existing initial bill data when continuing to final bill
+  const handleContinueToFinalBill = (initialBill: any) => {
+    setExistingInitialBill(initialBill);
+    setSurgeryBillStage('final');
+    setIsSurgeryBillingMode(true); // Enable surgery billing mode
+    setSecurityDeposit(initialBill.securityDeposit || 0);
+    setInsuranceCategory(initialBill.insuranceType);
+    setInsuranceCompany(initialBill.insuranceCompany);
+    setInsuranceTPA(initialBill.insuranceTPA);
+    setDateOfDischarge(initialBill.dateOfDischarge || '');
+    setGovtInsuranceEnabled(true);
+
+    // Scroll to the surgery billing section
+    setTimeout(() => {
+      const surgerySection = document.getElementById('surgery-billing-section');
+      if (surgerySection) {
+        surgerySection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 100);
+  };
+
+  const handleInsuranceToggle = (enabled: boolean) => {
+    setGovtInsuranceEnabled(enabled);
+
+    if (!enabled) {
+      setInsuranceCategory(null);
+      setInsuranceCompany('');
+      setInsuranceTPA('');
+      setInsuranceCovered(0);
+      setPatientPayable(grandTotal);
+    }
+  };
+
+  useEffect(() => {
+    const amount = grandTotal;
+    if (!govtInsuranceEnabled || !insuranceCategory || !insuranceCompany) {
+      setInsuranceCovered(0);
+      setPatientPayable(amount);
+      return;
+    }
+
+    const plan = MOCK_INSURANCE_PLANS[insuranceCategory]
+      .find(p => p.company === insuranceCompany);
+
+    if (!plan) return;
+
+    const covered = Math.round(
+      (amount * plan.coveragePercent) / 100
+    );
+
+    setInsuranceCovered(covered);
+    setPatientPayable(amount - covered);
+
+  }, [govtInsuranceEnabled, insuranceCategory, insuranceCompany, grandTotal]);
+
+  // Convert number to words (Indian format)
+  const numberToWords = (num: number): string => {
+    const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten',
+      'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+    const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+
+    if (num === 0) return 'Zero';
+
+    const convertLessThanThousand = (n: number): string => {
+      if (n < 20) return ones[n];
+      if (n < 100) return tens[Math.floor(n / 10)] + (n % 10 ? ' ' + ones[n % 10] : '');
+      return ones[Math.floor(n / 100)] + ' Hundred' + (n % 100 ? ' ' + convertLessThanThousand(n % 100) : '');
+    };
+
+    const convertToIndian = (n: number): string => {
+      if (n < 1000) return convertLessThanThousand(n);
+      if (n < 100000) {
+        return convertLessThanThousand(Math.floor(n / 1000)) + ' Thousand' + (n % 1000 ? ' ' + convertLessThanThousand(n % 1000) : '');
+      }
+      if (n < 10000000) {
+        return convertLessThanThousand(Math.floor(n / 100000)) + ' Lakh' + (n % 100000 ? ' ' + convertToIndian(n % 100000) : '');
+      }
+      return convertLessThanThousand(Math.floor(n / 10000000)) + ' Crore' + (n % 10000000 ? ' ' + convertToIndian(n % 10000000) : '');
+    };
+
+    const rupees = Math.floor(num);
+    const paise = Math.round((num - rupees) * 100);
+
+    let result = 'Rupees ' + convertToIndian(rupees);
+    if (paise > 0) {
+      result += ' and ' + convertToIndian(paise) + ' Paise';
+    }
+    return result + ' Only';
+  };
+
+  // ============ PRINT INITIAL SURGERY BILL ============
+  const handlePrintInitialBill = (billData: any, billId: string) => {
+    const today = new Date();
+    const dateStr = today.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const timeStr = today.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+
+    // Build surgery breakdown rows
+    let breakdownRows = '';
+    let sNo = 1;
+    (billData.surgeryBreakdown || []).forEach((item: any) => {
+      breakdownRows += `
+        <tr>
+          <td style="border: 1px solid #333; padding: 3px; text-align: center; font-size: 10px;">${sNo++}</td>
+          <td style="border: 1px solid #333; padding: 3px; font-size: 10px;">${item.particular}</td>
+          <td style="border: 1px solid #333; padding: 3px; text-align: right; font-size: 10px;">₹${item.cost?.toLocaleString('en-IN') || '0'}</td>
+          <td style="border: 1px solid #333; padding: 3px; text-align: center; font-size: 10px;">${item.qty || 1}</td>
+          <td style="border: 1px solid #333; padding: 3px; text-align: right; font-size: 10px;">₹${item.grossAmt?.toLocaleString('en-IN') || '0'}</td>
+        </tr>
+      `;
+    });
+
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Initial Surgery Bill - ${billId}</title>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { font-family: Arial, sans-serif; font-size: 11px; line-height: 1.2; color: #000; }
+          @page { size: A4; margin: 10mm; }
+          .invoice-container { max-width: 100%; margin: 0; padding: 0; page-break-after: always; }
+          .page-break { page-break-after: always; }
+          .page-number { position: fixed; bottom: 10mm; right: 10mm; font-size: 9px; }
+          .header { text-align: center; padding: 8px 0; border-bottom: 1px solid #333; background: linear-gradient(135deg, #f8f8f8 0%, #e8e8e8 100%); }
+          .hospital-name { font-size: 14px; font-weight: bold; color: #2c5282; margin: 2px 0; }
+          .bill-title { text-align: center; font-size: 13px; font-weight: bold; padding: 6px; background-color: #e67e22; color: white; letter-spacing: 1px; }
+          .pending-note { text-align: center; font-size: 10px; padding: 5px; background-color: #fff3cd; color: #856404; font-weight: bold; }
+          .patient-info { display: grid; grid-template-columns: 1fr 1fr; padding: 8px; border-bottom: 1px solid #333; gap: 5px; font-size: 10px; }
+          .info-row { display: flex; margin-bottom: 2px; }
+          .info-label { font-weight: bold; min-width: 100px; color: #333; }
+          .billing-table { width: 100%; border-collapse: collapse; }
+          .billing-table th { background-color: #e67e22; color: white; padding: 4px 3px; text-align: center; border: 1px solid #333; font-size: 9px; }
+          .totals-section { padding: 8px; border-top: 1px solid #333; }
+          .total-row { display: flex; justify-content: flex-end; margin-bottom: 3px; font-size: 10px; }
+          .total-label { font-weight: bold; min-width: 180px; text-align: right; padding-right: 15px; }
+          .total-value { min-width: 100px; text-align: right; font-weight: bold; }
+          .insurance-info { background-color: #e3f2fd; padding: 8px; margin: 8px 0; border: 1px solid #2196f3; font-size: 9px; }
+          .insurance-info h4 { margin-bottom: 5px; color: #1565c0; font-size: 10px; }
+          .insurance-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+          .footer { padding: 10px; border-top: 1px solid #333; margin-top: 10px; font-size: 9px; }
+          .signature-box { text-align: center; padding-top: 15px; }
+          .signature-line { border-top: 1px solid #333; width: 100px; margin: 0 auto; padding-top: 2px; font-size: 9px; }
+          @media print { body { padding: 0; margin: 0; } .invoice-container { border: none; } }
+        </style>
+      </head>
+      <body>
+        <div class="invoice-container">
+          <div class="header" style="display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: center; padding: 8px 0;">
+            <div style="text-align: left; font-size: 8px; line-height: 1.3;">
+              <div style="font-weight: bold; font-size: 9px; margin-bottom: 2px;">SPARK EYE CARE HOSPITAL</div>
+              <div><strong>Malakpet:</strong> 182-705/5/12/A, Hyderabad 500008</div>
+              <div><strong>Ph:</strong> 040-24542000</div>
+            </div>
+            
+            <div style="text-align: center;">
+              <img src="/Hospital.png" alt="SPARK Logo" style="max-width: 80px; height: auto;">
+              <div style="font-size: 10px; font-weight: bold; margin-top: 4px;">SPARK</div>
+            </div>
+            
+            <div style="text-align: right; font-size: 8px; line-height: 1.3;">
+              <div style="font-weight: bold; font-size: 9px; margin-bottom: 2px;">SPARK EYE CARE HOSPITAL</div>
+              <div><strong>Secunderabad:</strong> 1st Floor, Metro Pillar 1033, 500020</div>
+              <div><strong>Ph:</strong> 090-29500266</div>
+            </div>
+          </div>
+          
+          <div class="bill-title">IP INTIAL  BILL</div>
+          <div class="pending-note">âš ï¸ FINAL APPROVAL PENDING - This is a provisional bill</div>
+          
+          <div class="patient-info">
+            <div>
+              <div class="info-row"><span class="info-label">Bill No:</span> <span>${billId}</span></div>
+              <div class="info-row"><span class="info-label">Patient Name:</span> <span>${billData.patientName}</span></div>
+              <div class="info-row"><span class="info-label">Reg. ID:</span> <span>${currentRegId}</span></div>
+            </div>
+            <div>
+              <div class="info-row"><span class="info-label">Date:</span> <span>${dateStr}</span></div>
+              <div class="info-row"><span class="info-label">Time:</span> <span>${timeStr}</span></div>
+              <div class="info-row"><span class="info-label">Admission Date:</span> <span>${billData.admissionDate || dateStr}</span></div>
+              <div class="info-row"><span class="info-label">Discharge Date:</span> <span>${billData.dateOfDischarge || '-'}</span></div>
+            </div>
+          </div>
+          
+          <div class="insurance-info">
+            <h4>ðŸ¥ Insurance Information</h4>
+            <div class="insurance-grid">
+              <div><strong>Type:</strong> ${billData.insuranceType}</div>
+              <div><strong>Company:</strong> ${billData.insuranceCompany}</div>
+              <div><strong>TPA:</strong> ${billData.insuranceTPA}</div>
+              ${billData.claimNumber ? `<div style="grid-column: span 2;"><strong>Claim Number:</strong> ${billData.claimNumber}</div>` : ''}
+            </div>
+          </div>
+          
+          <div style="padding: 6px 0;">
+            <h4 style="margin-bottom: 4px; border-bottom: 1px solid #1565c0; padding-bottom: 4px; font-size: 10px;">ðŸ’Š Surgery: ${billData.surgeryName}</h4>
+            <table class="billing-table">
+              <thead>
+                <tr>
+                  <th style="width: 30px;">S.No</th>
+                  <th>Particulars</th>
+                  <th style="width: 70px;">Cost</th>
+                  <th style="width: 40px;">Qty</th>
+                  <th style="width: 70px;">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${breakdownRows}
+              </tbody>
+              <tfoot>
+                <tr style="background-color: #f5f5f5;">
+                  <td colspan="4" style="border: 1px solid #333; padding: 4px; text-align: right; font-weight: bold; font-size: 10px;">Total:</td>
+                  <td style="border: 1px solid #333; padding: 4px; text-align: right; font-weight: bold; font-size: 11px;">₹${billData.totalSurgeryCost?.toLocaleString('en-IN')}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          
+          <div class="totals-section">
+            <div class="total-row">
+              <span class="total-label">Total Surgery Cost:</span>
+              <span class="total-value">₹${billData.totalSurgeryCost?.toLocaleString('en-IN')}</span>
+            </div>
+          </div>
+          
+          <div class="footer">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+              <div class="signature-box">
+                <div class="signature-line">Patient Signature</div>
+              </div>
+              <div class="signature-box">
+                <div class="signature-line">Billing Staff</div>
+              </div>
+            </div>
+            <div style="text-align: center; margin-top: 10px; font-size: 8px; color: #666;">
+              Note: This is a provisional bill. Final bill will be generated after insurance approval.
+            </div>
+          </div>
+          <div class="page-number">Page 1</div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(printContent);
+      printWindow.document.close();
+      printWindow.onload = () => {
+        printWindow.print();
+      };
+    }
+  };
+
+  // ============ PRINT FINAL SURGERY BILL ============
+  const handlePrintFinalBill = (billData: any, billId: string, calculation: any) => {
+    const today = new Date();
+    const dateStr = today.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const timeStr = today.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+
+    // Build surgery breakdown rows
+    let breakdownRows = '';
+    let sNo = 1;
+    (billData.surgeryBreakdown || []).forEach((item: any) => {
+      breakdownRows += `
+        <tr>
+          <td style="border: 1px solid #333; padding: 6px; text-align: center;">${sNo++}</td>
+          <td style="border: 1px solid #333; padding: 6px;">${item.particular}</td>
+          <td style="border: 1px solid #333; padding: 6px; text-align: right;">₹${item.cost?.toLocaleString('en-IN') || '0'}</td>
+          <td style="border: 1px solid #333; padding: 6px; text-align: center;">${item.qty || 1}</td>
+          <td style="border: 1px solid #333; padding: 6px; text-align: right;">₹${item.grossAmt?.toLocaleString('en-IN') || '0'}</td>
+        </tr>
+      `;
+    });
+
+    const hasBalance = calculation.balancePayable > 0;
+    const hasRefund = calculation.refundAmount > 0;
+    const isSettled = !hasBalance && !hasRefund;
+
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>IP Final  Bill - ${billId}</title>
+        <style>
+          @page { size: A4; margin: 10mm; }
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { font-family: Arial, sans-serif; font-size: 11px; line-height: 1.2; color: #000; padding: 0; }
+          .invoice-container { max-width: 100%; border: 1px solid #333; padding: 0; }
+          .header { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 2px solid #333; }
+          .hospital-name { font-size: 24px; font-weight: bold; color: #2c5282; margin: 5px 0; }
+          .bill-title { text-align: center; font-size: 16px; font-weight: bold; padding: 6px; background-color: #27ae60; color: white; letter-spacing: 2px; }
+          .patient-info { display: grid; grid-template-columns: 1fr 1fr; padding: 8px; border-bottom: 1px solid #333; gap: 3px; }
+          .info-row { display: flex; margin-bottom: 3px; }
+          .info-label { font-weight: bold; min-width: 110px; color: #333; }
+          .billing-table { width: 100%; border-collapse: collapse; }
+          .billing-table th { background-color: #27ae60; color: white; padding: 4px 3px; text-align: center; border: 1px solid #333; font-size: 9px; }
+          .billing-table td { font-size: 10px; }
+          .totals-section { padding: 8px; border-top: 2px solid #333; }
+          .total-row { display: flex; justify-content: flex-end; margin-bottom: 6px; }
+          .total-label { font-weight: bold; min-width: 200px; text-align: right; padding-right: 15px; }
+          .total-value { min-width: 100px; text-align: right; font-weight: bold; }
+          .final-amount { font-size: 15px; border: 2px solid ${hasBalance ? '#e74c3c' : '#27ae60'}; padding: 10px; margin: 8px; border-radius: 6px; background: ${hasBalance ? '#fdf2f2' : '#e8f8f0'}; text-align: center; }
+          .insurance-info { background-color: #f7f7f7; padding: 8px; margin: 8px; border-radius: 6px; border: 1px solid #27ae60; }
+          .calculation-table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+          .calculation-table td { padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px; }
+          .footer { padding: 10px; border-top: 1px solid #333; margin-top: 10px; }
+          .signature-box { text-align: center; padding-top: 15px; }
+          .signature-line { border-top: 1px solid #333; width: 120px; margin: 0 auto; padding-top: 3px; font-size: 9px; }
+          .page-break { page-break-after: always; }
+          .page-number { position: fixed; bottom: 10mm; right: 10mm; font-size: 9px; color: #666; }
+          @media print { body { padding: 0; } .invoice-container { border: none; } }
+        </style>
+      </head>
+      <body>
+        <div class="invoice-container" style="padding: 8px;">
+          <div class="header" style="display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 2px solid #333;">
+            <!-- Left Address -->
+            <div style="text-align: left; font-size: 9px; line-height: 1.3;">
+              <div style="font-weight: bold; font-size: 10px; margin-bottom: 2px;">SPARK EYE CARE HOSPITAL</div>
+              <div><strong>Malakpet:</strong></div>
+              <div>182-705/5/12/A Opp Reliance Trand,</div>
+              <div>New Malakpet, Hyderabad 500008</div>
+              <div style="margin-top: 3px;"><strong>Phone:</strong> 040-24542000</div>
+            </div>
+            
+            <!-- Center Logo -->
+            <div style="text-align: center;">
+              <img src="/Hospital.png" alt="SPARK Logo" style="max-width: 100px; height: auto; margin: 0 auto;">
+              <div style="font-size: 10px; font-weight: bold; margin-top: 3px;">SPARK</div>
+              <div style="font-size: 8px; color: #666;">Eye Care Hospital</div>
+            </div>
+            
+            <!-- Right Address -->
+            <div style="text-align: right; font-size: 9px; line-height: 1.3;">
+              <div style="font-weight: bold; font-size: 10px; margin-bottom: 6px;">SPARK EYE CARE HOSPITAL</div>
+              <div><strong>Secunderabad:</strong></div>
+              <div>1st Floor Vijeetha Sanjeerani Apts,</div>
+              <div>Metro Pillar 1033, Opp Gandhi Hospital,</div>
+              <div>Musheerabad, Telangana 500020</div>
+              <div style="margin-top: 3px;"><strong>Phone:</strong> 090-29500266</div>
+            </div>
+          </div>
+          
+          <div class="bill-title">IP FINAL BILL</div>
+          
+          <div class="patient-info">
+            <div>
+              <div class="info-row"><span class="info-label">Bill No:</span> <span>${billId}</span></div>
+              <div class="info-row"><span class="info-label">Patient Name:</span> <span>${billData.patientName}</span></div>
+              <div class="info-row"><span class="info-label">Reg. ID:</span> <span>${currentRegId}</span></div>
+              ${billData.initialBillId ? `<div class="info-row"><span class="info-label">Initial Bill:</span> <span>${billData.initialBillId}</span></div>` : ''}
+            </div>
+            <div>
+              <div class="info-row"><span class="info-label">Date:</span> <span>${dateStr}</span></div>
+              <div class="info-row"><span class="info-label">Time:</span> <span>${timeStr}</span></div>
+              <div class="info-row"><span class="info-label">Admission Date:</span> <span>${billData.admissionDate || dateStr}</span></div>
+              <div class="info-row"><span class="info-label">Discharge Date:</span> <span>${billData.dateOfDischarge || '-'}</span></div>
+            </div>
+          </div>
+          
+          <div class="insurance-info">
+            <h4 style="margin-bottom: 6px; color: #27ae60; font-size: 10px;">âœ“ Insurance Approved</h4>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 10px;">
+              <div><strong>Type:</strong> ${billData.insuranceType}</div>
+              <div><strong>Company:</strong> ${billData.insuranceCompany}</div>
+              <div><strong>TPA:</strong> ${billData.insuranceTPA}</div>
+              <div><strong>Approved Amount:</strong> <span style="color: #27ae60; font-weight: bold;">₹${calculation.insuranceApprovedAmount?.toLocaleString('en-IN')}</span></div>
+              ${billData.claimNumber ? `<div style="grid-column: span 2;"><strong>Claim Number:</strong> ${billData.claimNumber}</div>` : ''}
+            </div>
+          </div>
+          
+          <div style="padding: 8px;">
+            <h4 style="margin-bottom: 6px; border-bottom: 1px solid #27ae60; padding-bottom: 4px; font-size: 10px;">ðŸ’Š Surgery: ${billData.surgeryName}</h4>
+            <h4 style="margin-bottom: 6px; color: #666; font-size: 9px;">Breakdown - Surgery Particulars</h4>
+            <table class="billing-table">
+              <thead>
+                <tr>
+                  <th style="width: 40px;">S.No</th>
+                  <th>Particulars</th>
+                  <th style="width: 80px;">Cost</th>
+                  <th style="width: 50px;">Qty</th>
+                  <th style="width: 80px;">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${breakdownRows}
+              </tbody>
+              <tfoot>
+                <tr style="background-color: #f5f5f5;">
+                  <td colspan="4" style="border: 1px solid #333; padding: 4px 3px; text-align: right; font-weight: bold; font-size: 10px;">Total Surgery Cost:</td>
+                  <td style="border: 1px solid #333; padding: 4px 3px; text-align: right; font-weight: bold; font-size: 11px;">₹${calculation.totalSurgeryCost?.toLocaleString('en-IN')}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          
+          <div style="padding: 8px;">
+            <h4 style="margin-bottom: 6px; font-size: 10px;">ðŸ’° Settlement Calculation</h4>
+            <table class="calculation-table">
+              <tr>
+                <td>Total Surgery Cost</td>
+                <td style="text-align: right; font-weight: bold;">₹${calculation.totalSurgeryCost?.toLocaleString('en-IN')}</td>
+              </tr>
+              <tr>
+                <td>Insurance Approved Amount</td>
+                <td style="text-align: right; color: #27ae60; font-weight: bold;">- ₹${calculation.insuranceApprovedAmount?.toLocaleString('en-IN')}</td>
+              </tr>
+              <tr style="background-color: #f5f5f5;">
+                <td><strong>Patient's Total Share</strong></td>
+                <td style="text-align: right; font-weight: bold;">₹${calculation.patientTotalShare?.toLocaleString('en-IN')}</td>
+              </tr>
+              <tr style="border-top: 2px solid #333;">
+                <td><strong>${hasBalance ? 'Balance Payable by Patient' : 'Final Balance'}</strong></td>
+                <td style="text-align: right; font-size: 12px; font-weight: bold; color: ${hasBalance ? '#e74c3c' : '#27ae60'};">
+                  ${hasBalance ? '₹' + calculation.balancePayable?.toLocaleString('en-IN') : '₹0 (Settled)'}
+                </td>
+              </tr>
+            </table>
+          </div>
+          
+          <div class="final-amount">
+            ${hasBalance ? `
+              <div style="font-size: 11px; color: #e74c3c;">Balance Payable by Patient</div>
+              <div style="font-size: 18px; font-weight: bold; color: #e74c3c;">₹${calculation.balancePayable?.toLocaleString('en-IN')}</div>
+            ` : `
+              <div style="font-size: 11px; color: #27ae60;">âœ“ Bill Fully Settled</div>
+              <div style="font-size: 16px; font-weight: bold; color: #27ae60;">No Balance Due</div>
+            `}
+          </div>
+          
+          <div class="footer">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; font-size: 9px;">
+              <div class="signature-box">
+                <div class="signature-line">Patient Signature</div>
+              </div>
+              <div class="signature-box">
+                <div class="signature-line">Billing Staff</div>
+              </div>
+            </div>
+            <div style="text-align: center; margin-top: 10px; font-size: 8px; color: #666;">
+              This is a computer-generated final settlement bill.
+            </div>
+          </div>
+          <div class="page-number">Page 1</div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(printContent);
+      printWindow.document.close();
+      printWindow.onload = () => {
+        printWindow.print();
+      };
+    }
+  };
+
+  const handlePrint = () => {
+    if (!patient) {
+      alert('Please select a patient first');
+      return;
+    }
+
+    // Generate unique invoice number
+    const invoiceNo = `INV-${new Date().getFullYear()}-${Date.now().toString(36).toUpperCase()}`;
+    const today = new Date();
+    const dateStr = today.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const timeStr = today.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+
+    // Calculate totals
+    const totalGross = items.reduce((sum, item) => sum + (item.totalGrossAmt || item.total), 0);
+    const totalMouDiscount = items.reduce((sum, item) => sum + (item.mouDiscount || 0), 0);
+    const receivedAmount = totalGross - totalMouDiscount;
+
+    // Create billData object for print template
+    const formatDate = (dateStr: string) => {
+      if (!dateStr) return '';
+      const [year, month, day] = dateStr.split('-');
+      return `${day}/${month}/${year}`;
+    };
+
+    const billData = {
+      patientName: patient?.name || '',
+      admissionDate: formatDate(dateOfSurgery) || dateStr,
+      dateOfDischarge: formatDate(dateOfDischarge) || '',
+      insuranceType: insuranceCategory || '',
+      insuranceCompany: insuranceCompany || '',
+      insuranceTPA: insuranceTPA || '',
+      claimNumber: claimNumber || ''
+    };
+
+    // Build invoice rows from surgery breakdown or regular items
+    let invoiceRows = '';
+    let sNo = 1;
+
+    items.forEach(item => {
+      if (item.surgeryBreakdown && item.surgeryBreakdown.length > 0) {
+        // Add surgery name as header
+        invoiceRows += `
+          <tr style="background-color: #f5f5f5;">
+            <td colspan="6" style="border: 1px solid #333; padding: 8px; font-weight: bold; font-size: 13px;">
+              ${item.name}
+            </td>
+          </tr>
+        `;
+
+        // Add breakdown items
+        item.surgeryBreakdown.forEach(part => {
+          invoiceRows += `
+            <tr>
+              <td style="border: 1px solid #333; padding: 6px; text-align: center;">${sNo}</td>
+              <td style="border: 1px solid #333; padding: 6px;">${part.particular}</td>
+              <td style="border: 1px solid #333; padding: 6px; text-align: right;">₹${part.cost.toLocaleString('en-IN')}</td>
+              <td style="border: 1px solid #333; padding: 6px; text-align: center;">${part.qty}</td>
+              <td style="border: 1px solid #333; padding: 6px; text-align: right;">₹${part.netAmt.toLocaleString('en-IN')}</td>
+              <td style="border: 1px solid #333; padding: 6px; text-align: right;">₹${part.grossAmt.toLocaleString('en-IN')}</td>
+            </tr>
+          `;
+          sNo++;
+        });
+
+        // Add subtotal row for this surgery
+        invoiceRows += `
+          <tr style="background-color: #e8e8e8;">
+            <td colspan="4" style="border: 1px solid #333; padding: 6px; text-align: right; font-weight: bold;">Subtotal (${item.name}):</td>
+            <td style="border: 1px solid #333; padding: 6px; text-align: right; font-weight: bold;">₹${(item.totalGrossAmt || item.total).toLocaleString('en-IN')}</td>
+            <td style="border: 1px solid #333; padding: 6px; text-align: right; font-weight: bold;">₹${(item.totalGrossAmt || item.total).toLocaleString('en-IN')}</td>
+          </tr>
+        `;
+      } else {
+        // Regular service item
+        invoiceRows += `
+          <tr>
+            <td style="border: 1px solid #333; padding: 6px; text-align: center;">${sNo}</td>
+            <td style="border: 1px solid #333; padding: 6px;">${item.name}</td>
+            <td style="border: 1px solid #333; padding: 6px; text-align: right;">₹${item.price.toLocaleString('en-IN')}</td>
+            <td style="border: 1px solid #333; padding: 6px; text-align: center;">${item.quantity}</td>
+            <td style="border: 1px solid #333; padding: 6px; text-align: right;">₹${item.total.toLocaleString('en-IN')}</td>
+            <td style="border: 1px solid #333; padding: 6px; text-align: right;">₹${item.total.toLocaleString('en-IN')}</td>
+          </tr>
+        `;
+        sNo++;
+      }
+    });
+
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Invoice - ${invoiceNo}</title>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { 
+            font-family: Arial, sans-serif; 
+            font-size: 12px; 
+            line-height: 1.4;
+            color: #000;
+            padding: 20px;
+          }
+          .invoice-container {
+            max-width: 800px;
+            margin: 0 auto;
+            border: 2px solid #333;
+            padding: 0;
+          }
+          .header {
+            text-align: center;
+            padding: 15px;
+            border-bottom: 2px solid #333;
+            background: linear-gradient(135deg, #f8f8f8 0%, #e8e8e8 100%);
+          }
+          .header img {
+            max-height: 60px;
+            margin-bottom: 5px;
+          }
+          .hospital-name {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2c5282;
+            margin: 5px 0;
+          }
+          .hospital-subtitle {
+            font-size: 11px;
+            color: #666;
+          }
+          .hospital-contact {
+            font-size: 10px;
+            color: #555;
+            margin-top: 5px;
+          }
+          .bill-title {
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+            padding: 10px;
+            background-color: #2c5282;
+            color: white;
+            letter-spacing: 2px;
+          }
+          .patient-info {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            padding: 15px;
+            border-bottom: 1px solid #333;
+            gap: 10px;
+          }
+          .info-row {
+            display: flex;
+            margin-bottom: 4px;
+          }
+          .info-label {
+            font-weight: bold;
+            min-width: 120px;
+            color: #333;
+          }
+          .info-value {
+            color: #000;
+          }
+          .billing-table {
+            width: 100%;
+            border-collapse: collapse;
+          }
+          .billing-table th {
+            background-color: #2c5282;
+            color: white;
+            padding: 10px 6px;
+            text-align: center;
+            border: 1px solid #333;
+            font-size: 11px;
+          }
+          .billing-table td {
+            font-size: 11px;
+          }
+          .totals-section {
+            padding: 15px;
+            border-top: 2px solid #333;
+          }
+          .total-row {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 8px;
+          }
+          .total-label {
+            font-weight: bold;
+            min-width: 200px;
+            text-align: right;
+            padding-right: 20px;
+          }
+          .total-value {
+            min-width: 120px;
+            text-align: right;
+            font-weight: bold;
+          }
+          .grand-total {
+            font-size: 16px;
+            color: #2c5282;
+            border-top: 2px solid #333;
+            padding-top: 10px;
+            margin-top: 10px;
+          }
+          .amount-words {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #f5f5f5;
+            border: 1px solid #ddd;
+            font-style: italic;
+          }
+          .footer {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            padding: 20px;
+            border-top: 1px solid #333;
+            margin-top: 20px;
+          }
+          .signature-box {
+            text-align: center;
+            padding-top: 40px;
+          }
+          .signature-line {
+            border-top: 1px solid #333;
+            width: 150px;
+            margin: 0 auto;
+            padding-top: 5px;
+          }
+          .thank-you {
+            text-align: center;
+            padding: 10px;
+            background-color: #2c5282;
+            color: white;
+            font-size: 11px;
+          }
+          @media print {
+            body { padding: 0; }
+            .invoice-container { border: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="invoice-container">
+          <div class="header">
+            <img src="/Hospital.png" alt="Hospital Logo" onerror="this.style.display='none'"/>
+            <div class="hospital-name">SPARK Eye Care Hospital</div>
+            <div class="hospital-subtitle">Excellence in Eye Care & Surgery</div>
+            <div class="hospital-contact">
+              ðŸ“ 123 Medical Center Road, Healthcare District | ðŸ“ž +91 9876543210 | âœ‰ info@sparkeyecare.com
+            </div>
+          </div>
+          
+          <div class="bill-title">IP FINAL BILL</div>
+          
+          <div class="patient-info">
+            <div>
+              <div class="info-row">
+                <span class="info-label">Patient Name:</span>
+                <span class="info-value">${patient?.name || 'N/A'}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Registration ID:</span>
+                <span class="info-value">${patient?.registrationId || 'N/A'}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Age / Gender:</span>
+                <span class="info-value">${patient?.demographics?.age || patient?.patientDetails?.age || patient?.age || 'N/A'}Y / ${patient?.demographics?.sex || patient?.patientDetails?.sex || patient?.sex || 'N/A'}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Phone:</span>
+                <span class="info-value">${patient?.contactInfo?.phone || 'N/A'}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Address:</span>
+                <span class="info-value">${patient?.contactInfo?.address || patient?.demographics?.address || 'N/A'}</span>
+              </div>
+            </div>
+            <div>
+              <div class="info-row">
+                <span class="info-label">Invoice No:</span>
+                <span class="info-value">${invoiceNo}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Date:</span>
+                <span class="info-value">${dateStr}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Time:</span>
+                <span class="info-value">${timeStr}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Payment Mode:</span>
+                <span class="info-value">${paymentMethod}</span>
+              </div>
+              ${selectedDoctor ? `
+              <div class="info-row">
+                <span class="info-label">Consulting Doctor:</span>
+                <span class="info-value">${selectedDoctor}</span>
+              </div>
+              ` : ''}
+              ${govtInsuranceEnabled ? `
+              <div class="info-row">
+                <span class="info-label">Insurance:</span>
+                <span class="info-value">${insuranceCompany} (${insuranceCategory})</span>
+              </div>
+              ` : ''}
+            </div>
+          </div>
+
+          <table class="billing-table">
+            <thead>
+              <tr>
+                <th style="width: 50px;">S.No</th>
+                <th>Particulars</th>
+                <th style="width: 100px;">Cost</th>
+                <th style="width: 60px;">Qty</th>
+                <th style="width: 100px;">Net Amt</th>
+                <th style="width: 100px;">Gross Amt</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${invoiceRows}
+            </tbody>
+          </table>
+
+          <div class="totals-section">
+            <div class="total-row">
+              <span class="total-label">Total Gross Amount:</span>
+              <span class="total-value">₹${totalGross.toLocaleString('en-IN')}</span>
+            </div>
+            ${totalMouDiscount > 0 ? `
+            <div class="total-row">
+              <span class="total-label">MOU Discount:</span>
+              <span class="total-value" style="color: #e53e3e;">- ₹${totalMouDiscount.toLocaleString('en-IN')}</span>
+            </div>
+            ` : ''}
+            ${govtInsuranceEnabled ? `
+            <div class="total-row">
+              <span class="total-label">Insurance Covered:</span>
+              <span class="total-value" style="color: #38a169;">- ₹${insuranceCovered.toLocaleString('en-IN')}</span>
+            </div>
+            <div class="total-row grand-total">
+              <span class="total-label">Patient Payable:</span>
+              <span class="total-value">₹${patientPayable.toLocaleString('en-IN')}</span>
+            </div>
+            ` : `
+            <div class="total-row grand-total">
+              <span class="total-label">Amount Received:</span>
+              <span class="total-value">₹${receivedAmount.toLocaleString('en-IN')}</span>
+            </div>
+            `}
+            
+            <div class="amount-words">
+              <strong>Amount in Words:</strong> ${numberToWords(govtInsuranceEnabled ? patientPayable : receivedAmount)}
+            </div>
+          </div>
+
+          <div class="footer">
+            <div class="signature-box">
+              <div class="signature-line">Patient Signature</div>
+            </div>
+            <div class="signature-box">
+              <div class="signature-line">Authorized Signatory</div>
+            </div>
+          </div>
+
+          <div class="thank-you">
+            Thank you for choosing SPARK Eye Care Hospital. Get well soon! ðŸ™
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    // Open print window
+    const printWindow = window.open('', '_blank', 'width=900,height=700');
+    if (printWindow) {
+      printWindow.document.write(printContent);
+      printWindow.document.close();
+
+      // Wait for content to load then print
+      printWindow.onload = () => {
+        printWindow.focus();
+        printWindow.print();
+      };
+    } else {
+      alert('Please allow popups to print the invoice');
+    }
+  };
+
+  const handleSaveBill = async (status: 'paid' | 'pending' | 'draft' = 'paid') => {
+    if (!currentRegId || items.length === 0) {
+      alert('Please select a patient and add items to the bill first.');
+      return;
+    }
+
+    try {
+      const isSurgery = items.some(item => item.category === 'Surgery');
+
+      // Prepare items with surgery breakdown for surgery items
+      const itemsWithBreakdown = items.map(item => {
+        if (item.category === 'Surgery' && item.surgeryBreakdown) {
+          return {
+            name: item.name,
+            category: item.category,
+            quantity: item.quantity,
+            price: item.price,
+            total: item.total,
+            surgeryBreakdown: item.surgeryBreakdown,
+            selectedPackage: item.selectedPackage, // Track which IOL package was selected
+            totalGrossAmt: item.totalGrossAmt,
+            mouDiscount: item.mouDiscount || 0,
+            receivedAmt: item.receivedAmt
+          };
+        }
+        return {
+          name: item.name,
+          category: item.category,
+          quantity: item.quantity,
+          price: item.price,
+          total: item.total
+        };
+      });
+
+      const response = await fetch(API_ENDPOINTS.BILLING_INVOICES(currentRegId), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          service: items.map(i => i.name).join(', '),
+          serviceItems: itemsWithBreakdown, // Include full items with breakdown
+          amount: subtotal + totalTax, // Total bill amount including tax
+          status: status,
+          insuranceCovered: govtInsuranceEnabled ? insuranceCovered : 0,
+          insuranceStatus: govtInsuranceEnabled ? 'claimed' : 'none',
+          patientResponsibility: govtInsuranceEnabled ? patientPayable : grandTotal,
+          patientPaidAmount: govtInsuranceEnabled ? patientPayable : grandTotal,
+          couponCode: couponCode,
+          appliedBy: currentUser || 'Admin',
+          discountAmount: discountAmount + totalDiscount,
+          notes: `Payment via ${paymentMethod}. ${govtInsuranceEnabled ? `Insurance Claim: ${insuranceCompany} - ${insuranceTPA}` : ''}`,
+          // New Multi-stage tracking fields
+          isSurgeryCase: isSurgery,
+          expectedFromInsurance: govtInsuranceEnabled ? insuranceCovered : 0,
+          upfrontPaid: govtInsuranceEnabled ? patientPayable : 0
+        })
+      });
+
+      if (response.ok) {
+        alert(status === 'draft' ? 'Draft saved successfully!' : 'Bill processed successfully!');
+
+        // Show popup to save as package if it's a surgery item
+        const hasSurgeryItems = items.some(item => item.category === 'Surgery');
+        if (hasSurgeryItems && status === 'paid') {
+          setShowSaveAsPackagePopup(true);
+        }
+
+        // Notify BillingDashboardView to refresh stats
+        window.dispatchEvent(new CustomEvent('billingUpdated', {
+          detail: {
+            registrationId: currentRegId,
+            invoiceId: currentRegId
+          }
+        }));
+
+        if (onBack && !hasSurgeryItems) onBack();
+      } else {
+        const errData = await response.json();
+        alert(`Error: ${errData.detail || 'Failed to process bill'}`);
+      }
+    } catch (err) {
+      console.error('Error saving bill:', err);
+      alert('Network error. Please check if the server is running.');
+    }
+  };
+
+  const handleSaveAsPackage = async () => {
+    if (!packageName.trim()) {
+      alert('Please enter a package name');
+      return;
+    }
+
+    setIsSavingAsPackage(true);
+
+    try {
+      const surgeryItems = items.filter(item => item.category === 'Surgery');
+      const packageItems = surgeryItems.flatMap(item => {
+        if (item.surgeryBreakdown) {
+          return item.surgeryBreakdown.map(breakdown => ({
+            description: breakdown.particular,
+            amount: breakdown.grossAmt,
+            // Store full breakdown data to preserve structure when loading
+            breakdown: {
+              sNo: breakdown.sNo,
+              particular: breakdown.particular,
+              cost: breakdown.cost,
+              qty: breakdown.qty,
+              netAmt: breakdown.netAmt,
+              grossAmt: breakdown.grossAmt,
+            }
+          }));
+        }
+        return [{
+          description: item.name,
+          amount: item.total,
+        }];
+      });
+
+      const response = await fetch(API_ENDPOINTS.SURGERY_PACKAGES.CREATE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          packageName: packageName,
+          items: packageItems,
+          description: `Surgery package with ${packageItems.length} items`,
+          createdBy: currentUser || 'System'
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save package');
+      }
+
+      alert('Package saved successfully! You can now reuse it for future surgeries.');
+      setShowSaveAsPackagePopup(false);
+      setPackageName('');
+      // Refresh packages list
+      const packagesRes = await fetch(API_ENDPOINTS.SURGERY_PACKAGES.GET_ALL);
+      if (packagesRes.ok) {
+        const data = await packagesRes.json();
+        setSavedPackages(data);
+      }
+      if (onBack) onBack();
+    } catch (err) {
+      console.error('Error saving package:', err);
+      alert(err instanceof Error ? err.message : 'Failed to save package');
+    } finally {
+      setIsSavingAsPackage(false);
+    }
+  };
+
+  const handleLoadPackage = (pkg: any) => {
+    // Build all breakdown particulars from package items
+    const surgeryBreakdown: SurgeryParticular[] = [];
+    let totalAmount = 0;
+    let sNo = 1;
+
+    pkg.items.forEach((item: any) => {
+      if (item.breakdown) {
+        // Use stored breakdown if available
+        surgeryBreakdown.push({
+          sNo: sNo++,
+          particular: item.breakdown.particular,
+          cost: item.breakdown.cost,
+          qty: item.breakdown.qty,
+          netAmt: item.breakdown.netAmt,
+          grossAmt: item.breakdown.grossAmt,
+        });
+        totalAmount += item.breakdown.grossAmt;
+      } else {
+        // Fallback for old flat structure
+        surgeryBreakdown.push({
+          sNo: sNo++,
+          particular: item.description,
+          cost: item.amount,
+          qty: 1,
+          netAmt: item.amount,
+          grossAmt: item.amount,
+        });
+        totalAmount += item.amount;
+      }
+    });
+
+    // Create ONE grouped item with all breakdown particulars
+    const newItem: BillingItem = {
+      id: `pkg-${pkg._id}-${Date.now()}`,
+      name: pkg.packageName,
+      category: 'Surgery',
+      price: totalAmount,
+      quantity: 1,
+      discount: 0,
+      tax: 0,
+      total: totalAmount,
+      surgeryBreakdown: surgeryBreakdown,
+    };
+
+    setItems([...items, newItem]);
+    alert(`Package "${pkg.packageName}" loaded successfully!`);
+  };
+
+  // Handle selecting a surgery package from the modal
+  const handleSelectSurgeryPackage = (pkg: any) => {
+    // Build all breakdown particulars from package items
+    const surgeryBreakdown: SurgeryParticular[] = [];
+    let totalAmount = 0;
+    let sNo = 1;
+
+    pkg.items.forEach((item: any) => {
+      if (item.breakdown) {
+        // Use stored breakdown if available
+        surgeryBreakdown.push({
+          sNo: sNo++,
+          particular: item.breakdown.particular,
+          cost: item.breakdown.cost,
+          qty: item.breakdown.qty,
+          netAmt: item.breakdown.netAmt,
+          grossAmt: item.breakdown.grossAmt,
+        });
+        totalAmount += item.breakdown.grossAmt;
+      } else {
+        // Fallback for old flat structure
+        surgeryBreakdown.push({
+          sNo: sNo++,
+          particular: item.description,
+          cost: item.amount,
+          qty: 1,
+          netAmt: item.amount,
+          grossAmt: item.amount,
+        });
+        totalAmount += item.amount;
+      }
+    });
+
+    // Create ONE grouped item with all breakdown particulars
+    const newItem: BillingItem = {
+      id: `pkg-${pkg._id}-${Date.now()}`,
+      name: pkg.packageName,
+      category: 'Surgery',
+      price: totalAmount,
+      quantity: 1,
+      discount: 0,
+      tax: 0,
+      total: totalAmount,
+      surgeryBreakdown: surgeryBreakdown,
+    };
+
+    setItems(prevItems => [...prevItems, newItem]);
+    alert(`Package "${pkg.packageName}" added successfully!`);
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-[#0a0a0a]">
+        <div className="w-12 h-12 rounded-full border-2 border-[#D4A574] border-t-transparent animate-spin"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-[1600px] mx-auto p-12 space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700 bg-[#0a0a0a]">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-4">
+
+          <div>
+            <h1 className="text-3xl font-light tracking-tight">Patient Billing</h1>
+            {/* Patient Search Input */}
+            <div className="relative mt-2" ref={dropdownRef}>
+              <div className="flex items-center gap-2">
+                <Search className="w-4 h-4 text-[#5a5a5a]" />
+                <input
+                  type="text"
+                  placeholder="Search patient by name, phone, or email..."
+                  value={patientSearchQuery}
+                  onChange={(e) => setPatientSearchQuery(e.target.value)}
+                  className="bg-[#1a1a1a] border border-[#D4A574] rounded-lg px-3 py-1.5 text-sm text-white placeholder-[#5a5a5a] focus:outline-none focus:border-[#D4A574] w-72"
+                />
+                {isSearchingPatient && (
+                  <div className="w-4 h-4 border-2 border-[#D4A574] border-t-transparent rounded-full animate-spin"></div>
+                )}
+              </div>
+
+              {/* Search Results Dropdown */}
+              {showPatientDropdown && patientSearchResults.length > 0 && (
+                <div className="absolute top-full left-0 mt-1 w-80 bg-[#1a1a1a] border border-[#D4A574] rounded-lg shadow-xl z-50 max-h-64 overflow-y-auto">
+                  {patientSearchResults.map((result) => (
+                    <button
+                      key={result.registrationId}
+                      onClick={() => handleSelectPatient(result)}
+                      className="w-full px-4 py-3 text-left hover:bg-[#2a2a2a] border-b border-[#D4A574] last:border-b-0 transition-colors"
+                    >
+                      <p className="text-white text-sm font-medium">{result.name}</p>
+                      <p className="text-[#5a5a5a] text-xs font-mono">{result.registrationId}</p>
+                      {result.phone && <p className="text-[#5a5a5a] text-xs">{result.phone}</p>}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {showPatientDropdown && patientSearchResults.length === 0 && patientSearchQuery && !isSearchingPatient && (
+                <div className="absolute top-full left-0 mt-1 w-80 bg-[#1a1a1a] border border-[#D4A574] rounded-lg shadow-xl z-50 p-4">
+                  <p className="text-[#5a5a5a] text-sm text-center">No patients found</p>
+                </div>
+              )}
+            </div>
+
+            {/* Selected Patient Info */}
+            {patient ? (
+              <p className="text-[#8B8B8B] text-sm mt-2">
+                Selected: <span className="text-[#D4A574]">{patient.name}</span> ({patient.registrationId})
+              </p>
+            ) : (
+              <p className="text-[#8B8B8B] text-sm mt-2">Search and select a patient to create invoice</p>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <Button
+            className="bg-[#D4A574] text-[#0a0a0a] hover:bg-[#C9955E] font-bold"
+            onClick={() => setShowCompanyTpaModal(true)}
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Add Company/TPA
+          </Button>
+          <Button
+            className="bg-[#D4A574] text-[#0a0a0a] hover:bg-[#C9955E] font-bold disabled:opacity-50"
+            onClick={handlePrint}
+            disabled={!patient}
+          >
+            <Printer className="w-4 h-4 mr-2" />
+            Print Invoice
+          </Button>
+          <Button
+            className="bg-[#D4A574] text-[#0a0a0a] hover:bg-[#C9955E] font-bold disabled:opacity-50"
+            onClick={() => handleSaveBill('paid')}
+            disabled={!patient || items.length === 0}
+          >
+            <Save className="w-4 h-4 mr-2" />
+            Save & Finalize
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Left Column: Service Selection */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Patient Info Card */}
+          <Card className="bg-[#0f0f0f] border-[#D4A574] p-6">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 rounded-full bg-[#1a1a1a] flex items-center justify-center border border-[#D4A574]">
+                  <User className="w-8 h-8 text-[#D4A574]" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold">{patient?.name}</h2>
+                  <p className="text-sm text-[#8B8B8B] font-mono">{patient?.registrationId}</p>
+                  <div className="flex items-center gap-4 mt-2 text-xs text-[#5a5a5a]">
+                    <span className="text-[#D4A574] font-medium">
+                      {patient?.demographics?.age || patient?.patientDetails?.age || patient?.age || 'N/A'}Y / {patient?.demographics?.sex || patient?.patientDetails?.sex || patient?.sex || 'N/A'}
+                    </span>
+                    <span className="text-[#444]">|</span>
+                    <span>{patient?.contactInfo?.phone}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="text-xs px-2 py-1 rounded-full bg-green-500/10 text-green-500 border border-green-500/20">
+                  Active Visit
+                </span>
+                <p className="text-xs text-[#5a5a5a] mt-2">Check-in: 10:30 AM</p>
+              </div>
+            </div>
+          </Card>
+
+          {/* Service Search & List */}
+          <Card className="bg-[#0f0f0f] border-[#D4A574] p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium">Add Services & Items</h3>
+              <button
+                onClick={() => setShowSurgerySelectionModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-[#D4A574] text-[#0a0a0a] rounded-lg hover:bg-[#C9955E] font-semibold text-sm transition-colors"
+              >
+                <Plus size={16} />
+                Surgeries
+              </button>
+            </div>
+
+            <div className="relative mb-6">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#5a5a5a]" />
+              <Input
+                placeholder="Search services, tests, or medicines..."
+                className="pl-10 bg-[#0a0a0a] border-[#D4A574] text-sm focus:border-[#D4A574]"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+
+            <div className="grid grid-cols-4 md:grid-cols-4 gap-3">
+              {/* Common Services */}
+              {COMMON_SERVICES.filter(s => s.name.toLowerCase().includes(searchTerm.toLowerCase())).map((service) => (
+                <button
+                  key={service.id}
+                  onClick={() => addItem(service)}
+                  className="flex items-center justify-between p-4 bg-[#0a0a0a] border border-[#D4A574] rounded-xl hover:bg-[#151515] transition-all group text-left ring-1 ring-[#D4A574]/30"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-white group-hover:text-[#D4A574]">{service.name}</p>
+                    <p className="text-[10px] text-[#5a5a5a] uppercase tracking-wider mt-1">{service.category}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-semibold text-[#D4A574]">₹{service.price}</p>
+                    <Plus className="w-4 h-4 text-[#5a5a5a] group-hover:text-[#D4A574] mt-1 ml-auto" />
+                  </div>
+                </button>
+              ))}
+
+              {/* Saved Surgery Packages - Auto Display */}
+              {savedPackages.map((pkg) => (
+                <button
+                  key={pkg._id}
+                  onClick={() => handleLoadPackage(pkg)}
+                  className="flex items-center justify-between p-4 bg-[#0a0a0a] border border-[#D4A574] rounded-xl hover:border-[#D4A574] hover:bg-[#151515] transition-all group text-left ring-1 ring-[#D4A574]/30"
+                  title={`Saved Package • ${pkg.items?.length || 0} items`}
+                >
+                  <div>
+                    <p className="text-sm font-medium text-white group-hover:text-[#D4A574]">{pkg.packageName || pkg.name}</p>
+                    <p className="text-[10px] text-[#5a5a5a] uppercase tracking-wider mt-1">Saved Package</p>
+                    {pkg.usageCount && pkg.usageCount > 1 && (
+                      <p className="text-[9px] text-[#8B8B8B] mt-1">Used {pkg.usageCount}x</p>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-semibold text-[#D4A574]">₹{(pkg.totalAmount || pkg.price || 0).toLocaleString('en-IN')}</p>
+                    <Plus className="w-4 h-4 text-[#5a5a5a] group-hover:text-[#D4A574] mt-1 ml-auto" />
+                  </div>
+                </button>
+              ))}
+            </div>
+          </Card>
+
+          {/* Items Table */}
+          <Card className="bg-[#0f0f0f] border-[#D4A574] overflow-hidden">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-[#151515] border-b border-[#D4A574]">
+                  <th className="p-4 text-xs font-semibold text-[#8B8B8B] uppercase">Service / Item</th>
+                  <th className="p-4 text-xs font-semibold text-[#8B8B8B] uppercase text-center">Qty</th>
+                  <th className="p-4 text-xs font-semibold text-[#8B8B8B] uppercase text-right">Price</th>
+                  <th className="p-4 text-xs font-semibold text-[#8B8B8B] uppercase text-right">Total</th>
+                  <th className="p-4 text-xs font-semibold text-[#8B8B8B] uppercase text-center">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#D4A574]">
+                {items.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="p-12 text-center text-[#5a5a5a]">
+                      {patient ? 'No items added to the bill yet.' : 'Search and select a patient first, then add items.'}
+                    </td>
+                  </tr>
+                ) : (
+                  items.map((item) => (
+                    <React.Fragment key={item.id}>
+                      <tr className="hover:bg-[#151515] transition-colors">
+                        <td className="p-4">
+                          <div className="flex items-center gap-2">
+                            {item.category === 'Surgery' && item.surgeryBreakdown && (
+                              <button
+                                onClick={() => toggleItemExpansion(item.id)}
+                                className="p-1 text-[#D4A574] hover:bg-[#1a1a1a] rounded transition-colors"
+                              >
+                                {expandedItems.has(item.id) ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                              </button>
+                            )}
+                            <div>
+                              <p className="text-sm font-medium text-white">{item.name}</p>
+                              <p className="text-[10px] text-[#5a5a5a] uppercase">{item.category}</p>
+                              {item.category === 'Surgery' && (
+                                <p className="text-[10px] text-[#D4A574]">Click arrow to view/edit breakdown</p>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-4">
+                          <div className="flex items-center justify-center gap-3">
+                            <button
+                              onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                              className="w-6 h-6 rounded bg-[#1a1a1a] border border-[#D4A574] flex items-center justify-center text-[#8B8B8B] hover:text-[#D4A574]"
+                            >
+                              -
+                            </button>
+                            <span className="text-sm font-mono w-4 text-center">{item.quantity}</span>
+                            <button
+                              onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                              className="w-6 h-6 rounded bg-[#1a1a1a] border border-[#D4A574] flex items-center justify-center text-[#8B8B8B] hover:text-[#D4A574]"
+                            >
+                              +
+                            </button>
+                          </div>
+                        </td>
+                        <td className="p-4 text-right text-sm text-[#8B8B8B]">₹{item.price.toLocaleString('en-IN')}</td>
+                        <td className="p-4 text-right text-sm font-semibold text-white">₹{item.total.toLocaleString('en-IN')}</td>
+                        <td className="p-4 text-center">
+                          <button
+                            onClick={() => removeItem(item.id)}
+                            className="p-2 text-[#5a5a5a] hover:text-red-500 transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+
+                      {/* Surgery Breakdown Expandable Section */}
+                      {item.category === 'Surgery' && item.surgeryBreakdown && expandedItems.has(item.id) && (
+                        <tr>
+                          <td colSpan={5} className="p-0">
+                            <div className="bg-[#0a0a0a] border-t border-b border-[#D4A574] p-4">
+                              {/* Surgery Name and Add Button */}
+                              <div className="flex items-center justify-between mb-4">
+                                <h4 className="text-sm font-semibold text-[#D4A574]">Surgery Breakdown - {item.name}</h4>
+                                <button
+                                  onClick={() => addSurgeryParticular(item.id)}
+                                  className="flex items-center gap-1 px-3 py-1.5 bg-[#D4A574] text-[#0a0a0a] rounded text-xs font-semibold hover:bg-[#C9955E]"
+                                >
+                                  <Plus className="w-3 h-3" /> Add Particular
+                                </button>
+                              </div>
+
+                              {/* Package Selection Buttons */}
+                              <div className="mb-4 p-3 bg-[#151515] rounded-lg border border-[#D4A574]">
+                                <p className="text-xs text-[#8B8B8B] mb-2 font-medium">Select Surgery Package / IOL Category:</p>
+                                <div className="flex flex-wrap gap-2">
+                                  {([35000, 40000, 50000, 60000, 75000] as PackageAmount[]).map((pkg) => (
+                                    <button
+                                      key={pkg}
+                                      onClick={() => applySurgeryPackage(item.id, pkg)}
+                                      className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${item.selectedPackage === pkg
+                                        ? 'bg-[#D4A574] text-[#0a0a0a] shadow-lg shadow-[#D4A574]/30'
+                                        : 'bg-[#1a1a1a] text-white border border-[#D4A574] hover:border-[#D4A574] hover:text-[#D4A574]'
+                                        }`}
+                                    >
+                                      ₹{pkg.toLocaleString('en-IN')}
+                                    </button>
+                                  ))}
+                                </div>
+                                {item.selectedPackage && (
+                                  <p className="text-[10px] text-green-500 mt-2">
+                                    âœ“ Package ₹{item.selectedPackage.toLocaleString('en-IN')} selected - All 18 particulars loaded
+                                  </p>
+                                )}
+                              </div>
+
+                              {/* 18 Particulars Table */}
+                              <table className="w-full text-xs border border-[#D4A574] rounded overflow-hidden">
+                                <thead>
+                                  <tr className="bg-[#D4A574] text-[#0a0a0a]">
+                                    <th className="p-2 text-left border-r border-[#D4A574]">S.No</th>
+                                    <th className="p-2 text-left border-r border-[#D4A574]">Particulars</th>
+                                    <th className="p-2 text-right border-r border-[#D4A574]">Cost</th>
+                                    <th className="p-2 text-center border-r border-[#D4A574]">Qty</th>
+                                    <th className="p-2 text-right border-r border-[#D4A574]">Net Amt</th>
+                                    <th className="p-2 text-right border-r border-[#D4A574]">Gross Amt</th>
+                                    <th className="p-2 text-center">Action</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {item.surgeryBreakdown.map((particular, idx) => (
+                                    <tr key={particular.sNo} className={idx % 2 === 0 ? 'bg-[#1a1a1a]' : 'bg-[#151515]'}>
+                                      <td className="p-2 border-r border-[#D4A574] text-white">{particular.sNo}</td>
+                                      <td className="p-2 border-r border-[#D4A574]">
+                                        <input
+                                          type="text"
+                                          value={particular.particular}
+                                          onChange={(e) => updateSurgeryParticular(item.id, particular.sNo, 'particular', e.target.value)}
+                                          className="bg-transparent text-white w-full focus:outline-none focus:bg-[#0a0a0a] px-1 rounded"
+                                        />
+                                      </td>
+                                      <td className="p-2 border-r border-[#D4A574]">
+                                        <input
+                                          type="number"
+                                          value={particular.cost}
+                                          onChange={(e) => updateSurgeryParticular(item.id, particular.sNo, 'cost', Number(e.target.value))}
+                                          className="bg-transparent text-white w-20 text-right focus:outline-none focus:bg-[#0a0a0a] px-1 rounded"
+                                        />
+                                      </td>
+                                      <td className="p-2 border-r border-[#D4A574] text-center">
+                                        <input
+                                          type="number"
+                                          value={particular.qty}
+                                          onChange={(e) => updateSurgeryParticular(item.id, particular.sNo, 'qty', Number(e.target.value))}
+                                          className="bg-transparent text-white w-12 text-center focus:outline-none focus:bg-[#0a0a0a] px-1 rounded"
+                                        />
+                                      </td>
+                                      <td className="p-2 border-r border-[#D4A574] text-right text-white">₹{particular.netAmt.toLocaleString('en-IN')}</td>
+                                      <td className="p-2 border-r border-[#D4A574] text-right text-white">₹{particular.grossAmt.toLocaleString('en-IN')}</td>
+                                      <td className="p-2 text-center">
+                                        <button
+                                          onClick={() => removeSurgeryParticular(item.id, particular.sNo)}
+                                          className="text-[#5a5a5a] hover:text-red-500"
+                                        >
+                                          <X className="w-3 h-3" />
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                                <tfoot>
+                                  <tr className="bg-[#0f0f0f] border-t border-[#D4A574]">
+                                    <td colSpan={5} className="p-2 text-right font-semibold text-white">Total Gross Amt:</td>
+                                    <td className="p-2 text-right font-bold text-[#D4A574]">₹{(item.totalGrossAmt || 0).toLocaleString('en-IN')}</td>
+                                    <td></td>
+                                  </tr>
+                                  <tr className="bg-[#0f0f0f]">
+                                    <td colSpan={5} className="p-2 text-right font-semibold text-white">MOU Discount:</td>
+                                    <td className="p-2 text-right">
+                                      <input
+                                        type="number"
+                                        value={item.mouDiscount || 0}
+                                        onChange={(e) => updateMouDiscount(item.id, Number(e.target.value))}
+                                        className="bg-[#0a0a0a] border border-[#D4A574] text-green-500 w-24 text-right px-2 py-1 rounded focus:outline-none focus:border-[#D4A574]"
+                                      />
+                                    </td>
+                                    <td></td>
+                                  </tr>
+                                  <tr className="bg-[#151515] border-t border-[#D4A574]">
+                                    <td colSpan={5} className="p-2 text-right font-bold text-white">Received:</td>
+                                    <td className="p-2 text-right font-bold text-[#4CAF50] text-base">₹{(item.receivedAmt || 0).toLocaleString('en-IN')}</td>
+                                    <td></td>
+                                  </tr>
+                                </tfoot>
+                              </table>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </Card>
+        </div>
+
+        {/* Right Column: Summary & Payment */}
+        <div className="space-y-6">
+          {/* Insurance & Discounts Section */}
+          <Card className="bg-[#0f0f0f] border-[#D4A574] p-6">
+            <h3 className="text-sm font-semibold text-[#D4A574] uppercase tracking-wider mb-4">Insurance & Discounts</h3>
+
+            <div className="space-y-4">
+              {/* Insurance Toggle - FIXED: Only show if there are Surgery items */}
+              {items.some(i => i.category === 'Surgery') && (
+                <div className="flex items-center justify-between p-3 rounded-xl bg-[#1a1a1a]/50 border border-[#D4A574]">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${govtInsuranceEnabled ? 'bg-blue-500/20 text-blue-500' : 'bg-[#0a0a0a] text-[#5a5a5a]'}`}>
+                      <CreditCard className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">Govt. Insurance (For Surgery)</p>
+                      <p className="text-[10px] text-[#5a5a5a]">Late claim processing</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleInsuranceToggle(!govtInsuranceEnabled)}
+                    className={`w-12 h-6 rounded-full transition-colors relative ${govtInsuranceEnabled ? 'bg-blue-600' : 'bg-[#2a2a2a]'}`}
+                  >
+                    <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${govtInsuranceEnabled ? 'left-7' : 'left-1'}`} />
+                  </button>
+                </div>
+              )}
+
+              {govtInsuranceEnabled && items.some(i => i.category === 'Surgery') && (
+                <>
+                  <div className="mt-4">
+                    <label className="text-sm block mb-2">Insurance Type</label>
+                    <select
+                      className="w-full bg-[#0a0a0a] border-[#D4A574] rounded p-2 text-sm text-white focus:outline-none focus:border-[#D4A574]"
+                      value={insuranceCategory || ''}
+                      onChange={(e) => {
+                        const val = e.target.value as InsuranceCategory;
+                        setInsuranceCategory(val || null);
+                        setInsuranceCompany('');
+                        setInsuranceTPA('');
+                      }}
+                    >
+                      <option value="">Select Insurance Type</option>
+                      {(['CGHS', 'SGHS', 'PRIVATE'] as const).map(type => (
+                        <option key={type} value={type}>{type}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {insuranceCategory && (
+                    <div className="grid grid-cols-2 gap-4 mt-4">
+                      <div>
+                        <label className="text-sm">Insurance Company</label>
+                        <select
+                          className="w-full bg-[#0a0a0a] border-[#D4A574] rounded p-2 text-sm text-white focus:outline-none focus:border-[#D4A574]"
+                          value={insuranceCompany}
+                          onChange={(e) => {
+                            setInsuranceCompany(e.target.value);
+                            setInsuranceTPA('');
+                          }}
+                        >
+                          <option value="">Select Company</option>
+                          {MOCK_INSURANCE_PLANS[insuranceCategory].map(plan => (
+                            <option key={plan.company} value={plan.company}>
+                              {plan.company}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-sm">TPA</label>
+                        <select
+                          className="w-full bg-[#0a0a0a] border-[#D4A574] rounded p-2 text-sm text-white focus:outline-none focus:border-[#D4A574]"
+                          value={insuranceTPA}
+                          disabled={!insuranceCompany}
+                          onChange={(e) => setInsuranceTPA(e.target.value)}
+                        >
+                          <option value="">Select TPA</option>
+                          {insuranceCompany &&
+                            MOCK_INSURANCE_PLANS[insuranceCategory]
+                              .find(p => p.company === insuranceCompany)
+                              ?.tpas.map(tpa => (
+                                <option key={tpa} value={tpa}>{tpa}</option>
+                              ))}
+                        </select>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Claim Number Input - shown when insurance is enabled */}
+                  {govtInsuranceEnabled && insuranceCompany && insuranceTPA && (
+                    <div className="mt-4">
+                      <label className="text-sm">Claim Number</label>
+                      <Input
+                        type="text"
+                        placeholder="Enter insurance claim number"
+                        value={claimNumber}
+                        onChange={(e) => setClaimNumber(e.target.value)}
+                        className="w-full bg-[#0a0a0a] border border-[#D4A574] rounded p-2 text-sm text-white focus:outline-none focus:border-[#D4A574]"
+                      />
+                      <p className="text-[10px] text-[#8B8B8B] mt-1">
+                        Enter the insurance company's claim/policy reference number
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Date Fields */}
+                  <div className="mt-4 grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm">Date of Surgery</label>
+                      <Input
+                        type="date"
+                        value={dateOfSurgery}
+                        onChange={(e) => setDateOfSurgery(e.target.value)}
+                        className="w-full bg-[#0a0a0a] border border-[#D4A574] rounded p-2 text-sm text-white focus:outline-none focus:border-[#D4A574]"
+                      />
+                      <p className="text-[10px] text-[#8B8B8B] mt-1">DD/MM/YYYY format</p>
+                    </div>
+                    <div>
+                      <label className="text-sm">Date of Discharge</label>
+                      <Input
+                        type="date"
+                        value={dateOfDischarge}
+                        onChange={(e) => setDateOfDischarge(e.target.value)}
+                        className="w-full bg-[#0a0a0a] border border-[#D4A574] rounded p-2 text-sm text-white focus:outline-none focus:border-[#D4A574]"
+                      />
+                      <p className="text-[10px] text-[#8B8B8B] mt-1">DD/MM/YYYY format</p>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* ============ SURGERY BILLING SECTION ============ */}
+              {isSurgeryBillingMode && govtInsuranceEnabled && (
+                <div id="surgery-billing-section" className="pt-4 border-t border-[#D4A574]">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-8 h-8 rounded-full bg-orange-500/20 flex items-center justify-center">
+                      <AlertCircle className="w-4 h-4 text-orange-500" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-semibold text-orange-500">Surgery Insurance Billing</h4>
+                      <p className="text-[10px] text-[#5a5a5a]">Two-Bill System: Initial â†’ Final Settlement</p>
+                    </div>
+                  </div>
+
+                  {/* Bill Stage Toggle */}
+                  <div className="flex gap-2 mb-4">
+                    <button
+                      onClick={() => setSurgeryBillStage('initial')}
+                      className={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold transition-all ${surgeryBillStage === 'initial'
+                        ? 'bg-orange-500 text-white'
+                        : 'bg-[#1a1a1a] text-[#8B8B8B] hover:bg-[#2a2a2a]'
+                        }`}
+                    >
+                      Initial Bill
+                    </button>
+                    <button
+                      onClick={() => setSurgeryBillStage('final')}
+                      className={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold transition-all ${surgeryBillStage === 'final'
+                        ? 'bg-green-500 text-white'
+                        : 'bg-[#1a1a1a] text-[#8B8B8B] hover:bg-[#2a2a2a]'
+                        }`}
+                    >
+                      Final Settlement
+                    </button>
+                  </div>
+
+                  {/* Existing Initial Bills Alert */}
+                  {existingInitialBill && surgeryBillStage === 'initial' && (
+                    <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 mb-4">
+                      <p className="text-yellow-500 text-xs font-semibold mb-1">âš ï¸ Pending Initial Bill Found</p>
+                      <p className="text-[10px] text-[#8B8B8B]">
+                        Bill ID: {existingInitialBill.billId}<br />
+                        Security Deposit: ₹{existingInitialBill.securityDeposit?.toLocaleString('en-IN')}
+                      </p>
+                      <button
+                        onClick={() => handleContinueToFinalBill(existingInitialBill)}
+                        className="mt-2 w-full py-2 bg-yellow-500 text-black text-xs font-semibold rounded-lg hover:bg-yellow-400"
+                      >
+                        Continue to Final Settlement â†’
+                      </button>
+                    </div>
+                  )}
+
+                  {/* INITIAL BILL: Security Deposit Input */}
+                  {surgeryBillStage === 'initial' && (
+                    <div className="space-y-3">
+                      <div className="bg-orange-500/10 rounded-lg p-3 border border-orange-500/30">
+                        <label className="text-xs text-orange-400 font-semibold block mb-2">
+                          ðŸ’° Security Deposit / Upfront Amount (Paid by Patient)
+                        </label>
+                        <Input
+                          type="number"
+                          value={securityDeposit || ''}
+                          onChange={(e) => setSecurityDeposit(Number(e.target.value))}
+                          className="bg-[#0a0a0a] border-orange-500/50 h-10 text-white text-lg font-bold"
+                          placeholder="Enter amount collected"
+                        />
+                        <p className="text-[10px] text-[#8B8B8B] mt-2">
+                          This is a temporary payment collected before surgery. Enter or adjust based on hospital policy.
+                        </p>
+                      </div>
+
+                      <div className="bg-[#1a1a1a] rounded-lg p-3 border border-[#D4A574]">
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="text-[#8B8B8B]">Total Surgery Cost:</span>
+                          <span className="text-white font-medium">₹{totalSurgeryCost.toLocaleString('en-IN')}</span>
+                        </div>
+                        <div className="flex justify-between text-xs pt-2 border-t border-[#D4A574]">
+                          <span className="text-[#8B8B8B]">Patient's Payable Amount:</span>
+                          <span className="text-white font-semibold">₹{patientPayable.toLocaleString('en-IN')}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* FINAL BILL: Insurance Approved Amount Input */}
+                  {surgeryBillStage === 'final' && (
+                    <div className="space-y-3">
+                      {existingInitialBill && (
+                        <div className="bg-[#1a1a1a] rounded-lg p-3 border border-[#D4A574]">
+                          <p className="text-[10px] text-[#8B8B8B] uppercase mb-1">Initial Bill Reference</p>
+                          <p className="text-xs text-white">{existingInitialBill.billId}</p>
+                          <p className="text-xs text-green-400 mt-1">
+                            Security Deposit Paid: ₹{(existingInitialBill.securityDeposit || securityDeposit).toLocaleString('en-IN')}
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="bg-green-500/10 rounded-lg p-3 border border-green-500/30">
+                        <label className="text-xs text-green-400 font-semibold block mb-2">
+                          âœ“ Insurance Approved Amount (As per approval letter)
+                        </label>
+                        <Input
+                          type="number"
+                          value={insuranceApprovedAmount || ''}
+                          onChange={(e) => setInsuranceApprovedAmount(Number(e.target.value))}
+                          className="bg-[#0a0a0a] border-green-500/50 h-10 text-white text-lg font-bold"
+                          placeholder="Enter approved amount"
+                        />
+                        <p className="text-[10px] text-[#8B8B8B] mt-2">
+                          Enter the exact amount approved by insurance company.
+                        </p>
+                      </div>
+
+                      {/* Auto-Calculation Preview */}
+                      <div className="bg-[#1a1a1a] rounded-lg p-4 border border-[#D4A574]">
+                        <h5 className="text-xs text-[#D4A574] font-semibold mb-3 uppercase">Auto-Calculation</h5>
+                        <div className="space-y-2 text-xs">
+                          <div className="flex justify-between">
+                            <span className="text-[#8B8B8B]">Total Surgery Cost:</span>
+                            <span className="text-white">₹{(existingInitialBill?.totalSurgeryCost || totalSurgeryCost).toLocaleString('en-IN')}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-[#8B8B8B]">Insurance Approved:</span>
+                            <span className="text-green-400">- ₹{insuranceApprovedAmount.toLocaleString('en-IN')}</span>
+                          </div>
+                          <div className="flex justify-between pt-2 border-t border-[#D4A574]">
+                            <span className="text-[#8B8B8B]">Patient's Total Share:</span>
+                            <span className="text-white font-medium">₹{((existingInitialBill?.totalSurgeryCost || totalSurgeryCost) - insuranceApprovedAmount).toLocaleString('en-IN')}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-[#8B8B8B]">Security Deposit Paid:</span>
+                            <span className="text-green-400">- ₹{(existingInitialBill?.securityDeposit || securityDeposit).toLocaleString('en-IN')}</span>
+                          </div>
+                          <div className="flex justify-between pt-2 border-t border-[#D4A574] text-base">
+                            {(() => {
+                              const surgCost = existingInitialBill?.totalSurgeryCost || totalSurgeryCost;
+                              const patShare = surgCost - insuranceApprovedAmount;
+                              const secDep = existingInitialBill?.securityDeposit || securityDeposit;
+                              const balance = patShare - secDep;
+
+                              if (balance > 0) {
+                                return (
+                                  <>
+                                    <span className="text-red-400 font-semibold">Balance Payable:</span>
+                                    <span className="text-red-400 font-bold">₹{balance.toLocaleString('en-IN')}</span>
+                                  </>
+                                );
+                              } else {
+                                return (
+                                  <>
+                                    <span className="text-green-400 font-semibold">Status:</span>
+                                    <span className="text-green-400 font-bold">Fully Settled âœ“</span>
+                                  </>
+                                );
+                              }
+                            })()}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* View Bill History Button */}
+              {existingSurgeryBills.length > 0 && (
+                <div className="pt-4 border-t border-[#D4A574]">
+                  <button
+                    onClick={() => setShowBillHistory(!showBillHistory)}
+                    className="w-full py-2 text-xs text-[#D4A574] hover:text-white transition-colors flex items-center justify-center gap-2"
+                  >
+                    {showBillHistory ? 'â–² Hide' : 'â–¼ View'} Surgery Bill History ({existingSurgeryBills.length})
+                  </button>
+
+                  {showBillHistory && (
+                    <div className="mt-3 space-y-2 max-h-40 overflow-y-auto">
+                      {existingSurgeryBills.map((bill, idx) => (
+                        <div
+                          key={bill.billId || idx}
+                          className={`p-2 rounded-lg border text-xs ${bill.billType === 'initial'
+                            ? 'bg-orange-500/10 border-orange-500/30'
+                            : 'bg-green-500/10 border-green-500/30'
+                            }`}
+                        >
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <span className={`font-semibold ${bill.billType === 'initial' ? 'text-orange-400' : 'text-green-400'}`}>
+                                {bill.billType === 'initial' ? 'Initial' : 'Final'}: {bill.billId}
+                              </span>
+                              <p className="text-[#8B8B8B] text-[10px]">{bill.surgeryName}</p>
+                            </div>
+                            <span className={`text-[10px] px-2 py-0.5 rounded ${bill.status === 'settled' ? 'bg-green-500/20 text-green-400' :
+                              bill.status === 'pending_approval' ? 'bg-yellow-500/20 text-yellow-400' :
+                                'bg-[#2a2a2a] text-[#8B8B8B]'
+                              }`}>
+                              {bill.status}
+                            </span>
+                          </div>
+                          {bill.billType === 'initial' && bill.status !== 'settled' && (
+                            <button
+                              onClick={() => handleContinueToFinalBill(bill)}
+                              className="mt-2 w-full py-1 bg-green-500/20 text-green-400 text-[10px] rounded hover:bg-green-500/30"
+                            >
+                              Create Final Bill â†’
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Coupon Section */}
+              <div className="pt-4 border-t border-[#D4A574]">
+                <div className="flex justify-between items-center mb-2">
+                  <label className="text-[10px] text-[#8B8B8B] uppercase">Apply Coupon</label>
+                  {workerQuota && (
+                    <span className="text-[10px] text-[#D4A574]">
+                      Quota: {workerQuota.remaining}/{workerQuota.limit} left
+                    </span>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    value={couponCode}
+                    onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                    className="bg-[#0a0a0a] border-[#D4A574] h-9 text-sm font-mono"
+                    placeholder="COUPON10"
+                  />
+                  <Button
+                    className="h-9 bg-[#D4A574] text-[#0a0a0a] hover:bg-[#C9955E] font-bold text-xs"
+                    onClick={() => {
+                      if (couponCode === 'GOVT50') {
+                        setDiscountAmount(grandTotal * 0.5);
+                        alert('50% Govt Discount Applied');
+                      } else {
+                        alert('Invalid Coupon');
+                      }
+                    }}
+                  >
+                    Apply
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="bg-[#0f0f0f] border-[#D4A574] p-6 sticky top-6">
+            <h3 className="text-lg font-medium mb-6">Bill Summary</h3>
+
+            <div className="space-y-4 mb-8">
+              <div className="flex justify-between text-sm">
+                <span className="text-[#8B8B8B]">Subtotal</span>
+                <span className="text-white font-medium">₹{subtotal}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-[#8B8B8B]">Discount</span>
+                <span className="text-green-500 font-medium">- ₹{totalDiscount + discountAmount}</span>
+              </div>
+
+              {govtInsuranceEnabled && items.some(i => i.category === 'Surgery') && (
+                <div className="pt-2 space-y-2 border-t border-[#D4A574]/50">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-blue-400">Insurance Covered</span>
+                    <span className="text-blue-400">- ₹{insuranceCovered}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-[#8B8B8B]">Patient Payable</span>
+                    <span className="text-white">₹{patientPayable}</span>
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-4 border-t border-[#D4A574] flex justify-between items-end">
+                <span className="text-base font-semibold text-white">
+                  {govtInsuranceEnabled ? 'Patient Payable' : 'Grand Total'}
+                </span>
+                <span className="text-3xl font-bold text-[#D4A574]">
+                  ₹{govtInsuranceEnabled ? patientPayable : grandTotal}
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-4 mb-8">
+              <label className="text-xs font-semibold text-[#8B8B8B] uppercase tracking-wider">Payment Method</label>
+              <div className="grid grid-cols-2 gap-2">
+                {['Cash', 'Card', 'UPI', 'Insurance'].map((method) => (
+                  <button
+                    key={method}
+                    onClick={() => setPaymentMethod(method as any)}
+                    className={`p-3 rounded-xl border text-xs font-medium transition-all ${paymentMethod === method ? 'bg-[#D4A574] border-[#D4A574] text-[#0a0a0a]' : 'bg-[#0a0a0a] border-[#D4A574] text-[#8B8B8B] hover:border-[#D4A574]'}`}
+                  >
+                    {method}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {/* Surgery Billing Buttons - Show only in surgery mode with insurance */}
+              {isSurgeryBillingMode && govtInsuranceEnabled ? (
+                <>
+                  {surgeryBillStage === 'initial' ? (
+                    <Button
+                      className="w-full bg-orange-500 text-white hover:bg-orange-600 h-12 font-bold text-base shadow-lg shadow-orange-500/20"
+                      onClick={handleCreateInitialBill}
+                      disabled={securityDeposit <= 0 || !insuranceCategory || !insuranceCompany}
+                    >
+                      ðŸ“‹ Generate Initial Insurance Bill
+                    </Button>
+                  ) : (
+                    <Button
+                      className="w-full bg-green-500 text-white hover:bg-green-600 h-12 font-bold text-base shadow-lg shadow-green-500/20"
+                      onClick={handleCreateFinalBill}
+                      disabled={insuranceApprovedAmount <= 0}
+                    >
+                      âœ“ Generate Final Settlement Bill
+                    </Button>
+                  )}
+                  <Button
+                    variant="outline"
+                    className="w-full border-[#D4A574] text-[#8B8B8B] hover:bg-[#1a1a1a] h-10 text-xs"
+                    onClick={handlePrint}
+                  >
+                    Print Regular Invoice
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    className="w-full bg-[#D4A574] text-[#0a0a0a] hover:bg-[#C9955E] h-12 font-bold text-base shadow-lg shadow-[#D4A574]/20"
+                    onClick={() => handleSaveBill('paid')}
+                  >
+                    COLLECT ₹{grandTotal}
+                  </Button>
+                  <Button
+                    className="w-full bg-[#D4A574] text-[#0a0a0a] hover:bg-[#C9955E] h-12 font-bold text-base shadow-lg shadow-[#D4A574]/20"
+                    onClick={() => handleSaveBill('draft')}
+                  >
+                    Save as Draft
+                  </Button>
+                </>
+              )}
+            </div>
+
+            <div className="mt-6 p-4 bg-[#1a1a1a]/50 rounded-xl border border-[#D4A574]">
+              <div className="flex items-center gap-2 text-xs text-[#8B8B8B]">
+                <AlertCircle className="w-3 h-3 text-[#D4A574]" />
+                <span>Invoice will be sent to {patient?.contactInfo?.email || 'patient email'}</span>
+              </div>
+            </div>
+
+            {/* Admin Quota Refresh (Only for CEO/Main Doc) */}
+            {(currentUser === 'CEO' || currentUser === 'MainDoctor' || currentUser === 'Admin') && (
+              <div className="mt-4 pt-4 border-t border-[#D4A574]">
+                <Button
+                  variant="ghost"
+                  className="w-full text-[10px] text-[#5a5a5a] hover:text-[#D4A574]"
+                  onClick={async () => {
+                    const res = await fetch(API_ENDPOINTS.COUPONS.REFRESH, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ workerId: currentUser, refreshedBy: currentUser, limit: 20 })
+                    });
+                    if (res.ok) {
+                      alert('Quota Refreshed!');
+                      fetchWorkerQuota();
+                    }
+                  }}
+                >
+                  Refresh My Coupon Quota (Admin Only)
+                </Button>
+              </div>
+            )}
+          </Card>
+        </div>
+      </div>
+
+      {/* Save as Package Popup Modal */}
+      {showSaveAsPackagePopup && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-[#0f0f0f] border border-[#D4A574] rounded-lg p-8 w-96 shadow-2xl">
+            <div className="flex items-center gap-2 mb-4">
+              <CheckCircle className="w-6 h-6 text-green-500" />
+              <h3 className="text-xl font-bold">Save as Reusable Package</h3>
+            </div>
+
+            <p className="text-[#8B8B8B] text-sm mb-6">
+              Would you like to save this surgery configuration as a reusable package? You can use it for future similar surgeries.
+            </p>
+
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-[#D4A574] mb-2">
+                Package Name
+              </label>
+              <input
+                type="text"
+                value={packageName}
+                onChange={(e) => setPackageName(e.target.value)}
+                placeholder="e.g., Standard Cataract Surgery"
+                className="w-full px-4 py-2 bg-[#1a1a1a] border border-[#D4A574] rounded-lg text-white placeholder-[#5a5a5a] focus:outline-none focus:border-[#D4A574]"
+                autoFocus
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={handleSaveAsPackage}
+                disabled={isSavingAsPackage || !packageName.trim()}
+                className="flex-1 bg-green-500 text-white py-2 rounded-lg hover:bg-green-600 transition disabled:opacity-50 font-medium"
+              >
+                {isSavingAsPackage ? 'Saving...' : 'Save Package'}
+              </button>
+              <button
+                onClick={() => {
+                  setShowSaveAsPackagePopup(false);
+                  setPackageName('');
+                  if (onBack) onBack();
+                }}
+                disabled={isSavingAsPackage}
+                className="flex-1 bg-[#2a2a2a] text-[#D4A574] py-2 rounded-lg hover:bg-[#3a3a3a] transition disabled:opacity-50 font-medium"
+              >
+                Skip
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Surgery Selection Modal */}
+      <SurgerySelectionModal
+        isOpen={showSurgerySelectionModal}
+        onClose={() => setShowSurgerySelectionModal(false)}
+        onSelectPackage={handleSelectSurgeryPackage}
+      />
+
+      {/* Add Company/TPA Modal */}
+      {showCompanyTpaModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-[#0f0f0f] border border-[#D4A574] rounded-lg p-8 w-96 shadow-2xl">
+            <h3 className="text-xl font-bold text-white mb-4">Add Insurance Company & TPA</h3>
+
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-sm text-[#D4A574] font-medium mb-2">Company Name</label>
+                <input
+                  type="text"
+                  value={newCompanyName}
+                  onChange={(e) => setNewCompanyName(e.target.value)}
+                  placeholder="e.g., Star Health"
+                  className="w-full px-4 py-2 bg-[#1a1a1a] border border-[#D4A574] rounded-lg text-white placeholder-[#5a5a5a] focus:outline-none focus:border-[#D4A574]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-[#D4A574] font-medium mb-2">TPA Names (comma-separated)</label>
+                <textarea
+                  value={newTpaNames}
+                  onChange={(e) => setNewTpaNames(e.target.value)}
+                  placeholder="e.g., MediAssist, FHPL"
+                  className="w-full px-4 py-2 bg-[#1a1a1a] border border-[#D4A574] rounded-lg text-white placeholder-[#5a5a5a] focus:outline-none focus:border-[#D4A574] h-20"
+                />
+                <p className="text-[10px] text-[#5a5a5a] mt-1">Separate multiple TPA names with commas</p>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  if (newCompanyName.trim()) {
+                    setInsuranceCompany(newCompanyName);
+                    if (newTpaNames.trim()) {
+                      setInsuranceTPA(newTpaNames.split(',')[0].trim());
+                    }
+                    setShowCompanyTpaModal(false);
+                    setNewCompanyName('');
+                    setNewTpaNames('');
+                    alert('Company and TPA added successfully!');
+                  } else {
+                    alert('Please enter a company name');
+                  }
+                }}
+                className="flex-1 bg-[#D4A574] text-[#0a0a0a] py-2 rounded-lg hover:bg-[#C9955E] font-medium"
+              >
+                Add Company
+              </button>
+              <button
+                onClick={() => {
+                  setShowCompanyTpaModal(false);
+                  setNewCompanyName('');
+                  setNewTpaNames('');
+                }}
+                className="flex-1 bg-[#2a2a2a] text-[#D4A574] py-2 rounded-lg hover:bg-[#3a3a3a] font-medium"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

@@ -1,0 +1,3449 @@
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --font-size: 16px;
+  --background: #ffffff;
+  --foreground: oklch(0.145 0 0);
+  --card: #ffffff;
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: #030213;
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.95 0.0058 264.53);
+  --secondary-foreground: #030213;
+  --muted: #ececf0;
+  --muted-foreground: #717182;
+  --accent: #e9ebef;
+  --accent-foreground: #030213;
+  --destructive: #d4183d;
+  --destructive-foreground: #ffffff;
+  --border: rgba(0, 0, 0, 0.1);
+  --input: transparent;
+  --input-background: #f3f3f5;
+  --switch-background: #cbced4;
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: #030213;
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+
+  /* Custom theme variables - Default to dark mode */
+  --theme-accent: #D4A574;
+  --theme-accent-rgb: 212, 165, 116;
+  --theme-accent-hover: #C9955E;
+  --base-font-size: 12px;
+  --glow-intensity: 0.2;
+
+  /* Theme colors - dark mode defaults */
+  --theme-bg: #050505;
+  --theme-bg-secondary: #0a0a0a;
+  --theme-bg-tertiary: #151515;
+  --theme-bg-input: #0f0f0f;
+  --theme-bg-gradient-from: #080808;
+  --theme-bg-gradient-to: #050505;
+  --theme-text: #ffffff;
+  --theme-text-secondary: #f5f5f5;
+  --theme-text-muted: #6B6B6B;
+  --theme-border: #1a1a1a;
+  --theme-toggle-color: #6B6B6B;
+  --theme-toggle-hover: rgba(21, 21, 21, 1);
+}
+
+/* Dark mode - this is the default/existing theme */
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.145 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.145 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.985 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.396 0.141 25.723);
+  --destructive-foreground: oklch(0.637 0.237 25.331);
+  --border: oklch(0.269 0 0);
+  --input: oklch(0.269 0 0);
+  --ring: oklch(0.439 0 0);
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(0.269 0 0);
+  --sidebar-ring: oklch(0.439 0 0);
+
+  /* Dark theme colors */
+  --theme-accent: #D4A574;
+  --theme-accent-rgb: 212, 165, 116;
+  --theme-accent-hover: #C9955E;
+  --theme-bg: #050505;
+  --theme-bg-secondary: #0a0a0a;
+  --theme-bg-tertiary: #151515;
+  --theme-bg-input: #0f0f0f;
+  --theme-bg-gradient-from: #080808;
+  --theme-bg-gradient-to: #050505;
+  --theme-text: #ffffff;
+  --theme-text-secondary: #f5f5f5;
+  --theme-text-muted: #6B6B6B;
+  --theme-border: #1a1a1a;
+  --theme-toggle-color: #6B6B6B;
+  --theme-toggle-hover: rgba(21, 21, 21, 1);
+}
+
+/* Light mode - new light theme */
+.light {
+  --background: #ffffff;
+  --foreground: #1a1a1a;
+  --card: #ffffff;
+  --card-foreground: #1a1a1a;
+  --popover: #ffffff;
+  --popover-foreground: #1a1a1a;
+  --primary: #753d3e;
+  --primary-foreground: #ffffff;
+  --secondary: #f5f5f5;
+  --secondary-foreground: #1a1a1a;
+  --muted: #f0f0f0;
+  --muted-foreground: #666666;
+  --accent: #753d3e;
+  --accent-foreground: #ffffff;
+  --destructive: #d4183d;
+  --destructive-foreground: #ffffff;
+  --border: rgba(117, 61, 62, 0.4);
+  --input: #ffffff;
+  --ring: #753d3e;
+  --sidebar: #fafafa;
+  --sidebar-foreground: #1a1a1a;
+  --sidebar-primary: #753d3e;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f0f0f0;
+  --sidebar-accent-foreground: #1a1a1a;
+  --sidebar-border: rgba(117, 61, 62, 0.2);
+  --sidebar-ring: #753d3e;
+
+  /* Light theme colors */
+  --theme-accent: #753d3e;
+  --theme-accent-rgb: 117, 61, 62;
+  --theme-accent-hover: #5a2e2f;
+  --theme-bg: #ffffff;
+  --theme-bg-secondary: #f8f9fa;
+  --theme-bg-tertiary: #e9ecef;
+  --theme-bg-input: #ffffff;
+  --theme-bg-gradient-from: #ffffff;
+  --theme-bg-gradient-to: #f1f3f5;
+  --theme-text: #1a1a1a;
+  --theme-text-secondary: #495057;
+  --theme-text-muted: #6c757d;
+  --theme-border: #dee2e6;
+  --theme-toggle-color: #753d3e;
+  --theme-toggle-hover: rgba(117, 61, 62, 0.1);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-input-background: var(--input-background);
+  --color-switch-background: var(--switch-background);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/**
+ * Base typography. This is not applied to elements which have an ancestor with a Tailwind text class.
+ */
+@layer base {
+  :where(:not(:has([class*=" text-"]), :not(:has([class^="text-"])))) {
+    h1 {
+      font-size: var(--text-2xl);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    h2 {
+      font-size: var(--text-xl);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    h3 {
+      font-size: var(--text-lg);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    h4 {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    p {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-normal);
+      line-height: 1.5;
+    }
+
+    label {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    button {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    input {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-normal);
+      line-height: 1.5;
+    }
+  }
+}
+
+html {
+  font-size: var(--font-size);
+}
+
+/* Utility classes for theme accent color */
+@layer utilities {
+  .text-theme-accent {
+    color: var(--theme-accent);
+  }
+
+  .bg-theme-accent {
+    background-color: var(--theme-accent);
+  }
+
+  .border-theme-accent {
+    border-color: var(--theme-accent);
+  }
+
+  .shadow-theme-accent {
+    box-shadow: 0 0 20px rgba(var(--theme-accent-rgb), var(--glow-intensity));
+  }
+
+  .ring-theme-accent {
+    --tw-ring-color: var(--theme-accent);
+  }
+}
+
+/* Custom scrollbar for search results panel (Chrome / Edge / Safari & Firefox) */
+.search-scroll {
+  scrollbar-width: thin;
+  /* Firefox */
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+}
+
+.search-scroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.search-scroll::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 9999px;
+}
+
+.search-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.search-scroll:hover::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+/* Light mode scrollbar */
+.light .search-scroll {
+  scrollbar-color: rgba(0, 0, 0, 0.12) transparent;
+}
+
+.light .search-scroll::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.light .search-scroll::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.light .search-scroll:hover::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.18);
+}
+
+/* ========================================
+   LIGHT MODE OVERRIDES
+   These override hardcoded Tailwind arbitrary values
+   ======================================== */
+
+/* Background color overrides */
+.light .bg-\[\#0a0a0a\],
+.light .bg-\[\#0A0A0A\] {
+  background-color: #ffffff !important;
+}
+
+.light .bg-\[\#1a1a1a\],
+.light .bg-\[\#1A1A1A\] {
+  background-color: #f8f8f8 !important;
+}
+
+.light .bg-\[\#2a2a2a\],
+.light .bg-\[\#2A2A2A\] {
+  background-color: #f0f0f0 !important;
+}
+
+.light .bg-\[\#0f0f0f\],
+.light .bg-\[\#0F0F0F\] {
+  background-color: #ffffff !important;
+}
+
+.light .bg-\[\#121212\] {
+  background-color: #ffffff !important;
+}
+
+.light .bg-\[\#050505\],
+.light .bg-\[\#080808\],
+.light .bg-\[\#050406\],
+.light .bg-\[\#0A0809\],
+.light .bg-\[\#121015\],
+.light .bg-\[\#1a1520\],
+.light .bg-\[\#0f0c12\] {
+  background-color: #ffffff !important;
+}
+
+.light .bg-\[\#111\],
+.light .bg-\[\#111111\] {
+  background-color: #fafafa !important;
+}
+
+.light .bg-\[\#222\],
+.light .bg-\[\#222222\] {
+  background-color: #f5f5f5 !important;
+}
+
+/* Accent color backgrounds - copper/gold to maroon */
+.light .bg-\[\#D4A574\],
+.light .bg-\[\#d4a574\] {
+  background-color: #753d3e !important;
+}
+
+.light .bg-\[\#C89B67\] {
+  background-color: #5c3031 !important;
+}
+
+.light .bg-\[\#C9955E\] {
+  background-color: #5c3031 !important;
+}
+
+/* Gradient overrides */
+.light .from-\[\#D4A574\],
+.light .from-\[\#d4a574\] {
+  --tw-gradient-from: #753d3e !important;
+}
+
+.light .to-\[\#C89B67\] {
+  --tw-gradient-to: #5c3031 !important;
+}
+
+.light .from-\[\#0a0a0a\],
+.light .from-\[\#0A0A0A\],
+.light .from-\[\#080808\],
+.light .from-\[\#050505\],
+.light .from-\[\#1a1520\] {
+  --tw-gradient-from: #ffffff !important;
+}
+
+.light .via-\[\#0d0d0d\],
+.light .via-\[\#0f0c12\] {
+  --tw-gradient-via: #fafafa !important;
+}
+
+.light .to-\[\#0a0a0a\],
+.light .to-\[\#0A0A0A\],
+.light .to-\[\#080808\],
+.light .to-\[\#050505\] {
+  --tw-gradient-to: #ffffff !important;
+}
+
+/* Text color overrides */
+.light .text-white,
+.light .text-\[\#ffffff\],
+.light .text-\[\#FFFFFF\],
+.light .text-\[\#F5F3EF\],
+.light .text-\[\#f5f3ef\],
+.light .text-\[\#FF9D00\],
+.light .text-\[\#ff9d00\],
+.light .text-\[\#00A3FF\],
+.light .text-\[\#00a3ff\],
+.light .text-\[\#7CFF6B\],
+.light .text-\[\#7cff6b\] {
+  color: #753d3e !important;
+}
+
+.light .text-title,
+.light .text-header,
+.light .text-main-name {
+  color: #753d3e !important;
+}
+
+.light .text-\[\#D4A574\],
+.light .text-\[\#d4a574\],
+.light .title-maroon {
+  color: #753d3e !important;
+}
+
+.light .text-\#0a0a0a,
+.light .text-\[\#0a0a0a\],
+.light .text-\[\#0A0A0A\],
+.light .text-\[\#000000\],
+.light .text-black {
+  color: #ffffff !important;
+}
+
+.light .text-\[\#666\],
+.light .text-\[\#666666\],
+.light .text-\[\#6B6B6B\],
+.light .text-\#6b6b6b,
+.light .text-\[\#555\],
+.light .text-\[\#555555\],
+.light .text-\[\#444\],
+.light .text-\[\#444444\],
+.light .text-\[\#C2BAB1\],
+.light .text-\[\#c2bab1\],
+.light .text-\[\#8C847B\],
+.light .text-\[\#8c847b\],
+.light .text-\[\#B8B8B8\],
+.light .text-\[\#b8b8b8\],
+.light .text-\[\#8B8B8B\],
+.light .text-\[\#e6e6e6\] {
+  color: #333333 !important;
+}
+
+/* Border color overrides */
+.light .border-\[\#D4A574\],
+.light .border-\[\#d4a574\],
+.light .border-\[\#2a2a2a\],
+.light .border-\[\#2A2A2A\],
+.light .border-\[\#1a1a1a\],
+.light .border-\[\#1A1A1A\],
+.light .border-\[\#222\],
+.light .border-\[\#222222\] {
+  border-color: rgba(117, 61, 62, 0.25) !important;
+}
+
+.light .ring-\[\#D4A574\] {
+  --tw-ring-color: #753d3e !important;
+}
+
+/* Shadow overrides */
+.light .shadow-\[0_0_20px_rgba\(212\,165\,116\,0\.3\)\] {
+  box-shadow: 0 0 20px rgba(117, 61, 62, 0.15) !important;
+}
+
+.light .shadow-\[0_0_30px_rgba\(212\,165\,116\,0\.4\)\] {
+  box-shadow: 0 0 30px rgba(117, 61, 62, 0.2) !important;
+}
+
+.light .shadow-\[\#D4A574\]\/30,
+.light .shadow-\[\#d4a574\]\/30 {
+  --tw-shadow-color: rgba(117, 61, 62, 0.15) !important;
+}
+
+.light .shadow-lg {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
+}
+
+.light .shadow-2xl {
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Placeholder text color in light mode */
+.light .placeholder\:text-\[\#444\]::placeholder {
+  color: #999999 !important;
+}
+
+.light .placeholder-\[\#444\]::placeholder {
+  color: #999999 !important;
+}
+
+/* Hover state overrides */
+.light .hover\:bg-\[\#1a1a1a\]:hover,
+.light .hover\:bg-\[\#1A1A1A\]:hover {
+  background-color: #f0f0f0 !important;
+}
+
+.light .hover\:bg-\[\#2a2a2a\]:hover,
+.light .hover\:bg-\[\#2A2A2A\]:hover {
+  background-color: #e8e8e8 !important;
+}
+
+.light .hover\:bg-\[\#222\]:hover {
+  background-color: #e8e8e8 !important;
+}
+
+.light .hover\:text-\[\#D4A574\]:hover,
+.light .hover\:text-\[\#d4a574\]:hover {
+  color: #753d3e !important;
+}
+
+.light .hover\:text-white:hover {
+  color: #1a1a1a !important;
+}
+
+.light .hover\:bg-\[\#C9955E\]:hover {
+  background-color: #5c3031 !important;
+}
+
+.light .hover\:border-\[\#D4A574\]:hover {
+  border-color: #753d3e !important;
+}
+
+/* Focus state overrides */
+.light .focus\:border-\[\#D4A574\]:focus {
+  border-color: #753d3e !important;
+}
+
+.light .focus\:ring-\[\#D4A574\]:focus {
+  --tw-ring-color: rgba(117, 61, 62, 0.5) !important;
+}
+
+/* Ring & outline overrides */
+.light .ring-\[\#D4A574\] {
+  --tw-ring-color: #753d3e !important;
+}
+
+/* Opacity variations */
+.light .bg-\[\#D4A574\]\/10,
+.light .bg-\[\#d4a574\]\/10 {
+  background-color: rgba(117, 61, 62, 0.1) !important;
+}
+
+.light .bg-\[\#D4A574\]\/20,
+.light .bg-\[\#d4a574\]\/20 {
+  background-color: rgba(117, 61, 62, 0.15) !important;
+}
+
+.light .border-\[\#D4A574\]\/20,
+.light .border-\[\#d4a574\]\/20 {
+  border-color: rgba(117, 61, 62, 0.15) !important;
+}
+
+.light .border-\[\#D4A574\]\/30,
+.light .border-\[\#d4a574\]\/30 {
+  border-color: rgba(117, 61, 62, 0.2) !important;
+}
+
+.light .border-\[\#D4A574\]\/50,
+.light .border-\[\#d4a574\]\/50 {
+  border-color: rgba(117, 61, 62, 0.35) !important;
+}
+
+.light .text-\[\#D4A574\]\/50,
+.light .text-\[\#d4a574\]\/50 {
+  color: rgba(117, 61, 62, 0.6) !important;
+}
+
+.light .hover\:bg-\[\#D4A574\]\/10:hover {
+  background-color: rgba(117, 61, 62, 0.1) !important;
+}
+
+.light .hover\:border-\[\#D4A574\]\/30:hover {
+  border-color: rgba(117, 61, 62, 0.2) !important;
+}
+
+.light .hover\:border-\[\#D4A574\]\/50:hover {
+  border-color: rgba(117, 61, 62, 0.35) !important;
+}
+
+/* Card & panel shadows for light mode */
+.light [class*="bg-\[\#0a0a0a\]"],
+.light [class*="bg-\[\#1a1a1a\]"],
+.light [class*="bg-\[\#0f0f0f\]"] {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+/* Dividers and separators */
+.light .bg-\[\#1a1a1a\].h-px,
+.light .h-px.bg-\[\#1a1a1a\] {
+  background-color: rgba(117, 61, 62, 0.15) !important;
+}
+
+/* Input field backgrounds */
+.light input.bg-\[\#0a0a0a\],
+.light input.bg-\[\#1a1a1a\],
+.light input.bg-\[\#0f0f0f\],
+.light textarea.bg-\[\#0a0a0a\],
+.light textarea.bg-\[\#1a1a1a\],
+.light textarea.bg-\[\#0f0f0f\] {
+  background-color: #ffffff !important;
+  color: #1a1a1a !important;
+  border-color: rgba(117, 61, 62, 0.3) !important;
+}
+
+/* Active/selected states */
+.light .group-hover\:text-\[\#D4A574\] {
+  color: #753d3e !important;
+}
+
+.light .group-hover\:bg-\[\#222\] {
+  background-color: #f0f0f0 !important;
+}
+
+/* Animation classes */
+.light .animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Theme toggle button specific styles */
+.light .text-theme-toggle {
+  color: #666666;
+}
+
+.light .hover\:bg-theme-toggle-hover:hover {
+  background-color: rgba(117, 61, 62, 0.1);
+}
+
+.dark .text-theme-toggle {
+  color: #8B8B8B;
+}
+
+.dark .hover\:bg-theme-toggle-hover:hover {
+  background-color: rgba(26, 26, 26, 1);
+}
+
+/* ========================================
+   ADDITIONAL LIGHT MODE OVERRIDES
+   Comprehensive coverage for all dark colors
+   ======================================== */
+
+/* More background color overrides for additional dark shades */
+.light .bg-\[\#050505\] {
+  background-color: #ffffff !important;
+}
+
+.light .bg-\[\#080808\] {
+  background-color: #fefefe !important;
+}
+
+.light .bg-\[\#0d0d0d\] {
+  background-color: #fcfcfc !important;
+}
+
+.light .bg-\[\#151515\] {
+  background-color: #f6f6f6 !important;
+}
+
+.light .bg-\[\#181818\] {
+  background-color: #f5f5f5 !important;
+}
+
+.light .bg-black {
+  background-color: #ffffff !important;
+}
+
+/* Additional gradient overrides */
+.light .from-\[\#080808\] {
+  --tw-gradient-from: #fefefe !important;
+}
+
+.light .to-\[\#050505\] {
+  --tw-gradient-to: #ffffff !important;
+}
+
+.light .from-\[\#050505\] {
+  --tw-gradient-from: #ffffff !important;
+}
+
+.light .to-\[\#080808\] {
+  --tw-gradient-to: #fefefe !important;
+}
+
+.light .from-\[\#1a1a1a\] {
+  --tw-gradient-from: #f8f8f8 !important;
+}
+
+.light .to-\[\#1a1a1a\] {
+  --tw-gradient-to: #f8f8f8 !important;
+}
+
+.light .via-\[\#1a1a1a\] {
+  --tw-gradient-via: #f8f8f8 !important;
+}
+
+/* More text color overrides */
+.light .text-\[\#555\],
+.light .text-\[\#555555\] {
+  color: #666666 !important;
+}
+
+/* Border overrides for additional shades */
+.light .border-\[\#D4A574\]\/10 {
+  border-color: rgba(117, 61, 62, 0.1) !important;
+}
+
+.light .border-transparent {
+  border-color: transparent !important;
+}
+
+/* Hover states for additional colors */
+.light .hover\:bg-\[\#151515\]:hover {
+  background-color: #f0f0f0 !important;
+}
+
+.light .hover\:bg-\[\#0f0f0f\]:hover {
+  background-color: #f2f2f2 !important;
+}
+
+/* Shadow overrides */
+.light .shadow-\[4px_0_24px_rgba\(0\,0\,0\,0\.5\)\] {
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.08) !important;
+}
+
+.light .shadow-\[0_0_20px_rgba\(212\,165\,116\,0\.1\)\] {
+  box-shadow: 0 0 20px rgba(117, 61, 62, 0.08) !important;
+}
+
+.light .shadow-xl {
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04) !important;
+}
+
+/* Scrollbar styling for light mode (all scrollbars) */
+.light .scrollbar-thumb-\[\#222\] {
+  --scrollbar-thumb-color: rgba(117, 61, 62, 0.15) !important;
+}
+
+.light .scrollbar-thin {
+  scrollbar-color: rgba(117, 61, 62, 0.15) transparent !important;
+}
+
+.light::-webkit-scrollbar-thumb {
+  background: rgba(117, 61, 62, 0.15) !important;
+}
+
+/* Fixed navigation and headers */
+.light header,
+.light .fixed.bg-\[\#0a0a0a\] {
+  background-color: #ffffff !important;
+  border-color: #753d3e !important;
+}
+
+/* Ensure min-h-screen backgrounds are overridden */
+.light .min-h-screen.bg-\[\#050505\],
+.light .min-h-screen.bg-\[\#0a0a0a\],
+.light .min-h-screen.bg-gradient-to-br {
+  background: #f8f8f8 !important;
+}
+
+/* Flex containers with dark bg */
+.light .flex.flex-col.bg-\[\#050505\] {
+  background-color: #ffffff !important;
+}
+
+/* Sticky headers */
+.light .sticky.bg-\[\#0a0a0a\] {
+  background-color: #ffffff !important;
+}
+
+/* flex-1 backgrounds */
+.light .flex-1.bg-gradient-to-br {
+  background: #f8f8f8 !important;
+}
+
+/* Override all bg-gradient-to-br patterns with dark colors */
+.light [class*="bg-gradient-to-br"][class*="from-\[\#0"] {
+  background: linear-gradient(to bottom right, #f8f8f8, #ffffff) !important;
+}
+
+.light [class*="bg-gradient-to-b"][class*="from-\[\#0"] {
+  background: linear-gradient(to bottom, #ffffff, #fafafa, #ffffff) !important;
+}
+
+/* Card and panel base styling */
+.light .rounded-xl[class*="bg-\[\#0"],
+.light .rounded-2xl[class*="bg-\[\#0"],
+.light .rounded-lg[class*="bg-\[\#0"] {
+  background-color: #ffffff !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Explicitly target the sidebar */
+.light .fixed.left-0.top-0[class*="bg-gradient"] {
+  background: linear-gradient(to bottom, #f8f8f8, #fafafa, #f8f8f8) !important;
+  border-color: #753d3e !important;
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Override icon hover states in sidebar */
+.light .hover\:bg-\[\#1a1a1a\]:hover,
+.light .hover\:bg-\[\#0a0a0a\]:hover {
+  background-color: rgba(117, 61, 62, 0.1) !important;
+}
+
+/* Active/current tab states */
+.light .bg-\[\#0a0a0a\][class*="border-\[\#D4A574\]"] {
+  background-color: #ffffff !important;
+  border-color: #753d3e !important;
+}
+
+/* Tooltips in light mode */
+.light .absolute[class*="bg-\[\#1a1a1a\]"][class*="text-\[\#D4A574\]"] {
+  background-color: #ffffff !important;
+  color: #753d3e !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Dropdown menus */
+.light [class*="absolute"][class*="bg-\[\#0a0a0a\]"][class*="border-\[\#D4A574\]"] {
+  background-color: #ffffff !important;
+  border-color: #753d3e !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Button styles in light mode - primary buttons keep their colors */
+.light button.bg-\[\#753d3e\],
+.light .bg-\[\#753d3e\] {
+  background-color: #753d3e !important;
+  color: #ffffff !important;
+}
+
+/* Ensure verify buttons have correct styling */
+.light button[class*="bg-\[\#D4A574\]"],
+.light button[class*="bg-\[\#753d3e\]"] {
+  color: #ffffff !important;
+}
+
+/* Calendar and date picker styling */
+.light .rounded-xl[class*="bg-\[\#0f0f0f\]"],
+.light .rounded-2xl[class*="bg-\[\#0f0f0f\]"] {
+  background-color: #ffffff !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Text inputs in light mode */
+.light input[class*="bg-\[\#0"],
+.light textarea[class*="bg-\[\#0"],
+.light input[class*="bg-\[\#1"],
+.light textarea[class*="bg-\[\#1"] {
+  background-color: #ffffff !important;
+  color: #1a1a1a !important;
+  border-color: rgba(117, 61, 62, 0.25) !important;
+}
+
+.light input::placeholder,
+.light textarea::placeholder {
+  color: #888888 !important;
+}
+
+/* Search input styling */
+.light .relative input[type="text"],
+.light .relative input[type="search"] {
+  background-color: #ffffff !important;
+  color: #1a1a1a !important;
+}
+
+/* Status indicator dots - keep their semantic colors */
+.light .bg-green-500 {
+  background-color: #22c55e !important;
+}
+
+.light .bg-blue-500,
+.light .bg-blue-400 {
+  background-color: #3b82f6 !important;
+}
+
+.light .bg-red-500,
+.light .bg-red-600 {
+  background-color: #ef4444 !important;
+}
+
+.light .text-green-500 {
+  color: #16a34a !important;
+}
+
+.light .text-blue-500 {
+  color: #2563eb !important;
+}
+
+.light .text-red-500 {
+  color: #dc2626 !important;
+}
+
+/* Operations Hub specific overrides */
+.light .text-3xl.font-light.text-white {
+  color: #1a1a1a !important;
+}
+
+.light h1.text-white,
+.light h2.text-white,
+.light h3.text-white,
+.light h4.text-white {
+  color: #1a1a1a !important;
+}
+
+/* Info text and metadata */
+.light .text-xs.text-\[\#6B6B6B\],
+.light .text-xs.text-\[\#555\],
+.light .text-sm.text-\[\#8B8B8B\] {
+  color: #666666 !important;
+}
+
+/* Patient card styling */
+.light [class*="rounded-2xl"][class*="bg-\[\#0a0a0a\]"][class*="border-\[\#D4A574\]"] {
+  background-color: #ffffff !important;
+  border-color: rgba(117, 61, 62, 0.25) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06) !important;
+}
+
+/* Hover on patient cards */
+.light [class*="hover\:border-\[\#D4A574\]"]:hover {
+  border-color: #753d3e !important;
+}
+
+/* Stats cards */
+.light [class*="bg-\[\#0f0f0f\]"][class*="border-\[\#D4A574\]"] {
+  background-color: #ffffff !important;
+  border-color: rgba(117, 61, 62, 0.2) !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Ensure all white text on dark backgrounds is flipped */
+.light .font-bold.text-white,
+.light .font-semibold.text-white,
+.light .font-medium.text-white,
+.light .font-light.text-white {
+  color: #1a1a1a !important;
+}
+
+/* Gradient overlays */
+.light .bg-gradient-to-r.from-transparent.via-\[\#D4A574\]\/10 {
+  background: linear-gradient(to right, transparent, rgba(117, 61, 62, 0.1)) !important;
+}
+
+/* Filter and action buttons */
+.light button[class*="bg-\[\#0f0f0f\]"][class*="border-\[\#D4A574\]"] {
+  background-color: #ffffff !important;
+  border-color: #753d3e !important;
+  color: #1a1a1a !important;
+}
+
+/* Body/HTML base styles for light mode */
+.light body,
+.light html {
+  background-color: #f8f8f8 !important;
+  color: #1a1a1a !important;
+}
+
+/* Main app container */
+.light #root {
+  background-color: #f8f8f8 !important;
+}
+
+/* Opacity variations for accent */
+.light .bg-\[\#D4A574\]\/5 {
+  background-color: rgba(117, 61, 62, 0.05) !important;
+}
+
+/* Badge and pill styling */
+.light .rounded-full[class*="bg-\[\#1a1a1a\]"] {
+  background-color: #f0f0f0 !important;
+}
+
+/* Loading spinner */
+.light .border-t-\[\#D4A574\] {
+  border-top-color: #753d3e !important;
+}
+
+/* Links and interactive text */
+.light a.text-\[\#D4A574\],
+.light .cursor-pointer.text-\[\#D4A574\] {
+  color: #753d3e !important;
+}
+
+/* Ensure nested elements inherit light mode */
+.light * {
+  --theme-accent: #753d3e;
+  --theme-accent-rgb: 117, 61, 62;
+}
+
+/* ========================================
+   FINAL COMPREHENSIVE OVERRIDES
+   Cover all remaining edge cases
+   ======================================== */
+
+/* Additional dark background colors from various components */
+.light .bg-\[\#050406\] {
+  background-color: #ffffff !important;
+}
+
+.light .bg-\[\#262626\] {
+  background-color: #e8e8e8 !important;
+}
+
+.light .border-\[\#262626\] {
+  border-color: rgba(117, 61, 62, 0.15) !important;
+}
+
+/* Text colors - light text on dark backgrounds */
+.light .text-\[\#F5F3EF\],
+.light .text-\[\#f5f3ef\] {
+  color: #1a1a1a !important;
+}
+
+.light .text-\[\#e6eef2\] {
+  color: #333333 !important;
+}
+
+/* Table header/row backgrounds */
+.light tr.bg-\[\#151515\],
+.light .bg-\[\#151515\] {
+  background-color: #f6f6f6 !important;
+}
+
+.light tr.bg-\[\#1a1a1a\] {
+  background-color: #f8f8f8 !important;
+}
+
+/* Table hover states */
+.light tr.hover\:bg-\[\#151515\]:hover,
+.light .hover\:bg-\[\#151515\]:hover {
+  background-color: #f0f0f0 !important;
+}
+
+/* Ring colors */
+.light .ring-\[\#D4A574\]\/30 {
+  --tw-ring-color: rgba(117, 61, 62, 0.2) !important;
+}
+
+.light .ring-1.ring-\[\#D4A574\]\/30 {
+  --tw-ring-color: rgba(117, 61, 62, 0.2) !important;
+}
+
+/* Focus visible states */
+.light .focus\:border-\[\#D4A574\]\/50:focus {
+  border-color: rgba(117, 61, 62, 0.35) !important;
+}
+
+/* Portal-specific gradients */
+.light .bg-gradient-to-br.from-\[\#080808\].to-\[\#050505\] {
+  background: linear-gradient(to bottom right, #fafafa, #ffffff) !important;
+}
+
+.light .from-\[\#D4A574\]\/20 {
+  --tw-gradient-from: rgba(117, 61, 62, 0.15) !important;
+}
+
+.light .to-\[\#D4A574\]\/5 {
+  --tw-gradient-to: rgba(117, 61, 62, 0.05) !important;
+}
+
+/* Sticky elements */
+.light .sticky.top-\[80px\] {
+  background-color: #ffffff !important;
+}
+
+.light .sticky.top-0[class*="bg-\[\#0"] {
+  background-color: #ffffff !important;
+}
+
+/* Shadow patterns */
+.light .shadow-inner {
+  box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06) !important;
+}
+
+/* Specific portal tab styling */
+.light button[class*="bg-\[\#0a0a0a\]"][class*="border-\[\#D4A574\]"][class*="text-\[\#D4A574\]"] {
+  background-color: #ffffff !important;
+  border-color: #753d3e !important;
+  color: #753d3e !important;
+}
+
+/* Text with tracking */
+.light .tracking-\[0\.25em\].text-\[\#D4A574\],
+.light .tracking-\[0\.2em\].text-\[\#D4A574\] {
+  color: #753d3e !important;
+}
+
+/* Opacity-based text colors */
+.light .text-\[\#D4A574\]\/70,
+.light .opacity-80.text-\[\#D4A574\] {
+  color: rgba(117, 61, 62, 0.85) !important;
+}
+
+/* Calendar component specific styling */
+.light .bg-\[\#0f0f0f\].border.rounded-2xl {
+  background-color: #ffffff !important;
+  border-color: rgba(117, 61, 62, 0.2) !important;
+}
+
+/* Search overlay */
+.light [class*="max-w-5xl"][class*="bg-\[\#050505\]"] {
+  background-color: #ffffff !important;
+}
+
+/* Video consultation view */
+.light .h-full.flex.flex-col.bg-\[\#050505\] {
+  background-color: #f8f8f8 !important;
+}
+
+/* Medicine management view */
+.light .min-h-screen.bg-\[\#050406\] {
+  background-color: #f8f8f8 !important;
+}
+
+/* Operations center backgrounds */
+.light .w-full.flex-1.flex.flex-col.min-h-0.bg-\[\#050505\] {
+  background-color: #ffffff !important;
+}
+
+.light .bg-\[\#080808\][class*="border-\[\#D4A574\]"] {
+  background-color: #ffffff !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06) !important;
+}
+
+/* Textarea shadow styling */
+.light textarea.shadow-inner {
+  background-color: #ffffff !important;
+  box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.04) !important;
+}
+
+/* Patient list items */
+.light .bg-\[\#0f0f0f\].border.rounded-lg {
+  background-color: #ffffff !important;
+  border-color: rgba(117, 61, 62, 0.15) !important;
+}
+
+/* Billing view alternating rows */
+.light tr:nth-child\(even\).bg-\[\#1a1a1a\] {
+  background-color: #f8f8f8 !important;
+}
+
+.light tr:nth-child\(odd\).bg-\[\#151515\] {
+  background-color: #fafafa !important;
+}
+
+/* Scrollbar-thumb colors */
+.light .scrollbar-thumb-\[\#222\]::-webkit-scrollbar-thumb,
+.light [class*="scrollbar-thumb-"]::-webkit-scrollbar-thumb {
+  background: rgba(117, 61, 62, 0.15) !important;
+}
+
+/* Empty state styling */
+.light .border-dashed[class*="border-\[\#D4A574\]"] {
+  border-color: rgba(117, 61, 62, 0.3) !important;
+  background-color: #fafafa !important;
+}
+
+/* More button hover states */
+.light .hover\:scale-105:hover {
+  transform: scale(1.05);
+}
+
+/* Search icon in inputs */
+.light .group-focus-within\:text-\[\#D4A574\] {
+  color: #753d3e !important;
+}
+
+/* Dropdown arrow/chevron */
+.light .text-\[\#444\].group-focus-within\:text-\[\#D4A574\] {
+  color: #888888 !important;
+}
+
+.light .text-\[\#444\].group-focus-within\:text-\[\#D4A574\]:is(:focus-within *) {
+  color: #753d3e !important;
+}
+
+/* Verify button - needs white text on dark background */
+.light button.bg-\[\#D4A574\],
+.light button.bg-\[\#753d3e\],
+.light .bg-\[\#753d3e\] {
+  background-color: #753d3e !important;
+  color: #ffffff !important;
+}
+
+.light button.bg-\[\#D4A574\] .text-\[\#0a0a0a\],
+.light button.bg-\[\#D4A574\] svg {
+  color: #ffffff !important;
+}
+
+/* Override any nested white/dark text in accent buttons */
+.light [class*="bg-\[\#D4A574\]"] span,
+.light [class*="bg-\[\#D4A574\]"] .text-\[\#0a0a0a\] {
+  color: #ffffff !important;
+}
+
+/* Ensure all gradients from accent colors work */
+.light [class*="bg-gradient-to-br"][class*="from-\[\#D4A574\]"] {
+  background: linear-gradient(to bottom right, #753d3e, #5c3031) !important;
+}
+
+/* Active state buttons should keep accent styling */
+.light [class*="from-\[\#D4A574\]"][class*="to-\[\#C89B67\]"] {
+  background: linear-gradient(to bottom right, #753d3e, #5c3031) !important;
+  color: #ffffff !important;
+}
+
+/* Make sure sidebar icons in active state are visible */
+.light .bg-gradient-to-br.from-\[\#D4A574\].to-\[\#C89B67\] {
+  background: linear-gradient(to bottom right, #753d3e, #5c3031) !important;
+}
+
+.light .bg-gradient-to-br.from-\[\#D4A574\].to-\[\#C89B67\] svg {
+  color: #ffffff !important;
+}
+
+/* Ensure the h-px divider works correctly */
+.light div.h-px[class*="bg-\[\#1a1a1a\]"],
+.light .h-px.bg-\[\#1a1a1a\] {
+  background-color: rgba(117, 61, 62, 0.1) !important;
+}
+
+/* Form ring and border */
+.light .ring-offset-background {
+  --tw-ring-offset-color: #ffffff;
+}
+
+/* Modal backgrounds */
+.light [class*="fixed"][class*="inset-0"][class*="bg-black"] {
+  background-color: rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Transition overrides for theme-aware components */
+.light .transition-colors,
+.light .transition-all {
+  transition-property: background-color, border-color, color, fill, stroke, box-shadow;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+/* ========================================
+   COMPREHENSIVE LIGHT MODE AUDIT - FINAL
+   Complete coverage for all dark elements
+   ======================================== */
+
+/* === ADDITIONAL BACKGROUND COLORS === */
+.light .bg-\[\#060606\],
+.light .bg-\[\#070707\],
+.light .bg-\[\#0b0b0b\],
+.light .bg-\[\#0c0c0c\] {
+  background-color: #fafafa !important;
+}
+
+.light .bg-\[\#121212\],
+.light .bg-\[\#121015\] {
+  background-color: #f6f6f6 !important;
+}
+
+.light .bg-\[\#262028\] {
+  background-color: #e8e8e8 !important;
+}
+
+.light .bg-\[\#333\],
+.light .bg-\[\#333333\] {
+  background-color: #e5e5e5 !important;
+}
+
+/* Video backgrounds - keep dark for video elements */
+.light video.bg-black,
+.light .bg-black video,
+.light [ref*="video"].bg-black {
+  background-color: #000000 !important;
+}
+
+/* === ALL TEXT-WHITE COMPREHENSIVE OVERRIDE === */
+.light .text-white {
+  color: #1a1a1a !important;
+}
+
+.light h1.text-white,
+.light h2.text-white,
+.light h3.text-white,
+.light h4.text-white,
+.light h5.text-white,
+.light h6.text-white,
+.light p.text-white,
+.light span.text-white,
+.light div.text-white,
+.light label.text-white {
+  color: #1a1a1a !important;
+}
+
+/* Text white in specific contexts */
+.light .text-white.text-sm,
+.light .text-white.text-xs,
+.light .text-white.text-lg,
+.light .text-white.text-xl,
+.light .text-white.text-2xl,
+.light .text-white.text-3xl {
+  color: #1a1a1a !important;
+}
+
+.light .font-mono.text-white,
+.light .font-bold.text-white,
+.light .font-semibold.text-white,
+.light .font-medium.text-white {
+  color: #1a1a1a !important;
+}
+
+/* === ADDITIONAL TEXT COLORS === */
+.light .text-\[\#666\],
+.light .text-\[\#666666\] {
+  color: #555555 !important;
+}
+
+.light .text-\[\#5a5a5a\] {
+  color: #666666 !important;
+}
+
+.light .text-\[\#4a4a4a\] {
+  color: #777777 !important;
+}
+
+.light .text-\[\#333\],
+.light .text-\[\#333333\] {
+  color: #888888 !important;
+}
+
+.light .text-\[\#F5F3EF\],
+.light .text-\[\#f5f3ef\] {
+  color: #1a1a1a !important;
+}
+
+.light .text-\[\#8C847B\] {
+  color: #666666 !important;
+}
+
+.light .text-\[\#9aa0a6\] {
+  color: #555555 !important;
+}
+
+/* === PLACEHOLDER COLORS === */
+.light .placeholder-\[\#5a5a5a\]::placeholder,
+.light .placeholder\:text-\[\#5a5a5a\]::placeholder {
+  color: #888888 !important;
+}
+
+.light .placeholder-\[\#6B6B6B\]::placeholder,
+.light .placeholder\:text-\[\#6B6B6B\]::placeholder {
+  color: #888888 !important;
+}
+
+.light .placeholder-\[\#9aa0a6\]::placeholder,
+.light .placeholder\:text-\[\#9aa0a6\]::placeholder {
+  color: #777777 !important;
+}
+
+.light .placeholder-\[\#4a4a4a\]::placeholder,
+.light .placeholder\:text-\[\#4a4a4a\]::placeholder {
+  color: #888888 !important;
+}
+
+.light .placeholder-\[\#8C847B\]::placeholder,
+.light .placeholder\:text-\[\#8C847B\]::placeholder {
+  color: #888888 !important;
+}
+
+.light .placeholder\:text-\[\#333\]::placeholder,
+.light .placeholder\:text-\[\#333333\]::placeholder {
+  color: #999999 !important;
+}
+
+/* === BORDER COLORS FOR ADDITIONAL SHADES === */
+.light .border-\[\#111\],
+.light .border-\[\#111111\] {
+  border-color: rgba(117, 61, 62, 0.15) !important;
+}
+
+.light .ring-\[\#111111\] {
+  --tw-ring-color: rgba(117, 61, 62, 0.15) !important;
+}
+
+.light .border-\[\#333\],
+.light .border-\[\#333333\] {
+  border-color: rgba(117, 61, 62, 0.2) !important;
+}
+
+.light .border-white\/10 {
+  border-color: rgba(117, 61, 62, 0.15) !important;
+}
+
+.light .border-yellow-500\/30 {
+  border-color: rgba(234, 179, 8, 0.3) !important;
+}
+
+/* === TABLE STYLING IN LIGHT MODE === */
+.light table,
+.light thead,
+.light tbody,
+.light th,
+.light td {
+  color: #1a1a1a;
+}
+
+.light th {
+  color: #333333 !important;
+  background-color: #f5f5f5 !important;
+}
+
+.light tr:nth-child(even) {
+  background-color: #fafafa !important;
+}
+
+.light tr:nth-child(odd) {
+  background-color: #ffffff !important;
+}
+
+.light tr.hover\:bg-\[\#070707\]:hover,
+.light tr.hover\:bg-\[\#060606\]:hover {
+  background-color: #f0f0f0 !important;
+}
+
+.light tr.even\:bg-\[\#060606\]:nth-child(even) {
+  background-color: #f8f8f8 !important;
+}
+
+/* === ACCENT BUTTON TEXT FIX === */
+/* When background is accent color, text should be white */
+.light .bg-\[\#D4A574\] .text-\[\#0a0a0a\],
+.light .bg-\[\#D4A574\].text-\[\#0a0a0a\],
+.light .bg-\[\#753d3e\] .text-white,
+.light [class*="bg-\[var\(--theme-accent\)\]"].text-white,
+.light [class*="bg-\[var\(--theme-accent\)\]"] .text-white,
+.light [class*="bg-theme-accent"].text-white,
+.light [class*="bg-theme-accent"] .text-white,
+.light [class*="bg-\[\#D4A574\]"] .text-black,
+.light [class*="bg-\[\#D4A574\]"].text-black,
+.light button.bg-\[\#D4A574\],
+.light button[class*="bg-\[var\(--theme-accent\)\]"] {
+  color: #ffffff !important;
+}
+
+/* Hover state for accent buttons */
+.light .hover\:bg-\[\#c49564\]:hover,
+.light .hover\:bg-\[\#b38b60\]:hover,
+.light .hover\:bg-\[\#b08558\]:hover {
+  background-color: #5c3031 !important;
+}
+
+/* Active accent backgrounds should have white text */
+.light [class*="bg-\[\#D4A574\]"]:not(.bg-\[\#D4A574\]\/5):not(.bg-\[\#D4A574\]\/10):not(.bg-\[\#D4A574\]\/20) {
+  color: #ffffff !important;
+}
+
+/* === MODAL AND DIALOG OVERLAYS === */
+.light .bg-black\/50,
+.light .bg-black\/60,
+.light .bg-black.bg-opacity-50 {
+  background-color: rgba(0, 0, 0, 0.4) !important;
+}
+
+/* Dialog/modal content backgrounds */
+.light [role="dialog"],
+.light [role="alertdialog"] {
+  background-color: #ffffff !important;
+  color: #1a1a1a !important;
+}
+
+/* === SIDEBAR NAVIGATION LINK STYLING === */
+.light .hover\:bg-\[\#1a1a1a\]:hover {
+  background-color: rgba(117, 61, 62, 0.08) !important;
+}
+
+.light .hover\:text-\[\#D4A574\]:hover {
+  color: #753d3e !important;
+}
+
+.light .group-hover\:text-white {
+  color: #1a1a1a !important;
+}
+
+.light .group-hover\:text-\[\#D4A574\] {
+  color: #753d3e !important;
+}
+
+/* Tooltip styling in light mode */
+.light .bg-\[\#1a1a1a\].text-\[\#D4A574\],
+.light [class*="bg-\[\#1a1a1a\]"][class*="text-\[\#D4A574\]"] {
+  background-color: #ffffff !important;
+  color: #753d3e !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* === FORM INPUT STYLING === */
+.light input,
+.light textarea,
+.light select {
+  color: #1a1a1a !important;
+}
+
+.light input[class*="bg-\[\#0"],
+.light input[class*="bg-\[\#1"],
+.light textarea[class*="bg-\[\#0"],
+.light textarea[class*="bg-\[\#1"],
+.light select[class*="bg-\[\#0"],
+.light select[class*="bg-\[\#1"] {
+  background-color: #ffffff !important;
+  color: #1a1a1a !important;
+  border-color: rgba(117, 61, 62, 0.25) !important;
+}
+
+.light input:focus,
+.light textarea:focus,
+.light select:focus {
+  border-color: #753d3e !important;
+}
+
+/* Appearance none for custom selects */
+.light select.appearance-none {
+  background-color: #ffffff !important;
+  color: #1a1a1a !important;
+}
+
+/* === CARD AND PANEL BACKGROUNDS === */
+.light [class*="rounded-lg"][class*="bg-\[\#1a1a1a\]"],
+.light [class*="rounded-xl"][class*="bg-\[\#1a1a1a\]"],
+.light [class*="rounded-2xl"][class*="bg-\[\#1a1a1a\]"],
+.light [class*="rounded-lg"][class*="bg-\[\#0a0a0a\]"],
+.light [class*="rounded-xl"][class*="bg-\[\#0a0a0a\]"],
+.light [class*="rounded-2xl"][class*="bg-\[\#0a0a0a\]"],
+.light [class*="rounded-lg"][class*="bg-\[\#0f0f0f\]"],
+.light [class*="rounded-xl"][class*="bg-\[\#0f0f0f\]"],
+.light [class*="rounded-2xl"][class*="bg-\[\#0f0f0f\]"] {
+  background-color: #ffffff !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
+}
+
+/* === STATUS INDICATORS - KEEP SEMANTIC COLORS === */
+.light .text-\[\#4CAF50\] {
+  color: #16a34a !important;
+}
+
+.light .bg-\[\#4CAF50\] {
+  background-color: #22c55e !important;
+}
+
+.light .bg-\[\#4CAF50\].bg-opacity-20,
+.light .bg-\[\#4CAF50\]\/20 {
+  background-color: rgba(34, 197, 94, 0.2) !important;
+}
+
+.light .bg-\[\#4CAF50\].bg-opacity-30,
+.light .bg-\[\#4CAF50\]\/30 {
+  background-color: rgba(34, 197, 94, 0.3) !important;
+}
+
+/* === HOVER STATES FOR CARDS === */
+.light .hover\:bg-\[\#2a2a2a\]:hover {
+  background-color: #f0f0f0 !important;
+}
+
+.light .hover\:bg-\[\#333\]:hover,
+.light .hover\:bg-\[\#333333\]:hover {
+  background-color: #e5e5e5 !important;
+}
+
+.light .hover\:border-\[\#D4A574\]:hover {
+  border-color: #753d3e !important;
+}
+
+/* === SHADOW OVERRIDES === */
+.light .shadow-\[\#D4A574\]\/20,
+.light .shadow-\[\#d4a574\]\/20 {
+  --tw-shadow-color: rgba(117, 61, 62, 0.15) !important;
+}
+
+.light .hover\:shadow-\[\#D4A574\]\/10:hover {
+  box-shadow: 0 0 20px rgba(117, 61, 62, 0.08) !important;
+}
+
+/* === CALENDAR GRID STYLING === */
+.light .bg-\[\#D4A574\].bg-opacity-20 {
+  background-color: rgba(117, 61, 62, 0.15) !important;
+}
+
+/* === FULL PAGE BACKGROUNDS === */
+.light .min-h-screen,
+.light .h-screen,
+.light .h-full {
+  background-color: inherit;
+}
+
+.light .min-h-screen[class*="bg-\[\#0"],
+.light .h-screen[class*="bg-\[\#0"],
+.light .min-h-screen[class*="bg-gradient"] {
+  background: #f8f8f8 !important;
+}
+
+/* === FLEX CONTAINER BACKGROUNDS === */
+.light .flex.flex-col[class*="bg-\[\#0"],
+.light .flex.flex-row[class*="bg-\[\#0"],
+.light .flex-1[class*="bg-\[\#0"] {
+  background-color: #ffffff !important;
+}
+
+/* === BORDER-B STYLING FOR HEADERS === */
+.light .border-b[class*="border-\[\#D4A574\]"] {
+  border-color: rgba(117, 61, 62, 0.2) !important;
+}
+
+.light .border-b[class*="border-\[\#262626\]"],
+.light .border-b[class*="border-\[\#222\]"] {
+  border-color: rgba(117, 61, 62, 0.12) !important;
+}
+
+/* === SPECIFIC COMPONENT FIXES === */
+
+/* ReceptionistPortal tabs */
+.light .bg-\[\#D4A574\]\/10 {
+  background-color: rgba(117, 61, 62, 0.1) !important;
+}
+
+/* Patient cards hover */
+.light .hover\:border-\[\#D4A574\]\/30:hover {
+  border-color: rgba(117, 61, 62, 0.25) !important;
+}
+
+/* === ICON COLORS IN LIGHT MODE === */
+.light svg {
+  color: inherit;
+}
+
+.light .text-\[\#D4A574\] svg,
+.light svg.text-\[\#D4A574\] {
+  color: #753d3e !important;
+}
+
+.light .text-\[\#8B8B8B\] svg,
+.light svg.text-\[\#8B8B8B\] {
+  color: #666666 !important;
+}
+
+/* === SCROLLBAR STYLING === */
+.light ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.light ::-webkit-scrollbar-track {
+  background: rgba(117, 61, 62, 0.05);
+  border-radius: 4px;
+}
+
+.light ::-webkit-scrollbar-thumb {
+  background: rgba(117, 61, 62, 0.2);
+  border-radius: 4px;
+}
+
+.light ::-webkit-scrollbar-thumb:hover {
+  background: rgba(117, 61, 62, 0.3);
+}
+
+/* === OPACITY-BASED TEXT OVERRIDES === */
+.light .opacity-40.text-white,
+.light .opacity-50.text-white,
+.light .opacity-60.text-white,
+.light .opacity-70.text-white,
+.light .opacity-80.text-white {
+  color: #1a1a1a !important;
+}
+
+/* === ANIMATION KEYFRAMES === */
+@keyframes pulse-light {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.light .animate-pulse {
+  animation: pulse-light 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* === ADDITIONAL GRADIENT FIXES === */
+.light .bg-gradient-to-r[class*="from-transparent"][class*="via-\[\#D4A574\]"] {
+  background: linear-gradient(to right, transparent, rgba(117, 61, 62, 0.1)) !important;
+}
+
+.light .bg-gradient-to-t[class*="from-\[\#0"] {
+  background: linear-gradient(to top, #f8f8f8, transparent) !important;
+}
+
+.light .bg-gradient-to-b[class*="from-\[\#0"],
+.light .bg-gradient-to-b[class*="to-\[\#0"] {
+  background: linear-gradient(to bottom, #ffffff, #f8f8f8) !important;
+}
+
+/* === ENSURE ALL DARK BACKGROUNDS ARE LIGHT === */
+.light [class*="bg-\[\#0"]:not([class*="bg-\[\#0"][class*="opacity"]):not(video):not([class*="video"]) {
+  background-color: #ffffff !important;
+}
+
+.light [class*="bg-\[\#1"]:not([class*="bg-\[\#1"][class*="opacity"]) {
+  background-color: #f8f8f8 !important;
+}
+
+/* === FIX VIDEO CONSULTATION VIEW === */
+.light .bg-\[\#222\],
+.light .bg-\[\#222222\] {
+  background-color: #f0f0f0 !important;
+}
+
+.light .hover\:bg-\[\#222\]:hover,
+.light .hover\:bg-\[\#222222\]:hover {
+  background-color: #e8e8e8 !important;
+}
+
+/* ========================================
+   ACCENT BUTTON TEXT FIX - COMPREHENSIVE
+   Elements with accent backgrounds need white text
+   ======================================== */
+
+/* Text black on accent backgrounds should stay white */
+.light .bg-\[\#D4A574\].text-black,
+.light .text-black.bg-\[\#D4A574\],
+.light [class*="bg-\[\#D4A574\]"].text-black,
+.light [class*="bg-gradient"][class*="from-\[\#D4A574\]"].text-black {
+  color: #ffffff !important;
+}
+
+/* Active states with text-black on accent */
+.light .active\:bg-\[\#D4A574\]:active.text-black,
+.light .active\:text-black:active[class*="bg-\[\#D4A574\]"] {
+  color: #ffffff !important;
+}
+
+/* Icons in accent-colored elements */
+.light .bg-\[\#D4A574\] svg,
+.light [class*="bg-\[\#D4A574\]"] svg,
+.light .bg-\[\#753d3e\] svg,
+.light [class*="from-\[\#D4A574\]"] svg {
+  color: #ffffff !important;
+}
+
+/* text-[#0a0a0a] in accent elements */
+.light .bg-\[\#D4A574\] .text-\[\#0a0a0a\],
+.light [class*="bg-\[\#D4A574\]"] .text-\[\#0a0a0a\],
+.light [class*="bg-\[\#D4A574\]"][class*="text-\[\#0a0a0a\]"] {
+  color: #ffffff !important;
+}
+
+/* Profile settings, Optometry, and other accent button fixes */
+.light .bg-\[\#D4A574\][class*="text-black"],
+.light [class*="bg-gradient-to-r"][class*="from-\[\#D4A574\]"][class*="text-black"] {
+  color: #ffffff !important;
+}
+
+/* Yellow warning badges should keep their styling */
+.light .bg-yellow-500.text-black,
+.light .text-black.bg-yellow-500 {
+  color: #000000 !important;
+  background-color: #eab308 !important;
+}
+
+/* White background with text-black should stay black */
+.light .bg-white.text-black {
+  color: #000000 !important;
+}
+
+/* ========================================
+   ADDITIONAL UI FIXES
+   ======================================== */
+
+/* Ensure all text inside accent buttons is white */
+.light button.bg-\[\#D4A574\] span,
+.light button.bg-\[\#D4A574\] div,
+.light button[class*="bg-\[\#D4A574\]"] span,
+.light button[class*="bg-\[\#D4A574\]"] div,
+.light button.bg-\[\#753d3e\] span,
+.light button.bg-\[\#753d3e\] div {
+  color: #ffffff !important;
+}
+
+/* Hover states for accent buttons */
+.light .hover\:bg-\[\#C9955E\]:hover,
+.light .hover\:bg-\[\#c49564\]:hover {
+  background-color: #5c3031 !important;
+}
+
+/* Gradient buttons */
+.light .bg-gradient-to-r.from-\[\#D4A574\].to-\[\#b38556\] {
+  background: linear-gradient(to right, #753d3e, #5c3031) !important;
+  color: #ffffff !important;
+}
+
+.light .bg-gradient-to-r.from-\[\#D4A574\].to-\[\#b38556\].text-black {
+  color: #ffffff !important;
+}
+
+/* Additional hover states */
+.light .hover\:from-\[\#E5B685\]:hover,
+.light .hover\:to-\[\#c49667\]:hover {
+  background: linear-gradient(to right, #8a4a4b, #753d3e) !important;
+}
+
+/* ========================================
+   OPTOMETRY CARD SPECIFIC FIX
+   ======================================== */
+
+.light .bg-\[\#252525\] {
+  background-color: #f5f5f5 !important;
+}
+
+.light .hover\:bg-\[\#333\]:hover {
+  background-color: #e8e8e8 !important;
+}
+
+.light .hover\:border-\[\#444\]:hover {
+  border-color: rgba(117, 61, 62, 0.3) !important;
+}
+
+/* Active state with accent */
+.light .active\:bg-\[\#D4A574\]:active {
+  background-color: #753d3e !important;
+}
+
+.light .active\:text-black:active {
+  color: #ffffff !important;
+}
+
+/* ========================================
+   OPERATIONS CENTER FIX
+   ======================================== */
+
+.light .bg-white.text-black {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+}
+
+/* ========================================
+   STICKY HEADER FIX
+   ======================================== */
+
+.light .sticky.top-0.z-40.bg-\[\#050505\],
+.light .sticky.top-0.z-40.bg-\[\#0a0a0a\],
+.light .sticky.top-0.bg-\[\#121212\] {
+  background-color: #ffffff !important;
+}
+
+/* ========================================
+   FINAL STRICT LIGHT THEME CLEANUP
+   Complete visibility and contrast fixes
+   ======================================== */
+
+/* === COMPREHENSIVE TEXT COLOR OVERRIDES === */
+
+/* Primary text - all white/light text to black/dark */
+.light .text-white,
+.light .text-\[\#fff\],
+.light .text-\[\#ffffff\],
+.light .text-\[\#FFFFFF\],
+.light .text-\[\#fafafa\],
+.light .text-\[\#f5f5f5\],
+.light .text-\[\#f0f0f0\] {
+  color: #111111 !important;
+}
+
+/* Secondary gray text - ensure proper contrast */
+.light .text-\[\#8B8B8B\],
+.light .text-\[\#9B9B9B\],
+.light .text-\[\#aaa\],
+.light .text-\[\#aaaaaa\],
+.light .text-\[\#bbb\],
+.light .text-\[\#bbbbbb\],
+.light .text-\[\#ccc\],
+.light .text-\[\#cccccc\] {
+  color: #555555 !important;
+}
+
+/* Metadata/placeholder text */
+.light .text-\[\#666\],
+.light .text-\[\#666666\],
+.light .text-\[\#6B6B6B\],
+.light .text-\[\#777\],
+.light .text-\[\#777777\] {
+  color: #555555 !important;
+}
+
+/* Light header text */
+.light .text-\[\#e6eef2\],
+.light .text-\[\#e6e6e6\],
+.light .text-\[\#E6E6E6\],
+.light .text-\[\#9aa0a6\],
+.light .text-\[\#9AA0A6\],
+.light .text-\[\#c7ced2\],
+.light .text-\[\#C7CED2\],
+.light .text-\[\#8B8B8B\],
+.light .text-\[\#8b8b8b\],
+.light .text-\[\#ddd\],
+.light .text-\[\#dddddd\],
+.light .text-\[\#eee\],
+.light .text-\[\#eeeeee\],
+.light .text-\[var\(--theme-text\)\],
+.light .text-\[var\(--theme-text-muted\)\] {
+  color: #1a1a1a !important;
+}
+
+
+.light .text-\[var\(--theme-text-secondary\)\] {
+  color: #333333 !important;
+}
+
+
+/* Accent text colors */
+.light .text-\[\#D4A574\],
+.light .text-\[\#d4a574\],
+.light .text-\[\#C89B67\],
+.light .text-\[\#c89b67\],
+.light .text-\[\#C9955E\] {
+  color: #753d3e !important;
+}
+
+/* Accent with opacity */
+.light .text-\[\#D4A574\]\/50,
+.light .text-\[\#d4a574\]\/50,
+.light .text-\[\#D4A574\]\/70,
+.light .text-\[\#D4A574\]\/80 {
+  color: rgba(117, 61, 62, 0.7) !important;
+}
+
+/* === COMPREHENSIVE ICON COLOR OVERRIDES === */
+
+/* All SVG icons in light mode */
+.light svg {
+  color: inherit !important;
+}
+
+/* Primary icons - accent color */
+.light .text-\[\#D4A574\] svg,
+.light svg.text-\[\#D4A574\],
+.light .text-\[\#d4a574\] svg,
+.light svg.text-\[\#d4a574\] {
+  color: #753d3e !important;
+}
+
+/* Secondary icons - dark gray */
+.light .text-\[\#8B8B8B\] svg,
+.light svg.text-\[\#8B8B8B\],
+.light .text-\[\#6B6B6B\] svg,
+.light svg.text-\[\#6B6B6B\] {
+  color: #555555 !important;
+}
+
+/* White icons to dark */
+.light .text-white svg,
+.light svg.text-white {
+  color: #333333 !important;
+}
+
+/* Gray icons */
+.light .text-gray-400 svg,
+.light svg.text-gray-400,
+.light .text-gray-500 svg,
+.light svg.text-gray-500 {
+  color: #666666 !important;
+}
+
+/* Icon classes */
+.light [class*="lucide-"] {
+  color: inherit !important;
+}
+
+/* === NAVBAR AND SIDEBAR ICONS === */
+
+/* Navbar icons */
+.light header svg,
+.light nav svg,
+.light .fixed.left-0 svg {
+  color: inherit !important;
+}
+
+/* Active sidebar icons should stay white on accent background */
+.light .bg-gradient-to-br svg,
+.light [class*="from-\[\#D4A574\]"] svg,
+.light [class*="bg-\[\#753d3e\]"] svg {
+  color: #ffffff !important;
+}
+
+/* Inactive sidebar icons */
+.light .text-\[\#8B8B8B\]:not(:hover) svg {
+  color: #555555 !important;
+}
+
+/* === NAVIGATION ITEMS === */
+
+.light button.text-\[\#8B8B8B\],
+.light a.text-\[\#8B8B8B\] {
+  color: #555555 !important;
+}
+
+.light button.text-\[\#8B8B8B\]:hover,
+.light a.text-\[\#8B8B8B\]:hover {
+  color: #753d3e !important;
+}
+
+/* === STATUS COLORS - Keep semantic meaning === */
+
+/* Red status/error */
+.light .text-red-500,
+.light .text-red-600,
+.light .text-\[\#F44336\],
+.light .text-\[\#FF6B6B\] {
+  color: #dc2626 !important;
+}
+
+/* Green status/success */
+.light .text-green-500,
+.light .text-green-600,
+.light .text-\[\#4CAF50\],
+.light .text-\[\#22c55e\] {
+  color: #16a34a !important;
+}
+
+/* Blue status/info */
+.light .text-blue-500,
+.light .text-blue-600 {
+  color: #2563eb !important;
+}
+
+/* Yellow/warning */
+.light .text-yellow-500,
+.light .text-yellow-600 {
+  color: #ca8a04 !important;
+}
+
+/* === BUTTON TEXT COLORS === */
+
+/* Buttons with accent background need white text */
+.light button.bg-\[\#D4A574\],
+.light button.bg-\[\#753d3e\],
+.light button[class*="bg-\[\#D4A574\]"],
+.light button[class*="bg-\[\#753d3e\]"],
+.light .bg-\[\#D4A574\] button,
+.light .bg-\[\#753d3e\] button {
+  color: #ffffff !important;
+}
+
+/* Buttons with light background need dark text */
+.light button.bg-\[\#1a1a1a\],
+.light button.bg-\[\#0a0a0a\],
+.light button[class*="bg-\[\#1a1a1a\]"],
+.light button[class*="bg-\[\#0a0a0a\]"] {
+  color: #1a1a1a !important;
+  background-color: #f5f5f5 !important;
+}
+
+/* === INPUT AND FORM ELEMENTS === */
+
+.light input,
+.light textarea,
+.light select {
+  color: #1a1a1a !important;
+  background-color: #ffffff !important;
+}
+
+.light input::placeholder,
+.light textarea::placeholder {
+  color: #888888 !important;
+}
+
+.light input:focus,
+.light textarea:focus,
+.light select:focus {
+  border-color: #753d3e !important;
+}
+
+/* Input labels */
+.light label {
+  color: #333333 !important;
+}
+
+/* === CARD CONTENT === */
+
+/* Card headings */
+.light h1,
+.light h2,
+.light h3,
+.light h4,
+.light h5,
+.light h6 {
+  color: inherit;
+}
+
+.light h1.text-white,
+.light h2.text-white,
+.light h3.text-white,
+.light h4.text-white,
+.light h5.text-white,
+.light h6.text-white {
+  color: #111111 !important;
+}
+
+/* Card paragraphs */
+.light p.text-white,
+.light span.text-white,
+.light div.text-white {
+  color: #1a1a1a !important;
+}
+
+/* === TOOLTIP AND BADGE STYLING === */
+
+/* Tooltips */
+.light [class*="tooltip"],
+.light .absolute[class*="bg-\[\#1a1a1a\]"][class*="rounded"],
+.light .absolute[class*="bg-\[\#0a0a0a\]"][class*="rounded"] {
+  background-color: #ffffff !important;
+  color: #1a1a1a !important;
+  border-color: rgba(117, 61, 62, 0.2) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Badge text */
+.light .rounded-full.text-white,
+.light .rounded-md.text-white {
+  color: #1a1a1a !important;
+}
+
+/* Status badges keep semantic colors */
+.light .bg-green-500 .text-white,
+.light .bg-red-500 .text-white,
+.light .bg-blue-500 .text-white,
+.light .bg-yellow-500 .text-black {
+  color: inherit !important;
+}
+
+/* === EMPTY STATES === */
+
+.light .opacity-40,
+.light .opacity-50 {
+  opacity: 0.7 !important;
+}
+
+.light .opacity-40 .text-white,
+.light .opacity-50 .text-white,
+.light .opacity-60 .text-white {
+  color: #333333 !important;
+}
+
+/* === TABLE STYLING === */
+
+.light th {
+  color: #333333 !important;
+  background-color: #f5f5f5 !important;
+}
+
+.light td {
+  color: #1a1a1a !important;
+}
+
+.light tr:hover {
+  background-color: #f5f5f5 !important;
+}
+
+/* Table header with accent */
+.light th.text-\[\#D4A574\],
+.light .text-\[\#D4A574\].text-xs.uppercase {
+  color: #753d3e !important;
+}
+
+.light th.text-\[\#8B8B8B\] {
+  color: #555555 !important;
+}
+
+/* === HOVER STATES FOR TEXT === */
+
+.light .hover\:text-white:hover {
+  color: #1a1a1a !important;
+}
+
+.light .hover\:text-\[\#D4A574\]:hover,
+.light .hover\:text-\[\#d4a574\]:hover {
+  color: #753d3e !important;
+}
+
+.light .group-hover\:text-white {
+  color: #1a1a1a !important;
+}
+
+.light .group-hover\:text-\[\#D4A574\] {
+  color: #753d3e !important;
+}
+
+/* === SPECIFIC COMPONENT FIXES === */
+
+/* Search overlay results */
+.light .text-sm.text-white.font-semibold {
+  color: #1a1a1a !important;
+}
+
+/* Patient names and IDs */
+.light .font-bold.text-white,
+.light .font-semibold.text-white,
+.light .font-medium.text-white {
+  color: #111111 !important;
+}
+
+/* Metadata text */
+.light .font-mono.text-white,
+.light .font-mono.text-\[\#D4A574\]\/50 {
+  color: rgba(117, 61, 62, 0.7) !important;
+}
+
+.light .text-xs.font-mono {
+  color: #555555 !important;
+}
+
+/* === MODAL AND DIALOG CONTENT === */
+
+.light [role="dialog"] h2,
+.light [role="dialog"] h3,
+.light [role="alertdialog"] h2,
+.light [role="alertdialog"] h3 {
+  color: #1a1a1a !important;
+}
+
+.light [role="dialog"] p,
+.light [role="alertdialog"] p {
+  color: #333333 !important;
+}
+
+/* === DROPDOWN MENU STYLING === */
+
+.light [class*="absolute"][class*="bg-\[\#0a0a0a\]"][class*="border"] {
+  background-color: #ffffff !important;
+}
+
+.light [class*="absolute"][class*="bg-\[\#0a0a0a\]"] button,
+.light [class*="absolute"][class*="bg-\[\#1a1a1a\]"] button {
+  color: #1a1a1a !important;
+}
+
+.light [class*="absolute"][class*="bg-\[\#0a0a0a\]"] button:hover,
+.light [class*="absolute"][class*="bg-\[\#1a1a1a\]"] button:hover {
+  background-color: #f0f0f0 !important;
+  color: #753d3e !important;
+}
+
+/* === CALENDAR AND DATE STYLING === */
+
+.light .text-xs.text-\[\#D4A574\].font-bold {
+  color: #753d3e !important;
+}
+
+/* === PREVENT THEME LEAKAGE === */
+
+/* Ensure light class overrides everything */
+html.light body,
+html.light #root {
+  background-color: #f8f8f8 !important;
+  color: #1a1a1a !important;
+}
+
+/* Override any inline styles for text */
+.light [style*="color: white"],
+.light [style*="color: #fff"],
+.light [style*="color: #ffffff"] {
+  color: #1a1a1a !important;
+}
+
+/* Ensure CSS variables use light theme values */
+.light {
+  --text-primary: #111111 !important;
+  --text-secondary: #333333 !important;
+  --text-muted: #555555 !important;
+  --text-placeholder: #888888 !important;
+  --bg-primary: #ffffff !important;
+  --bg-secondary: #f8f8f8 !important;
+  --bg-tertiary: #f0f0f0 !important;
+  --accent-primary: #753d3e !important;
+  --accent-secondary: #5c3031 !important;
+}
+
+/* === FINAL CLEANUP - CATCH ALL WHITE TEXT === */
+
+/* Any remaining white text in main content areas */
+.light main .text-white,
+.light section .text-white,
+.light article .text-white,
+.light aside .text-white {
+  color: #1a1a1a !important;
+}
+
+/* Portal and view specific */
+.light [class*="Portal"] .text-white,
+.light [class*="View"] .text-white,
+.light [class*="Card"] .text-white {
+  color: #1a1a1a !important;
+}
+
+/* Ensure all font weights work with dark text */
+.light .font-light.text-white,
+.light .font-normal.text-white,
+.light .font-bold.text-white,
+.light .font-extrabold.text-white {
+  color: #111111 !important;
+}
+
+/* Fix any tracking/letter-spacing text */
+.light .tracking-tight.text-white,
+.light .tracking-wide.text-white,
+.light .tracking-widest.text-white {
+  color: #111111 !important;
+}
+
+/* Uppercase text */
+.light .uppercase.text-white,
+.light .uppercase.text-\[\#8B8B8B\] {
+  color: #444444 !important;
+}
+
+/* Leading/line-height text */
+.light .leading-none.text-white,
+.light .leading-tight.text-white {
+  color: #111111 !important;
+}
+
+/* === SCROLLBAR FINAL STYLING === */
+
+.light * {
+  scrollbar-color: rgba(117, 61, 62, 0.2) transparent;
+}
+
+.light *::-webkit-scrollbar-thumb {
+  background-color: rgba(117, 61, 62, 0.2) !important;
+}
+
+.light *::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(117, 61, 62, 0.3) !important;
+}
+
+.light *::-webkit-scrollbar-track {
+  background-color: rgba(117, 61, 62, 0.05) !important;
+}
+
+/* ========================================
+   FULL APPLICATION AUDIT - FINAL CLEANUP
+   Zero exceptions for light theme styling
+   ======================================== */
+
+/* === PAGE-LEVEL BACKGROUNDS - MANDATORY WHITE/OFF-WHITE === */
+
+/* App.tsx root container */
+.light .min-h-screen.bg-\[\#0a0a0a\],
+.light .min-h-screen.bg-\[\#050406\],
+.light .min-h-screen.bg-\[\#050505\],
+.light .min-h-screen.bg-black {
+  background-color: #f8f8f8 !important;
+}
+
+.light .h-screen.bg-\[\#0a0a0a\],
+.light .h-screen.bg-\[\#050406\],
+.light .h-screen.bg-\[\#050505\] {
+  background-color: #f8f8f8 !important;
+}
+
+/* All min-h-screen text-white overrides */
+.light .min-h-screen.text-white,
+.light .min-h-screen.text-\[\#F5F3EF\] {
+  color: #1a1a1a !important;
+}
+
+/* === PROFILE PAGE SPECIFIC FIXES === */
+
+/* Profile Settings card background */
+.light .bg-\[\#0a0a0a\].border.border-\[\#D4A574\].rounded-3xl,
+.light .rounded-3xl.bg-\[\#0a0a0a\] {
+  background-color: #ffffff !important;
+  border-color: rgba(117, 61, 62, 0.25) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Profile avatar placeholder */
+.light .w-32.h-32.rounded-full.bg-\[\#1a1a1a\] {
+  background-color: #f0f0f0 !important;
+  border-color: rgba(117, 61, 62, 0.15) !important;
+}
+
+/* Profile avatar icons */
+.light .w-32.h-32 svg,
+.light .w-16.h-16.text-\[\#444\] {
+  color: #999999 !important;
+}
+
+/* Profile avatar hover camera icon */
+.light .bg-black\/60.flex.items-center.justify-center svg {
+  color: #ffffff !important;
+}
+
+/* Profile form inputs */
+.light .w-full.bg-\[\#0f0f0f\].border.border-\[\#D4A574\].rounded-xl {
+  background-color: #ffffff !important;
+  border-color: rgba(117, 61, 62, 0.25) !important;
+  color: #1a1a1a !important;
+}
+
+.light .w-full.bg-\[\#0a0a0a\].border.rounded-xl {
+  background-color: #f5f5f5 !important;
+  border-color: rgba(117, 61, 62, 0.2) !important;
+  color: #888888 !important;
+}
+
+/* Profile input icons */
+.light .absolute.left-4.text-\[\#444\] {
+  color: #888888 !important;
+}
+
+/* Profile cancel button */
+.light .bg-\[\#1a1a1a\].hover\:bg-\[\#2a2a2a\].text-white {
+  background-color: #f0f0f0 !important;
+  color: #333333 !important;
+}
+
+/* === DASHBOARD VIEW SPECIFIC FIXES === */
+
+/* Dashboard bg override */
+.light .bg-\[\#050406\].text-\[\#F5F3EF\] {
+  background-color: #f8f8f8 !important;
+  color: #1a1a1a !important;
+}
+
+/* === CARDS AND PANELS === */
+
+/* StatCard backgrounds */
+.light .bg-\[\#0f0f0f\].border.border-\[\#D4A574\]\/20.rounded-lg {
+  background-color: #ffffff !important;
+  border-color: rgba(117, 61, 62, 0.15) !important;
+}
+
+/* VitalSignsCard, SystemicInvestigationsCard etc */
+.light .bg-\[\#0a0a0a\].border.border-\[\#D4A574\] {
+  background-color: #ffffff !important;
+}
+
+/* All card text-3xl stat values */
+.light .text-3xl.tracking-tight.text-white {
+  color: #1a1a1a !important;
+}
+
+/* === REPORTS AND DATA TABLES === */
+
+/* Report table headers */
+.light .px-4.py-3.text-left.text-xs.text-\[\#e6eef2\] {
+  color: #333333 !important;
+  background-color: #f5f5f5 !important;
+}
+
+/* Table cell text */
+.light td.text-white,
+.light td .text-white,
+.light .px-4.py-3.text-sm.text-white {
+  color: #1a1a1a !important;
+}
+
+/* SearchOverlay table */
+.light .sticky.top-0.bg-\[\#050505\] th {
+  background-color: #f5f5f5 !important;
+  color: #333333 !important;
+}
+
+.light tr.hover\:bg-\[\#070707\]:hover {
+  background-color: #f5f5f5 !important;
+}
+
+.light tr.even\:bg-\[\#060606\] {
+  background-color: #fafafa !important;
+}
+
+/* === BANNERS AND HEROES === */
+
+/* TelemedicineView hero cards */
+.light .bg-gradient-to-br.from-\[\#111\].to-\[\#0a0a0a\] {
+  background: linear-gradient(to bottom right, #f5f5f5, #ffffff) !important;
+}
+
+.light .bg-gradient-to-t.from-black.via-black\/80.to-transparent {
+  background: linear-gradient(to top, rgba(248, 248, 248, 0.95), rgba(248, 248, 248, 0.7), transparent) !important;
+}
+
+.light .bg-\[\#0c0c0c\] {
+  background-color: #ffffff !important;
+}
+
+/* === WIDGETS === */
+
+/* DeviceInfoDisplay */
+.light [class*="DeviceInfo"] {
+  color: #1a1a1a !important;
+}
+
+/* === MODALS === */
+
+/* SurgerySelectionModal */
+.light .bg-\[\#0f0f0f\].border.border-\[\#D4A574\].rounded-lg.w-11\/12 {
+  background-color: #ffffff !important;
+}
+
+/* Modal header text */
+.light .text-2xl.font-bold.text-white {
+  color: #111111 !important;
+}
+
+/* Modal search input */
+.light .w-full.pl-10.pr-4.py-2.bg-\[\#1a1a1a\] {
+  background-color: #ffffff !important;
+  color: #1a1a1a !important;
+}
+
+/* === TOOLTIPS === */
+
+/* All tooltips in light mode */
+.light .absolute[class*="bg-\[\#1a1a1a\]"][class*="text-\[\#D4A574\]"][class*="rounded"] {
+  background-color: #ffffff !important;
+  color: #753d3e !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12) !important;
+  border: 1px solid rgba(117, 61, 62, 0.2) !important;
+}
+
+/* === EMPTY STATES === */
+
+.light .border-dashed.border-\[\#D4A574\] {
+  background-color: #fafafa !important;
+  border-color: rgba(117, 61, 62, 0.3) !important;
+}
+
+.light .opacity-40 .text-\[\#8B8B8B\] {
+  color: #666666 !important;
+}
+
+/* === CHART STYLING === */
+
+/* Recharts axis text */
+.light [data-slot="chart"] text,
+.light .recharts-text,
+.light .recharts-cartesian-axis-tick text {
+  fill: #333333 !important;
+}
+
+/* Recharts legend text */
+.light .recharts-legend-item-text {
+  color: #333333 !important;
+}
+
+/* Recharts tooltip */
+.light .recharts-tooltip-wrapper {
+  background-color: #ffffff !important;
+  border: 1px solid rgba(117, 61, 62, 0.2) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+}
+
+.light .recharts-default-tooltip {
+  background-color: #ffffff !important;
+  border-color: rgba(117, 61, 62, 0.2) !important;
+}
+
+/* Recharts grid lines */
+.light .recharts-cartesian-grid line {
+  stroke: rgba(117, 61, 62, 0.15) !important;
+}
+
+/* === ICON COMPREHENSIVE FIX === */
+
+/* All lucide icons inherit correct color */
+.light [class*="lucide"] {
+  color: inherit !important;
+}
+
+/* Icons in buttons */
+.light button svg:not([class*="text-"]) {
+  color: inherit !important;
+}
+
+/* White icons in standard containers to dark */
+.light .text-white svg,
+.light svg.text-white,
+.light .text-\[\#fff\] svg,
+.light svg.text-\[\#fff\] {
+  color: #333333 !important;
+}
+
+/* Icons with specific accent colors */
+.light svg.text-\[\#D4A574\],
+.light .text-\[\#D4A574\] svg {
+  color: #753d3e !important;
+}
+
+/* Icons in accent-colored backgrounds stay white */
+.light .bg-\[\#D4A574\] svg,
+.light .bg-\[\#753d3e\] svg,
+.light [class*="from-\[\#D4A574\]"][class*="to-\[\#"] svg,
+.light [class*="bg-gradient"][class*="from-\[\#D4A574\]"] svg {
+  color: #ffffff !important;
+}
+
+/* Active sidebar button icons */
+.light button.bg-gradient-to-br svg {
+  color: #ffffff !important;
+}
+
+/* Inactive sidebar button icons */
+.light button.text-\[\#8B8B8B\] svg {
+  color: inherit !important;
+}
+
+/* Status indicator icons keep their colors */
+.light .text-green-500 svg,
+.light .text-red-500 svg,
+.light .text-blue-500 svg,
+.light .text-yellow-500 svg {
+  color: inherit !important;
+}
+
+/* === HEADER/NAVBAR FIXES === */
+
+/* Navbar background */
+.light header.border-b.border-\[\#D4A574\].bg-\[\#0a0a0a\] {
+  background-color: #ffffff !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Navbar title text */
+.light .text-white.font-bold.text-2xl {
+  color: #1a1a1a !important;
+}
+
+/* Navbar buttons */
+.light header button.bg-\[\#1a1a1a\] {
+  background-color: #f0f0f0 !important;
+  color: #333333 !important;
+}
+
+/* === SIDEBAR FIXES === */
+
+/* Sidebar gradient background */
+.light .fixed.left-0.top-0.h-full.w-16[class*="bg-gradient"] {
+  background: linear-gradient(to bottom, #f8f8f8, #fafafa, #f8f8f8) !important;
+  border-color: #753d3e !important;
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* === RECEPTIONIST PORTAL FIXES === */
+
+/* Portal main container */
+.light .flex.flex-col.bg-\[\#050505\].min-h-screen {
+  background-color: #f8f8f8 !important;
+}
+
+/* Portal header */
+.light .bg-\[\#0a0a0a\].border-b.border-\[\#D4A574\] {
+  background-color: #ffffff !important;
+}
+
+/* Portal header title */
+.light .text-lg.font-bold.text-white {
+  color: #1a1a1a !important;
+}
+
+/* Portal tabs */
+.light .text-\[\#6B6B6B\].hover\:text-white {
+  color: #555555 !important;
+}
+
+.light .text-\[\#6B6B6B\].hover\:text-white:hover {
+  color: #1a1a1a !important;
+}
+
+/* Portal content area */
+.light .flex-1.flex.flex-col.bg-gradient-to-br.from-\[\#080808\].to-\[\#050505\] {
+  background: #f8f8f8 !important;
+}
+
+/* === OPERATIONS HUB FIXES === */
+
+/* Operations Hub stat cards */
+.light .bg-\[\#0f0f0f\].border.border-\[\#D4A574\]\/30.p-2\.5.rounded-xl {
+  background-color: #ffffff !important;
+  border-color: rgba(117, 61, 62, 0.15) !important;
+}
+
+/* Operations Hub stat text */
+.light .text-2xl.font-light.text-white {
+  color: #1a1a1a !important;
+}
+
+/* Operations Hub search */
+.light .w-full.bg-\[\#0a0a0a\].border.border-\[\#D4A574\].rounded-xl.pl-9.pr-3.py-2 {
+  background-color: #ffffff !important;
+  color: #1a1a1a !important;
+}
+
+/* Operations Hub filters */
+.light .flex.items-center.gap-2.px-3.py-2.bg-\[\#0f0f0f\].border.border-\[\#D4A574\] {
+  background-color: #f5f5f5 !important;
+  color: #333333 !important;
+}
+
+/* Patient list panel */
+.light .bg-\[\#0f0f0f\].border.border-\[\#D4A574\].rounded-2xl.p-6 {
+  background-color: #ffffff !important;
+}
+
+/* Patient item cards */
+.light .bg-\[\#0a0a0a\].border.border-\[\#D4A574\].rounded-2xl.p-4 {
+  background-color: #ffffff !important;
+}
+
+/* Patient name hover color */
+.light .text-xs.font-bold.text-white.hover\:text-\[\#D4A574\] {
+  color: #1a1a1a !important;
+}
+
+.light .text-xs.font-bold.text-white.hover\:text-\[\#D4A574\]:hover {
+  color: #753d3e !important;
+}
+
+/* === QUEUE VIEW FIXES === */
+
+/* Reception Queue container */
+.light .flex.flex-col.h-full.overflow-hidden.bg-\[\#0a0a0a\] {
+  background-color: #f8f8f8 !important;
+}
+
+/* Queue title */
+.light .text-3xl.font-bold.text-white.tracking-tight {
+  color: #1a1a1a !important;
+}
+
+/* Queue search input */
+.light .bg-\[\#0f0f0f\].border.border-\[\#D4A574\].rounded-2xl {
+  background-color: #ffffff !important;
+}
+
+/* Patient count display */
+.light .text-xs.font-bold.text-white.pr-2 {
+  color: #1a1a1a !important;
+}
+
+/* Patient card in queue */
+.light .bg-\[\#0f0f0f\].border-\[\#D4A574\] {
+  background-color: #ffffff !important;
+}
+
+.light .text-white.font-bold.text-lg.group-hover\:text-\[\#D4A574\] {
+  color: #1a1a1a !important;
+}
+
+.light .text-white.font-bold.text-lg.group-hover\:text-\[\#D4A574\]:hover {
+  color: #753d3e !important;
+}
+
+/* === FORM TEXT INPUTS - COMPREHENSIVE === */
+
+/* All inputs in dark-themed containers */
+.light input.text-white,
+.light input.text-\[\#e6e6e6\],
+.light input.text-\[\#fff\] {
+  color: #1a1a1a !important;
+}
+
+/* All textareas */
+.light textarea.text-white,
+.light textarea.text-\[\#e6e6e6\] {
+  color: #1a1a1a !important;
+}
+
+/* All selects */
+.light select.text-white,
+.light select.text-\[\#e6e6e6\] {
+  color: #1a1a1a !important;
+}
+
+/* === SPECIAL EXAMINATION CARD === */
+
+.light .bg-\[\#0a0a0a\].border.border-\[\#D4A574\].rounded-lg.p-4 {
+  background-color: #ffffff !important;
+}
+
+.light .p-3.text-white.border-r.border-\[\#D4A574\] {
+  color: #1a1a1a !important;
+}
+
+/* === VIDEO CONSULTATION === */
+
+/* Video area should keep dark background */
+.light .bg-\[\#050505\].relative.rounded-2xl video,
+.light video,
+.light .aspect-video {
+  background-color: #000000;
+}
+
+/* Video controls */
+.light .bg-\[\#222\].hover\:bg-\[\#333\].text-white {
+  background-color: #f0f0f0 !important;
+  color: #333333 !important;
+}
+
+.light .bg-\[\#222\].hover\:bg-\[\#333\].text-white:hover {
+  background-color: #e0e0e0 !important;
+}
+
+/* Video overlay text */
+.light .absolute.top-4.left-4.text-white {
+  color: #ffffff !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+/* === MEDICINE MANAGEMENT VIEW === */
+
+.light .min-h-screen.bg-\[\#050406\].text-\[\#F5F3EF\] {
+  background-color: #f8f8f8 !important;
+  color: #1a1a1a !important;
+}
+
+/* === PHARMACY BILLING VIEW === */
+
+.light .min-h-screen.bg-linear-to-br {
+  background: #f8f8f8 !important;
+}
+
+/* === PAYMENT SETUP VIEW === */
+
+.light .min-h-screen.bg-gradient-to-br.from-\[\#0a0a0a\].to-\[\#1a1a1a\].text-white {
+  background: #f8f8f8 !important;
+  color: #1a1a1a !important;
+}
+
+/* === SLIT LAMP VIEW === */
+
+.light .text-2xl.font-bold.text-white {
+  color: #111111 !important;
+}
+
+.light .bg-transparent.text-xs.text-white {
+  color: #333333 !important;
+}
+
+/* Notes textarea */
+.light .w-full.h-32.bg-\[\#0a0a0a\].border.border-\[\#222\] {
+  background-color: #ffffff !important;
+  color: #1a1a1a !important;
+  border-color: rgba(117, 61, 62, 0.2) !important;
+}
+
+/* Eye side selector */
+.light .flex.p-1.bg-\[\#0a0a0a\].rounded-xl.border.border-\[\#222\] {
+  background-color: #f5f5f5 !important;
+  border-color: rgba(117, 61, 62, 0.15) !important;
+}
+
+.light .text-\[\#666\].hover\:text-white {
+  color: #666666 !important;
+}
+
+.light .text-\[\#666\].hover\:text-white:hover {
+  color: #1a1a1a !important;
+}
+
+/* === THEME LEAKAGE PREVENTION === */
+
+/* Override any CSS variables that might leak through */
+.light {
+  --foreground: #1a1a1a !important;
+  --background: #ffffff !important;
+  --muted-foreground: #555555 !important;
+  --accent: #753d3e !important;
+  --accent-foreground: #ffffff !important;
+  --primary: #753d3e !important;
+  --primary-foreground: #ffffff !important;
+  --card: #ffffff !important;
+  --card-foreground: #1a1a1a !important;
+  --popover: #ffffff !important;
+  --popover-foreground: #1a1a1a !important;
+}
+
+/* Ensure no dark theme variables apply in light mode */
+.light [class*="bg-foreground"] {
+  background-color: #1a1a1a !important;
+}
+
+.light [class*="text-foreground"] {
+  color: #1a1a1a !important;
+}
+
+.light [class*="text-muted-foreground"] {
+  color: #555555 !important;
+}
+
+/* === FINAL CATCH-ALL OVERRIDES === */
+
+/* Any remaining text-white anywhere */
+.light *:not(.bg-\[\#D4A574\]):not(.bg-\[\#753d3e\]):not([class*="from-\[\#D4A574\]"]):not(.bg-green-500):not(.bg-red-500):not(.bg-blue-500)>.text-white {
+  color: #1a1a1a !important;
+}
+
+/* Any remaining white text in paragraph elements */
+.light p.text-white,
+.light span.text-white,
+.light div.text-white,
+.light label.text-white,
+.light h1.text-white,
+.light h2.text-white,
+.light h3.text-white,
+.light h4.text-white {
+  color: #111111 !important;
+}
+
+/* Button with accent background override */
+.light button[class*="bg-\[\#D4A574\]"] *,
+.light button[class*="bg-\[\#753d3e\]"] *,
+.light [class*="bg-gradient"][class*="from-\[\#D4A574\]"] * {
+  color: #ffffff !important;
+}
+
+/* Ensure semantic colors stay intact */
+.light .bg-green-500,
+.light .bg-green-600 {
+  background-color: #22c55e !important;
+}
+
+.light .bg-red-500,
+.light .bg-red-600 {
+  background-color: #ef4444 !important;
+}
+
+.light .bg-blue-500,
+.light .bg-blue-600 {
+  background-color: #3b82f6 !important;
+}
+
+.light .bg-yellow-500 {
+  background-color: #eab308 !important;
+}
+
+/* Text colors inside semantic backgrounds stay visible */
+.light .bg-green-500 *,
+.light .bg-red-500 *,
+.light .bg-blue-500 * {
+  color: #ffffff !important;
+}
+
+.light .bg-yellow-500 * {
+  color: #000000 !important;
+}
+
+/* ========================================
+   DASHBOARD VIEW - FINAL FIX
+   Hero banner and card text visibility
+   ======================================== */
+
+/* === HERO BANNER GRADIENT FIX === */
+
+/* Dashboard greeting banner - dark purple gradient to light */
+.light .bg-gradient-to-br.from-\[\#1a1520\].to-\[\#0f0c12\] {
+  background: linear-gradient(to bottom right, #f0f0f0, #ffffff) !important;
+  border-color: rgba(117, 61, 62, 0.25) !important;
+}
+
+.light .from-\[\#1a1520\] {
+  --tw-gradient-from: #f0f0f0 !important;
+}
+
+.light .to-\[\#0f0c12\] {
+  --tw-gradient-to: #ffffff !important;
+}
+
+/* Blur decorations in hero */
+.light .bg-\[\#FF9D00\]\/5 {
+  background-color: rgba(117, 61, 62, 0.05) !important;
+}
+
+.light .bg-\[\#00A3FF\]\/5 {
+  background-color: rgba(117, 61, 62, 0.03) !important;
+}
+
+/* === DASHBOARD TEXT COLORS === */
+
+/* Primary text - F5F3EF (light cream) to dark */
+.light .text-\[\#F5F3EF\],
+.light .text-\[\#f5f3ef\] {
+  color: #1a1a1a !important;
+}
+
+/* Secondary text - C2BAB1 (light gray) to darker gray */
+.light .text-\[\#C2BAB1\],
+.light .text-\[\#c2bab1\] {
+  color: #555555 !important;
+}
+
+/* Muted text - 8C847B (medium gray) to darker */
+.light .text-\[\#8C847B\],
+.light .text-\[\#8c847b\] {
+  color: #666666 !important;
+}
+
+/* Keep accent colors - FF9D00 (orange), 00A3FF (blue), 7CFF6B (green) */
+.light .text-\[\#FF9D00\] {
+  color: #753d3e !important;
+}
+
+.light .text-\[\#00A3FF\] {
+  color: #2563eb !important;
+}
+
+.light .text-\[\#7CFF6B\] {
+  color: #16a34a !important;
+}
+
+/* === CARD BACKGROUNDS === */
+
+/* Weekly Reports cards - 121015 (dark purple) to white */
+.light .bg-\[\#121015\] {
+  background-color: #ffffff !important;
+}
+
+/* Chart container - 0A0809 (near black) to white */
+.light .bg-\[\#0A0809\],
+.light .bg-\[\#0a0809\] {
+  background-color: #ffffff !important;
+}
+
+/* Chart select dropdown */
+.light select.bg-\[\#0A0809\],
+.light select.bg-\[\#0a0809\] {
+  background-color: #ffffff !important;
+  color: #1a1a1a !important;
+  border-color: rgba(117, 61, 62, 0.25) !important;
+}
+
+/* === PROFILE SETTINGS PAGE === */
+
+/* Settings page header text */
+.light h1.text-white.font-\[\'Manrope\'\],
+.light .text-3xl.font-bold.text-white {
+  color: #111111 !important;
+}
+
+/* Profile page description */
+.light .text-\[\#666\].text-sm {
+  color: #555555 !important;
+}
+
+/* Profile form labels */
+.light .text-\[10px\].font-bold.text-\[\#666\] {
+  color: #555555 !important;
+}
+
+/* Profile input text colors */
+.light input.text-white,
+.light .h-12.text-white {
+  color: #1a1a1a !important;
+}
+
+/* Profile role field (read-only) */
+.light .text-\[\#666\].outline-none.cursor-not-allowed,
+.light input.text-\[\#666\] {
+  color: #888888 !important;
+}
+
+/* Profile input icons */
+.light .text-\[\#444\] {
+  color: #888888 !important;
+}
+
+/* Profile avatar icon */
+.light .w-16.h-16.text-\[\#444\] {
+  color: #aaaaaa !important;
+}
+
+/* === CHART STYLING FOR LIGHT MODE === */
+
+/* Chart grid lines */
+.light .recharts-cartesian-grid line,
+.light [stroke="#222"] {
+  stroke: rgba(117, 61, 62, 0.15) !important;
+}
+
+/* Chart axis labels */
+.light .recharts-cartesian-axis-tick-value,
+.light .recharts-xAxis text,
+.light .recharts-yAxis text {
+  fill: #555555 !important;
+}
+
+/* Chart legend */
+.light .recharts-legend-item-text {
+  color: #333333 !important;
+}
+
+/* Activity Overview text */
+.light .text-lg.font-semibold {
+  color: #1a1a1a !important;
+}
+
+/* === UNIVERSAL TEXT-WHITE OVERRIDE === */
+
+/* Ensure ALL text-white classes are overridden in light mode */
+.light .text-white,
+.light [class*="text-white"] {
+  color: #1a1a1a !important;
+}
+
+/* Exceptions: text inside accent backgrounds should stay white */
+.light .bg-\[\#D4A574\] .text-white,
+.light .bg-\[\#753d3e\] .text-white,
+.light .bg-theme-accent .text-white,
+.light [class*="bg-\[var\(--theme-accent\)\]"] .text-white,
+.light [class*="bg-\[var\(--theme-accent-hover\)\]"] .text-white,
+.light .bg-green-500 .text-white,
+.light .bg-red-500 .text-white,
+.light .bg-blue-500 .text-white,
+.light [class*="from-\[\#D4A574\]"] .text-white,
+.light [class*="from-\[\#753d3e\]"] .text-white {
+  color: #ffffff !important;
+}
+
+/* Camera icon in profile hover should stay white */
+.light .bg-black\/60 .text-white,
+.light .absolute.inset-0.bg-black\/60 .text-white {
+  color: #ffffff !important;
+}
+
+/* === SELECT AND DROPDOWN BACKGROUNDS === */
+
+.light select {
+  background-color: #ffffff !important;
+  color: #1a1a1a !important;
+}
+
+.light option {
+  background-color: #ffffff !important;
+  color: #1a1a1a !important;
+}
+
+/* === FINAL CLEANUP FOR MISSED ELEMENTS === */
+
+/* Any h1, h2, h3 with text-white */
+.light h1[class*="text-white"],
+.light h2[class*="text-white"],
+.light h3[class*="text-white"] {
+  color: #111111 !important;
+}
+
+/* Any paragraph with text-white */
+.light p[class*="text-white"] {
+  color: #1a1a1a !important;
+}
+
+/* Any div with text-white */
+.light div[class*="text-white"]:not(.bg-black\/60) {
+  color: #1a1a1a !important;
+}
+
+/* Any span with text-white (except in accent backgrounds) */
+.light span[class*="text-white"]:not([class*="bg-"]) {
+  color: #1a1a1a !important;
+}
+
+/* Font-bold and font-semibold with text-white */
+.light .font-bold[class*="text-white"],
+.light .font-semibold[class*="text-white"] {
+  color: #111111 !important;
+}
+
+/* Tracking-tight and tracking-wide with text-white */
+.light .tracking-tight[class*="text-white"],
+.light .tracking-wide[class*="text-white"] {
+  color: #111111 !important;
+}
+
+/* Text-sm and text-xs with text-white */
+.light .text-sm[class*="text-white"],
+.light .text-xs[class*="text-white"] {
+  color: #333333 !important;
+}
+
+/* ========================================
+   MEDICINE MANAGEMENT & ADDITIONAL VIEWS
+   ======================================== */
+
+/* Border color #262028 (dark purple) */
+.light .border-\[\#262028\] {
+  border-color: rgba(117, 61, 62, 0.2) !important;
+}
+
+/* Placeholder colors */
+.light .placeholder-\[\#8C847B\]::placeholder,
+.light .placeholder\:text-\[\#8C847B\]::placeholder {
+  color: #888888 !important;
+}
+
+/* Input/Select with text-[#F5F3EF] */
+.light input.text-\[\#F5F3EF\],
+.light select.text-\[\#F5F3EF\],
+.light textarea.text-\[\#F5F3EF\] {
+  color: #1a1a1a !important;
+}
+
+/* Table header text */
+.light th.text-\[\#C2BAB1\] {
+  color: #555555 !important;
+}
+
+/* === FORCE ALL LIGHT TEXT TO DARK === */
+
+/* Comprehensive override for any light-colored text */
+.light [class*="text-\[\#F"],
+.light [class*="text-\[\#f"],
+.light [class*="text-\[\#E"],
+.light [class*="text-\[\#e"],
+.light [class*="text-\[\#D"][class*="D4A574"] {
+  color: #1a1a1a !important;
+}
+
+/* Keep accent color text as maroon */
+.light .text-\[\#D4A574\],
+.light .text-\[\#d4a574\] {
+  color: #753d3e !important;
+}
+
+/* Force all light gray hex values to dark */
+.light [class*="text-\[\#C"],
+.light [class*="text-\[\#c"],
+.light [class*="text-\[\#B"],
+.light [class*="text-\[\#b"],
+.light [class*="text-\[\#A"],
+.light [class*="text-\[\#a"],
+.light [class*="text-\[\#9"],
+.light [class*="text-\[\#8"] {
+  color: #555555 !important;
+}
+
+/* Exceptions - keep status colors */
+.light .text-\[\#4CAF50\] {
+  color: #16a34a !important;
+}
+
+/* === FINAL UNIVERSAL OVERRIDE === */
+
+/* Absolute catch-all for text-white anywhere in the document */
+html.light .text-white {
+  color: #1a1a1a !important;
+}
+
+/* Double check - profile page inputs */
+html.light input.text-white,
+html.light textarea.text-white {
+  color: #1a1a1a !important;
+}
+
+/* Profile settings header */
+html.light h1.text-white {
+  color: #111111 !important;
+}
+
+/* === BACK TO DASHBOARD BUTTON FIX === */
+
+/* Back button - fix dark background */
+.light button.bg-\[\#0a0a0a\] {
+  background-color: #ffffff !important;
+  border-color: #753d3e !important;
+}
+
+/* Back button - fix text color */
+.light button.text-\[\#D4A574\] {
+  color: #753d3e !important;
+}
+
+/* Back button - fix border color */
+.light button.border-\[\#D4A574\] {
+  border-color: #753d3e !important;
+}
+
+/* Back button hover states */
+.light button.hover\:bg-\[\#D4A574\]:hover {
+  background-color: #753d3e !important;
+}
+
+.light button.hover\:text-\[\#0a0a0a\]:hover {
+  color: #ffffff !important;
+}
+
+/* Back button arrow icon */
+.light button .text-\[\#D4A574\] {
+  color: #753d3e !important;
+}
+
+/* Generic flex button with ArrowLeft (Back buttons) */
+.light button.flex.items-center.gap-2 {
+  border-color: #753d3e !important;
+}
+
+/* VideoConsultation back button */
+.light button.hover\:bg-\[\#1a1a1a\] {
+  background-color: #f5f5f5 !important;
+}
+
+.light button.hover\:bg-\[\#1a1a1a\]:hover {
+  background-color: #e5e5e5 !important;
+}
+
+/* SlitLamp back button */
+.light button.hover\:bg-\[\#222\] {
+  background-color: #f5f5f5 !important;
+}
+
+.light button.hover\:bg-\[\#222\]:hover {
+  background-color: #e5e5e5 !important;
+}
+
+/* === ICON COLORS IN BACK BUTTONS === */
+.light .text-\[\#888\] {
+  color: #555555 !important;
+}
+
+/* ========================================
+   THE DEFINITIVE ACCENT VISIBILITY FIX
+   Ensures both Maroon Background AND White Text
+   ======================================== */
+
+/* Force Background for ALL Accent elements in light mode */
+.light [class*="bg-\[var\(--theme-accent\)\]"]:not([class*="/"]),
+.light [class*="bg-\[\#753d3e\]"],
+.light [class*="bg-\[\#D4A574\]"]:not([class*="/"]),
+.light [class*="from-\[var\(--theme-accent\)\]"],
+.light .bg-\[var\(--theme-accent\)\],
+.light button.bg-\[var\(--theme-accent\)\],
+.light .bg-\[\#D4A574\],
+.light [class*="bg-\[var\(--theme-accent\)\]"].text-white,
+.light [class*="bg-\[var\(--theme-accent\)\]"].force-text-white {
+  background-color: #753d3e !important;
+  color: #ffffff !important;
+}
+
+
+/* Force White Text for children/icons */
+.light .bg-\[var\(--theme-accent\)\] .text-white,
+.light .bg-\[var\(--theme-accent\)\] .force-text-white,
+.light .bg-\[var\(--theme-accent\)\] svg,
+.light .from-\[var\(--theme-accent\)\] svg,
+.light .bg-\[\#753d3e\] svg,
+.light .bg-\[\#D4A574\] svg,
+.light .bg-\[\#753d3e\] span,
+.light .bg-\[\#D4A574\] span {
+  color: #ffffff !important;
+}
+
+/* Ensure no shadows make it look weird */
+.light .bg-\[var\(--theme-accent\)\] {
+  border-color: #753d3e !important;
+}
+
+/* === DROPDOWN MENUS IN LIGHT MODE - SPECIFIC FIX === */
+
+/* Dropdown container (the white popup) */
+.light [class*="bg-\[var\(--theme-bg-secondary\)\]"] button,
+.light [class*="bg-\[var\(--theme-bg-tertiary\)\]"] button,
+.light [class*="bg-\[var\(--theme-bg-input\)\]"] button {
+  color: #1a1a1a !important;
+}
+
+/* Any button directly on a light background should be dark text */
+.light .bg-\[var\(--theme-bg-secondary\)\]>button,
+.light .bg-\[var\(--theme-bg-tertiary\)\]>button {
+  color: #1a1a1a !important;
+}
+
+/* Dropdown items that are NOT selected should be dark text */
+.light button.text-\[\#111111\] {
+  color: #111111 !important;
+}
+
+/* Ensure any literal 'text-white' inside light backgrounds turns dark */
+.light .bg-white .text-white,
+.light [class*="bg-\[\#f"] .text-white,
+.light [class*="bg-\[\#F"] .text-white,
+.light .bg-\[var\(--theme-bg-secondary\)\] .text-white,
+.light .bg-\[var\(--theme-bg-tertiary\)\] .text-white,
+.light .bg-\[var\(--theme-bg\)\] .text-white {
+  color: #1a1a1a !important;
+}
+
+/* === FORCE WHITE TEXT HELPER === */
+/* Use this class on any text that MUST stay white (e.g. on maroon backgrounds) */
+.force-text-white {
+  color: #ffffff !important;
+}

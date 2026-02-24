@@ -1,0 +1,236 @@
+import React, { useState, useEffect } from 'react';
+import AgoraRTC from 'agora-rtc-sdk-ng';
+import axios from 'axios';
+
+const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
+const BACKEND_URL = "http://localhost:5000"; 
+
+function App() {
+  const [username, setUsername] = useState("");
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isInCall, setIsInCall] = useState(false);
+  const [remoteUsers, setRemoteUsers] = useState([]); // Store other people here
+
+  // Add this Listener Effect
+  useEffect(() => {
+    // Event: When someone (Android App) publishes their video
+    client.on("user-published", async (user, mediaType) => {
+      await client.subscribe(user, mediaType);
+      console.log("Subscribed to remote user:", user.uid);
+
+      if (mediaType === "video") {
+        // Add this user to our list to render them
+        setRemoteUsers(prev => [...prev, user]); 
+      }
+      if (mediaType === "audio") {
+        user.audioTrack.play();
+      }
+    });
+
+    // Event: When they leave
+    client.on("user-unpublished", (user) => {
+      setRemoteUsers(prev => prev.filter(u => u.uid !== user.uid));
+    });
+  }, []);
+
+  // --- 1. HANDLE LOGIN ---
+  const handleLogin = () => {
+    if(!username) return alert("Enter a name!");
+    // For web, we just save the name locally
+    setIsLoggedIn(true);
+  };
+
+  // --- 2. START SELF-CALL ---
+  const startCall = async () => {
+    try {
+      // Tell backend: "Ring the device belonging to [username]"
+      const response = await axios.post(`${BACKEND_URL}/call_self`, { username });
+      
+      const { channel_name, token, appID } = response.data;
+
+      // Join Agora immediately
+      await client.join(appID, channel_name, token, 0); // 0 = let Agora assign ID
+      const [mic, cam] = await AgoraRTC.createMicrophoneAndCameraTracks();
+      cam.play("local-player");
+      await client.publish([mic, cam]);
+      
+      setIsInCall(true);
+      console.log("Waiting for mobile to answer...");
+
+    } catch (error) {
+      console.error("Call failed:", error);
+      alert("Could not call mobile. Is the app logged in?");
+    }
+  };
+
+  // --- RENDER ---
+  if (!isLoggedIn) {
+    return (
+      <div style={{ padding: 50 }}>
+        <h2>Login to Doctor Portal</h2>
+        <input 
+          placeholder="Enter Username (e.g., john)" 
+          value={username} 
+          onChange={e => setUsername(e.target.value)} 
+        />
+        <button onClick={handleLogin}>Login</button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ padding: 20 }}>
+      <h1>Doctor Dashboard</h1>
+      <h2>Welcome, {username}</h2>
+      {!isInCall ? (
+         <button onClick={startCall} style={{ padding: "15px 30px", fontSize: "20px" }}>
+           📞 Call My Phone
+         </button>
+      ) : (
+        <div style={{ display: "flex", gap: "20px" }}>
+          {/* 1. MY FACE (Local) */}
+          <div id="local-player" style={{ width: "400px", height: "300px", background: "black" }}>
+            <p style={{color: 'white'}}>Me</p>
+          </div>
+
+          {/* 2. THEIR FACE (Remote - Android) */}
+          {remoteUsers.map(user => (
+            <div 
+              key={user.uid} 
+              id={`user-${user.uid}`} 
+              style={{ width: "400px", height: "300px", background: "#333" }}
+              ref={(div) => {
+                if (div && user.videoTrack) {
+                  user.videoTrack.play(div); // <--- THIS MAKES THEM APPEAR
+                }
+              }}
+            >
+              <p style={{color: 'white'}}>Patient (Android)</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default App;
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+import firebase_admin
+from firebase_admin import credentials, messaging
+from agora_token_builder import RtcTokenBuilder
+from motor.motor_asyncio import AsyncIOMotorClient # MongoDB Driver
+import time
+import os
+
+app = FastAPI()
+
+# 1. CORS Setup
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# 2. Database & Firebase Setup
+MONGO_URL = "mongodb://localhost:27017"
+client = AsyncIOMotorClient(MONGO_URL)
+db = client.webtoapp  # Database Name: "webtoapp"
+users_collection = db.users
+
+cred_path = "serviceAcckey.json"
+if os.path.exists(cred_path):
+    cred = credentials.Certificate(cred_path)
+    firebase_admin.initialize_app(cred)
+
+AGORA_APP_ID = "942e6848979d4714915bd89aa0e85947"
+AGORA_APP_CERTIFICATE = "c4ed429c073a46b689c626c754dd06ae"
+
+# --- DATA MODELS ---
+class LoginRequest(BaseModel):
+    username: str
+    fcm_token: str | None = None  # Optional for Web, Required for Mobile
+
+class CallRequest(BaseModel):
+    username: str # Who are we calling? (Self)
+
+# --- API 1: LOGIN / REGISTER ---
+# Mobile calls this to save the Token. Web calls this just to check in.
+@app.post("/login")
+async def login(request: LoginRequest):
+    # If a token is provided (Mobile), update the user's record
+    if request.fcm_token:
+        await users_collection.update_one(
+            {"username": request.username},
+            {"$set": {"fcm_token": request.fcm_token}},
+            upsert=True
+        )
+        return {"status": "User token updated", "username": request.username}
+    else:
+        # Web Login (Just ensure user exists or do nothing)
+        return {"status": "Web logged in", "username": request.username}
+
+# --- API 2: START CALL (RING MY PHONE) ---
+@app.post("/call_self")
+async def call_self(request: CallRequest):
+    # 1. Find the user in MongoDB
+    user = await users_collection.find_one({"username": request.username})
+    
+    if not user or "fcm_token" not in user:
+        raise HTTPException(status_code=404, detail="Mobile device not found for this user")
+
+    # 2. Generate Agora Token for the call
+    channel_name = f"call_{request.username}" # Unique channel for John
+    uid = 0 # 0 lets Agora assign a UID automatically
+    expiration = 3600
+    current_time = int(time.time())
+    
+    agora_token = RtcTokenBuilder.buildTokenWithUid(
+        AGORA_APP_ID, AGORA_APP_CERTIFICATE, channel_name, uid, 1, current_time + expiration
+    )
+
+    # 3. Send Notification to Mobile
+    message = messaging.Message(
+        data={
+            "type": "call",
+            "channel_name": channel_name,
+            "agora_token": agora_token, # Send token to mobile so it can join instantly
+            "caller_name": "Web Dashboard"
+        },
+        android=messaging.AndroidConfig(priority="high"),
+        token=user["fcm_token"],
+    )
+
+    try:
+        response = messaging.send(message)
+        return {
+            "success": True, 
+            "channel_name": channel_name, 
+            "token": agora_token, 
+            "appID": AGORA_APP_ID 
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    # --- API 3: GENERATE TOKEN (For Android) ---
+@app.get("/get_token")
+def get_token(channel_name: str, uid: int):
+    expiration_time_in_seconds = 3600
+    current_timestamp = int(time.time())
+    privilege_expired_ts = current_timestamp + expiration_time_in_seconds
+    
+    # Build the token
+    token = RtcTokenBuilder.buildTokenWithUid(
+        AGORA_APP_ID, 
+        AGORA_APP_CERTIFICATE, 
+        channel_name, 
+        uid, 
+        1, # Role 1 = Publisher
+        privilege_expired_ts
+    )
+    # Return exactly what Android expects (TokenResponse)
+    return {"token": token, "appID": AGORA_APP_ID}
