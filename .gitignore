@@ -4,3 +4,13 @@ backend/
 .venv/
 __pycache__/
 *.pyc
+node_modules/
+build/
+vector_db/
+*.bin
+*.pickle
+*.sqlite3
+*.pdf
+*.xls
+.vscode/
+.env
