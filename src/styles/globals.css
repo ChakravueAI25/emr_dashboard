@@ -3447,3 +3447,12 @@ html.light h1.text-white {
 .force-text-white {
   color: #ffffff !important;
 }
+
+/* === FIX: SVGs inside accent-bg elements within buttons must stay white === */
+.light button .bg-\[\#D4A574\] svg,
+.light button [class*="bg-\[\#D4A574\]"] svg,
+.light button .bg-\[\#753d3e\] svg,
+.light button [class*="bg-\[\#753d3e\]"] svg {
+  color: #ffffff !important;
+  stroke: #ffffff !important;
+}

@@ -38,7 +38,12 @@ interface Patient {
   };
 }
 
-export function AppointmentBookingView() {
+interface AppointmentBookingViewProps {
+  onNavigateToBilling?: (registrationId: string, patientData?: Patient) => void;
+}
+
+export function AppointmentBookingView(props: AppointmentBookingViewProps) {
+  const { onNavigateToBilling } = props;
   // Patient Selection
   const [patientSearch, setPatientSearch] = useState('');
   const [searchResults, setSearchResults] = useState<Patient[]>([]);
@@ -195,26 +200,22 @@ export function AppointmentBookingView() {
       newErrors.name = 'Patient name is required';
     }
 
-    // Validate phone number
-    if (!newPatientPhone.trim()) {
-      newErrors.phone = 'Contact number is required';
-    } else {
-      // Phone validation: 10 digits excluding +91, starting digits must be 6, 7, 8, or 9
-      const phoneRegex = /^(\+91[-\s]?)?[6789]\d{9}$/;
-      const cleanPhone = newPatientPhone.replace(/[\s-]/g, '');
-      if (!phoneRegex.test(cleanPhone)) {
-        newErrors.phone = 'Valid 10-digit number required (e.g., 9876543210 or +919876543210)';
+    // Check if a patient with this name already exists
+    try {
+      const response = await fetch(`${API_ENDPOINTS.PATIENTS_SEARCH}?q=${encodeURIComponent(newPatientName)}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.results && data.results.length > 0) {
+          // Patient with this name already exists
+          const existingPatient = data.results[0];
+          setError(`A patient named "${newPatientName}" already exists with ID ${existingPatient.registrationId}. Please select from search results instead.`);
+          return;
+        }
       }
+    } catch (err) {
+      console.warn('Could not check for duplicates:', err);
+      // Continue anyway if search fails
     }
-
-    // If there are field errors, set them and return
-    if (Object.keys(newErrors).length > 0) {
-      setFieldErrors(newErrors);
-      return;
-    }
-
-    // Clear field errors
-    setFieldErrors({});
 
     const regId = generateNewRegistrationId();
     setNewRegistrationId(regId);
@@ -374,8 +375,9 @@ export function AppointmentBookingView() {
       }
 
       setSuccess(`Appointment booked successfully for ${selectedPatient.name}`);
+      console.log('✅ Appointment booked, preparing redirect with patient data:', selectedPatient);
 
-      // Reset form
+      // Redirect to billing page after brief delay to show success message
       setTimeout(() => {
         setSelectedPatient(null);
         setSelectedDoctor(null);
@@ -388,10 +390,10 @@ export function AppointmentBookingView() {
         setNewRegistrationId(null);
         setSuccess(null);
         setIsNewPatient(false);
-      }, 5000);
+      }, 2000);
     } catch (err) {
+      console.error('❌ Error in handleBookAppointment:', err);
       setError(err instanceof Error ? err.message : 'Failed to book appointment');
-    } finally {
       setLoading(false);
     }
   };

@@ -119,7 +119,18 @@ export function ReceptionistPortal({ username, onLogout, onViewChange, onPatient
                     )}
                     {activeTab === 'booking' && (
                         <div className="h-full pt-6">
-                            <AppointmentBookingView />
+                                                        <AppointmentBookingView 
+                                                            onNavigateToBilling={(registrationId, patientData) => {
+                                                                // Use window.location.hash or a global event, or ideally lift state up if possible
+                                                                // For now, use a global event as a workaround
+                                                                console.log('📍 [ReceptionistPortal] AppointmentBooking callback invoked with:', { registrationId, patientData });
+                                                                if (window && typeof window.dispatchEvent === 'function') {
+                                                                    window.dispatchEvent(new CustomEvent('navigate-to-billing', {
+                                                                        detail: { registrationId, patientData }
+                                                                    }));
+                                                                }
+                                                            }}
+                                                        />
                         </div>
                     )}
                 </div>
