@@ -850,7 +850,7 @@ async def search_patients(q: str | None = None, limit: int = 20):
     except Exception:
         escaped = term
 
-    # Search name (contains) OR patientDetails.email (exact/prefix) OR patientDetails.phone (contains) OR registrationId (contains)
+    # Search name (contains) OR contactInfo.email (exact/prefix) OR contactInfo.phone (contains) OR registrationId (contains)
     regex_name = {"$regex": escaped, "$options": "i"}
     regex_email = {"$regex": f"^{escaped}$", "$options": "i"}
     regex_phone = {"$regex": escaped, "$options": "i"}
@@ -859,19 +859,19 @@ async def search_patients(q: str | None = None, limit: int = 20):
     cursor = patient_collection.find(
         {"$or": [
             {"name": regex_name}, 
-            {"patientDetails.email": regex_email},
-            {"patientDetails.phone": regex_phone},
+            {"contactInfo.email": regex_email},
+            {"contactInfo.phone": regex_phone},
             {"registrationId": regex_regid}
         ]},
-        {"name": 1, "registrationId": 1, "patientDetails.email": 1, "patientDetails.phone": 1, "created_at": 1}
+        {"name": 1, "registrationId": 1, "contactInfo.email": 1, "contactInfo.phone": 1, "created_at": 1}
     ).limit(limit)
 
     results = []
     for doc in cursor:
-        # extract phone and email from patientDetails
-        patient_details = doc.get("patientDetails") or {}
-        phone = patient_details.get("phone")
-        email = patient_details.get("email")
+        # extract phone and email from contactInfo
+        contact_info = doc.get("contactInfo") or {}
+        phone = contact_info.get("phone")
+        email = contact_info.get("email")
         profile_pic = doc.get("profilePic") or doc.get("profile_pic")
 
         # derive a last visit date from encounters if available

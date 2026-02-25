@@ -25,7 +25,8 @@ python-dotenv==1.0.0
 # Utilities
 python-multipart==0.0.20
 
-# Agent 2: Book-based medical knowledge retrieval (RAG)
-chromadb
-sentence-transformers
-pypdf
+# Optional: Agent 2: Book-based medical knowledge retrieval (RAG)
+# These require C++ build tools - install manually if needed
+# chromadb
+# sentence-transformers
+# pypdf
