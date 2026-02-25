@@ -62,6 +62,7 @@ export function AppointmentBookingView() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<{ name?: string; phone?: string }>({});
 
   // Fetch doctors from database
   useEffect(() => {
@@ -187,27 +188,33 @@ export function AppointmentBookingView() {
   };
 
   const handleCreateNewPatient = async () => {
+    const newErrors: { name?: string; phone?: string } = {};
+
+    // Validate name
     if (!newPatientName.trim()) {
-      setError('Patient name is required');
+      newErrors.name = 'Patient name is required';
+    }
+
+    // Validate phone number
+    if (!newPatientPhone.trim()) {
+      newErrors.phone = 'Contact number is required';
+    } else {
+      // Phone validation: 10 digits excluding +91, starting digits must be 6, 7, 8, or 9
+      const phoneRegex = /^(\+91[-\s]?)?[6789]\d{9}$/;
+      const cleanPhone = newPatientPhone.replace(/[\s-]/g, '');
+      if (!phoneRegex.test(cleanPhone)) {
+        newErrors.phone = 'Valid 10-digit number required (e.g., 9876543210 or +919876543210)';
+      }
+    }
+
+    // If there are field errors, set them and return
+    if (Object.keys(newErrors).length > 0) {
+      setFieldErrors(newErrors);
       return;
     }
 
-    // Check if a patient with this name already exists
-    try {
-      const response = await fetch(`${API_ENDPOINTS.PATIENTS_SEARCH}?q=${encodeURIComponent(newPatientName)}`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data.results && data.results.length > 0) {
-          // Patient with this name already exists
-          const existingPatient = data.results[0];
-          setError(`A patient named "${newPatientName}" already exists with ID ${existingPatient.registrationId}. Please select from search results instead.`);
-          return;
-        }
-      }
-    } catch (err) {
-      console.warn('Could not check for duplicates:', err);
-      // Continue anyway if search fails
-    }
+    // Clear field errors
+    setFieldErrors({});
 
     const regId = generateNewRegistrationId();
     setNewRegistrationId(regId);
@@ -381,7 +388,7 @@ export function AppointmentBookingView() {
         setNewRegistrationId(null);
         setSuccess(null);
         setIsNewPatient(false);
-      }, 2000);
+      }, 5000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to book appointment');
     } finally {
@@ -426,17 +433,6 @@ export function AppointmentBookingView() {
   return (
     <div className="text-white space-y-8 animate-in fade-in duration-700">
       {/* Success/Error Messages */}
-      {success && (
-        <div className="bg-green-500/10 border border-green-500/20 rounded-2xl p-4 flex items-center gap-3 animate-in slide-in-from-top-2">
-          <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center">
-            <CheckCircle className="w-5 h-5 text-green-500" />
-          </div>
-          <div>
-            <p className="text-green-500 text-sm font-bold">Appointment Scheduled</p>
-            <p className="text-white/60 text-xs">{success}</p>
-          </div>
-        </div>
-      )}
 
       {error && (
         <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 flex items-center gap-3 animate-in shake duration-500">
@@ -549,7 +545,18 @@ export function AppointmentBookingView() {
                     <div className="bg-[var(--theme-bg-secondary)] border border-[var(--theme-accent)]/20 rounded-3xl p-8 shadow-2xl animate-in fade-in zoom-in-95">
                       <div className="flex items-center justify-between mb-8">
                         <h3 className="text-lg font-bold text-[var(--theme-text)]">Create New Patient Record</h3>
-                        <button onClick={() => setIsNewPatient(false)} className="text-[var(--theme-text-muted)] hover:text-[var(--theme-accent)]"><X className="w-5 h-5" /></button>
+                        <button 
+                          onClick={() => {
+                            setIsNewPatient(false);
+                            setFieldErrors({});
+                            setNewPatientName('');
+                            setNewPatientPhone('');
+                            setNewPatientEmail('');
+                          }} 
+                          className="text-[var(--theme-text-muted)] hover:text-[var(--theme-accent)]"
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -559,18 +566,34 @@ export function AppointmentBookingView() {
                             <Input
                               placeholder="Enter legal name"
                               value={newPatientName}
-                              onChange={(e) => setNewPatientName(e.target.value)}
-                              className="bg-[var(--theme-bg-tertiary)] border-[var(--theme-accent)] h-12 rounded-xl focus:border-[var(--theme-accent)]/50 text-[var(--theme-text)] placeholder:text-[var(--theme-text-muted)]"
+                              onChange={(e) => {
+                                setNewPatientName(e.target.value);
+                                if (fieldErrors.name) setFieldErrors({ ...fieldErrors, name: undefined });
+                              }}
+                              className={`bg-[var(--theme-bg-tertiary)] h-12 rounded-xl focus:border-[var(--theme-accent)]/50 text-[var(--theme-text)] placeholder:text-[var(--theme-text-muted)] ${
+                                fieldErrors.name ? 'border-red-500' : 'border-[var(--theme-accent)]'
+                              }`}
                             />
+                            {fieldErrors.name && (
+                              <p className="text-red-500 text-xs mt-1 font-semibold">{fieldErrors.name}</p>
+                            )}
                           </div>
                           <div>
-                            <label className="text-[10px] font-bold text-[var(--theme-text-muted)] uppercase tracking-widest block mb-2">Contact Number</label>
+                            <label className="text-[10px] font-bold text-[var(--theme-text-muted)] uppercase tracking-widest block mb-2">Contact Number *</label>
                             <Input
                               placeholder="+91 XXXXX XXXXX"
                               value={newPatientPhone}
-                              onChange={(e) => setNewPatientPhone(e.target.value)}
-                              className="bg-[var(--theme-bg-tertiary)] border-[var(--theme-accent)] h-12 rounded-xl focus:border-[var(--theme-accent)]/50 text-[var(--theme-text)] placeholder:text-[var(--theme-text-muted)]"
+                              onChange={(e) => {
+                                setNewPatientPhone(e.target.value);
+                                if (fieldErrors.phone) setFieldErrors({ ...fieldErrors, phone: undefined });
+                              }}
+                              className={`bg-[var(--theme-bg-tertiary)] h-12 rounded-xl focus:border-[var(--theme-accent)]/50 text-[var(--theme-text)] placeholder:text-[var(--theme-text-muted)] ${
+                                fieldErrors.phone ? 'border-red-500' : 'border-[var(--theme-accent)]'
+                              }`}
                             />
+                            {fieldErrors.phone && (
+                              <p className="text-red-500 text-xs mt-1 font-semibold">{fieldErrors.phone}</p>
+                            )}
                           </div>
                         </div>
                         <div className="space-y-4">
@@ -805,6 +828,27 @@ export function AppointmentBookingView() {
                   </div>
                 </div>
               </div>
+
+              {/* Success Notification - Below Confirm Button */}
+              {success && (
+                <div className="bg-green-500/15 border border-green-500/30 rounded-2xl p-4 flex items-center justify-between gap-3 animate-in slide-in-from-bottom duration-300">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center">
+                      <CheckCircle className="w-5 h-5 text-green-500" />
+                    </div>
+                    <div>
+                      <p className="text-green-400 text-sm font-bold">Success!</p>
+                      <p className="text-green-300 text-xs">{success}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setSuccess(null)}
+                    className="text-green-400 hover:text-green-300 transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              )}
 
               {/* Quick Tips */}
               <div className="bg-[#D4A574]/5 border border-[#D4A574]/10 rounded-3xl p-6">

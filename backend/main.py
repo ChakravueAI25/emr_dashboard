@@ -291,33 +291,89 @@ def _parse_encounter_date(enc: dict):
         return None
 
 
+
+
 @app.get("/api/analytics/patient/{reg_id}/iop-trend")
 def patient_iop_trend(reg_id: str, limit: int = 12):
-    """Return patient's IOP trend from their encounters (most recent first).
-    Response: [{date: 'YYYY-MM-DD', od: <num>|null, os: <num>|null}, ...]
     """
+    Return patient's IOP trend.
+    Supports BOTH:
+    1) New structure: encounters[].vitals.iop.od/os
+    2) Old migrated structure: visits[].iop[0].rightEye/leftEye
+    """
+
+    from datetime import datetime
+
     p = patient_collection.find_one({"registrationId": reg_id})
     if not p:
         return []
-    encs = p.get("encounters") or []
+
     rows = []
-    for e in encs:
-        dt = _parse_encounter_date(e)
-        od = None
-        os = None
+
+    # -------------------------
+    # 1️⃣ Try NEW structure (encounters)
+    # -------------------------
+    encounters = p.get("encounters") or []
+    for e in encounters:
+        dt = e.get("date")
         try:
-            od = e.get("vitals", {}).get("iop", {}).get("od") if isinstance(e.get("vitals"), dict) else None
-            os = e.get("vitals", {}).get("iop", {}).get("os") if isinstance(e.get("vitals"), dict) else None
+            if isinstance(dt, str):
+                dt = datetime.fromisoformat(dt)
         except Exception:
-            od = None; os = None
-        rows.append({"date": dt, "od": od, "os": os})
-    # filter out entries with no date
+            dt = None
+
+        od = e.get("vitals", {}).get("iop", {}).get("od")
+        os = e.get("vitals", {}).get("iop", {}).get("os")
+
+        if dt and (od is not None or os is not None):
+            rows.append({
+                "date": dt,
+                "od": od,
+                "os": os
+            })
+
+    # -------------------------
+    # 2️⃣ If no encounters data found → fallback to OLD visits structure
+    # -------------------------
+    if not rows:
+        visits = p.get("visits") or []
+
+        for v in visits:
+            dt = v.get("visitDate")
+            try:
+                if isinstance(dt, str):
+                    dt = datetime.fromisoformat(dt)
+            except Exception:
+                dt = None
+
+            iop_list = v.get("iop") or []
+            if len(iop_list) > 0:
+                first_iop = iop_list[0]
+                od = first_iop.get("rightEye")
+                os = first_iop.get("leftEye")
+
+                if dt and (od is not None or os is not None):
+                    rows.append({
+                        "date": dt,
+                        "od": od,
+                        "os": os
+                    })
+
+    # -------------------------
+    # Sort and limit
+    # -------------------------
     rows = [r for r in rows if r["date"] is not None]
     rows.sort(key=lambda x: x["date"], reverse=True)
-    out = []
+
+    output = []
     for r in rows[:limit][::-1]:
-        out.append({"date": r["date"].date().isoformat(), "od": r["od"], "os": r["os"]})
-    return out
+        output.append({
+            "date": r["date"].date().isoformat(),
+            "od": r["od"],
+            "os": r["os"]
+        })
+
+    return output
 
 
 @app.get("/api/analytics/patient/{reg_id}/visual-acuity")

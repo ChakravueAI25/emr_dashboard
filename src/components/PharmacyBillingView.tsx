@@ -36,6 +36,8 @@
 //   const [loading, setLoading] = useState(true);
 //   const [error, setError] = useState<string | null>(null);
 //   const [availableStock, setAvailableStock] = useState<{ [key: string]: number }>({});
+//   const [currentPage, setCurrentPage] = useState(1);
+//   const ITEMS_PER_PAGE = 20;
 
 //   // Updated to match Database categories from Excel import
 //   const categories = ['All', 'Drops', 'Tablet', 'Capsules', 'Ointment', 'Injection', 'Others', 'Surgical'];
@@ -510,11 +512,11 @@
 
 //               {/* Medicine Grid - 4 columns for clean layout */}
 //             {!loading && (
-//               <div className="grid grid-cols-4 gap-3 p-3">
+//               <div className="grid grid-cols-5 gap-4 p-4">
 //                 {filteredMedicines.map(medicine => (
 //                 <div
 //                   key={medicine.id}
-//                   className="bg-[#121212] border border-[#D4A574] rounded-lg p-3 hover:border-[#D4A574] transition-all hover:shadow-lg hover:shadow-[#D4A574]/20"
+//                   className="bg-[#121212] border border-[#D4A574] rounded-lg p-2 hover:border-[#D4A574] transition-all hover:shadow-lg hover:shadow-[#D4A574]/20"
 //                 >
 //                   {/* Icon */}
 //                   <div className="w-full h-12 bg-[#1a1a1a] border border-[#D4A574] rounded flex items-center justify-center mb-3 shrink-0">
@@ -721,6 +723,9 @@ export function PharmacyBillingView({
   const [error, setError] = useState<string | null>(null);
   const [availableStock, setAvailableStock] = useState<{ [key: string]: number }>({});
   const [showOrderSummary, setShowOrderSummary] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 20;
+  const [notification, setNotification] = useState<{message: string, type: 'error'} | null>(null);
 
   // Updated to match Database categories from Excel import
   const categories = ['All', 'Drops', 'Tablet', 'Capsules', 'Ointment', 'Injection', 'Others', 'Surgical'];
@@ -781,6 +786,7 @@ export function PharmacyBillingView({
     setPatientSearchQuery('');
     setPatientSearchResults([]);
     setShowPatientDropdown(false);
+    setCart([]);
   };
 
   // Fetch medicines from backend
@@ -816,13 +822,32 @@ export function PharmacyBillingView({
     fetchMedicines();
   }, []);
 
-  const filteredMedicines = medicines.filter(med => {
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedCategory, searchTerm]);
+
+  // Filter medicines and apply pagination
+  const allMedicines = medicines.filter(med => {
     const matchesCategory = selectedCategory === 'All' || med.category === selectedCategory;
     const matchesSearch = med.name.toLowerCase().includes(searchTerm.toLowerCase());
     return matchesCategory && matchesSearch;
-  }).slice(0, selectedCategory === 'All' ? 20 : undefined);
+  });
+
+  const totalPages = selectedCategory === 'All' ? Math.ceil(allMedicines.length / ITEMS_PER_PAGE) : 1;
+
+  const filteredMedicines = selectedCategory === 'All' 
+    ? allMedicines.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
+    : allMedicines;
 
   const addToCart = (medicine: MedicineItem) => {
+    // Check if patient is selected
+    if (!currentRegId || !currentPatientName) {
+      setNotification({ message: 'Please select a patient before adding items to cart', type: 'error' });
+      setTimeout(() => setNotification(null), 4000);
+      return;
+    }
+
     const currentStock = availableStock[medicine.id] || medicine.stock;
     if (currentStock <= 0) return;
 
@@ -1056,8 +1081,9 @@ export function PharmacyBillingView({
   };
 
   return (
-    <div className="max-w-[1600px] mx-auto p-12 space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700 bg-[#0a0a0a]">
-      {/* Header */}
+    <>
+      <div className="max-w-[1600px] mx-auto p-12 space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700 bg-[#0a0a0a]">
+        {/* Header */}
       <div className="flex items-center justify-between mb-2">
         <div>
           <h1 className="text-4xl font-light text-[var(--theme-text)] tracking-tight">
@@ -1068,9 +1094,26 @@ export function PharmacyBillingView({
           </p>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 relative">
           {/* Search Patient Box */}
           <div className="relative w-[300px] z-20">
+            {/* Notification Alert - Above Search Bar Placeholder */}
+            {notification && (
+              <div className="absolute -top-20 left-0 right-0 animate-in slide-in-from-top duration-300 z-30">
+                <div className="bg-red-100 border-l-4 border-red-600 rounded p-3 shadow-md flex items-center justify-between">
+                  <p className="text-red-800 font-semibold text-sm">
+                    {notification.message}
+                  </p>
+                  <button
+                    onClick={() => setNotification(null)}
+                    className="ml-2 text-red-600 hover:text-red-800 transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center bg-[#121212] border border-[#D4A574] rounded-lg px-3 py-2 transition-colors focus-within:border-[#D4A574]">
               <Search className="w-4 h-4 text-[#8B8B8B] mr-2" />
               <input
@@ -1119,6 +1162,7 @@ export function PharmacyBillingView({
                 onClick={() => {
                   setCurrentRegId(undefined);
                   setCurrentPatientName(undefined);
+                  setCart([]);
                   if (onBillingComplete) onBillingComplete(0); // Optional: Reset parent state if needed
                 }}
                 className="ml-2 hover:bg-[#2a2a2a] p-1 rounded-full text-[#8B8B8B] hover:text-white transition-colors"
@@ -1194,30 +1238,26 @@ export function PharmacyBillingView({
 
           {/* Medicine Grid - 4 columns for clean layout */}
           {!loading && (
-            <div className="grid grid-cols-4 gap-4 p-6">
+            <>
+            <div className="grid grid-cols-5 gap-4 p-6">
               {filteredMedicines.map(medicine => (
                 <div
                   key={medicine.id}
                   className="bg-[#121212] border border-[#D4A574] rounded-lg p-4 hover:border-[#D4A574] transition-all hover:shadow-lg hover:shadow-[#D4A574]/20"
                 >
-                  {/* Icon */}
-                  <div className="w-full h-12 bg-[#1a1a1a] border border-[#D4A574] rounded flex items-center justify-center mb-3 shrink-0">
-                    <Eye className="w-6 h-6 text-[#D4A574]" />
-                  </div>
-
-                  {/* Name and Price - Clearly separated */}
-                  <div className="mb-2">
-                    <h3 className="text-white font-semibold text-sm line-clamp-2 mb-1">{medicine.name}</h3>
-                    <div className="flex items-baseline justify-between mb-1">
-                      <p className="text-[#D4A574] font-bold text-lg">₹{medicine.price}</p>
+                    {/* Name and Price - On same line */}
+                  <div className="mb-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="text-white font-bold text-base line-clamp-1 flex-1">{medicine.name}</h3>
+                      <p className="text-[#D4A574] font-bold text-base whitespace-nowrap">₹{medicine.price}</p>
                     </div>
                   </div>
 
                   {/* Description */}
-                  <p className="text-[#8B8B8B] text-xs mb-2 line-clamp-2 h-8">{medicine.description}</p>
+                  <p className="text-[#8B8B8B] text-xs mb-1.5 line-clamp-2">{medicine.description}</p>
 
                   {/* Stock Info */}
-                  <div className="mb-3 pb-2 border-t border-[#D4A574] pt-2">
+                  <div className="mb-2 pb-1.5 border-t border-[#D4A574] pt-1.5">
                     <p className="text-[#8B8B8B] text-xs">
                       Available: <span className="text-[#D4A574] font-semibold">{availableStock[medicine.id] || medicine.stock}</span>
                     </p>
@@ -1227,13 +1267,53 @@ export function PharmacyBillingView({
                   <button
                     onClick={() => addToCart(medicine)}
                     disabled={(availableStock[medicine.id] || medicine.stock) === 0}
-                    className="w-full py-2 bg-[#D4A574] text-[#0a0a0a] rounded hover:bg-[#C9955E] disabled:opacity-50 disabled:cursor-not-allowed transition-all font-semibold flex items-center justify-center gap-1 text-xs"
+                    className="w-full py-1.5 bg-[#D4A574] text-[#0a0a0a] rounded hover:bg-[#C9955E] disabled:opacity-50 disabled:cursor-not-allowed transition-all font-semibold flex items-center justify-center gap-1 text-xs"
                   >
                     <Plus className="w-3 h-3" /> Add to Cart
                   </button>
                 </div>
               ))}
             </div>
+
+            {/* Pagination Controls */}
+            {selectedCategory === 'All' && totalPages > 1 && (
+              <div className="flex items-center justify-center gap-2 p-4">
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1 bg-[#D4A574] text-[#0a0a0a] rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#C9955E] transition-colors font-semibold text-sm"
+                >
+                  Prev
+                </button>
+                
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                  <button
+                    key={page}
+                    onClick={() => setCurrentPage(page)}
+                    className={`px-3 py-1 rounded font-semibold text-sm transition-colors ${
+                      currentPage === page
+                        ? 'bg-[#D4A574] text-white border border-[#D4A574] dark:bg-[#D4A574] dark:text-[#0a0a0a] dark:border-[#D4A574]'
+                        : 'bg-white text-black border border-black dark:bg-[#1a1a1a] dark:text-[#D4A574] dark:border-[#D4A574]'
+                    }`}
+                  >
+                    {page}
+                  </button>
+                ))}
+
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-1 bg-[#D4A574] text-[#0a0a0a] rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#C9955E] transition-colors font-semibold text-sm"
+                >
+                  Next
+                </button>
+
+                <span className="text-[#8B8B8B] text-sm ml-4">
+                  Page {currentPage} of {totalPages}
+                </span>
+              </div>
+            )}
+            </>
           )}
 
           {!loading && filteredMedicines.length === 0 && (
@@ -1389,6 +1469,7 @@ export function PharmacyBillingView({
           </div>
         )
       }
-    </div >
+      </div>
+    </>
   );
 }
