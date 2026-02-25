@@ -1,3 +1,6 @@
+// NOTE: this file appears to be plaintext/JSX; showAlert is used for consistency with app components
+function showAlert(msg) { alert(msg); }
+
 import React, { useState, useEffect } from 'react';
 import AgoraRTC from 'agora-rtc-sdk-ng';
 import axios from 'axios';
@@ -35,7 +38,7 @@ function App() {
 
   // --- 1. HANDLE LOGIN ---
   const handleLogin = () => {
-    if(!username) return alert("Enter a name!");
+    if(!username) return showAlert("Enter a name!");
     // For web, we just save the name locally
     setIsLoggedIn(true);
   };
@@ -59,7 +62,7 @@ function App() {
 
     } catch (error) {
       console.error("Call failed:", error);
-      alert("Could not call mobile. Is the app logged in?");
+      showAlert("Could not call mobile. Is the app logged in?");
     }
   };
 

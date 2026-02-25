@@ -1,5 +1,6 @@
 ﻿import { useState, useEffect } from 'react';
 import { CheckCircle2, Eye, AlertCircle, Save, RotateCcw } from 'lucide-react';
+import { showAlert } from './ui/AlertModal';
 import API_ENDPOINTS from '../config/api';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
@@ -169,7 +170,7 @@ export function OpdQueueView({ userRole, onPatientSelected, hideDetailView }: Op
       const queueId = (selectedPatient as any).id || selectedPatient._id;
 
       if (!registrationId) {
-        alert('Cannot complete: Patient has no registration ID');
+        showAlert('Cannot complete: Patient has no registration ID');
         return;
       }
 
@@ -202,7 +203,7 @@ export function OpdQueueView({ userRole, onPatientSelected, hideDetailView }: Op
         console.log('OPD queue updated');
       } catch (e) {
         console.error('Failed to update OPD queue:', e);
-        alert('Failed to persist OPD data to server. Please retry.');
+        showAlert('Failed to persist OPD data to server. Please retry.');
         return;
       }
 
@@ -211,7 +212,7 @@ export function OpdQueueView({ userRole, onPatientSelected, hideDetailView }: Op
 
       setSelectedPatient(null);
       setFindings('');
-      alert('Patient moved to Doctor queue');
+      showAlert('Patient moved to Doctor queue');
     } catch (err) {
       console.error('Error completing OPD:', err);
     }
@@ -240,7 +241,7 @@ export function OpdQueueView({ userRole, onPatientSelected, hideDetailView }: Op
         throw new Error('Failed to recall patient');
       }
 
-      alert('Patient recalled to reception for corrections');
+      showAlert('Patient recalled to reception for corrections');
       setSelectedPatient(null);
       fetchOpdQueue();
 
@@ -248,7 +249,7 @@ export function OpdQueueView({ userRole, onPatientSelected, hideDetailView }: Op
       window.dispatchEvent(new CustomEvent('receptionQueueUpdated'));
     } catch (err) {
       console.error('Error recalling patient:', err);
-      alert('Failed to recall patient. Please try again.');
+      showAlert('Failed to recall patient. Please try again.');
     }
   };
 

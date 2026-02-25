@@ -4,6 +4,7 @@
  */
 
 import { API_ENDPOINTS } from '../config/api';
+import { showAlert } from '../components/ui/AlertModal';
 
 export interface MedicineData {
   name: string;
@@ -35,11 +36,11 @@ export async function addNewMedicine(medicineData: MedicineData) {
     }
 
     const result = await response.json();
-    alert(`✓ Medicine added successfully!\nID: ${result.medicineId}\nName: ${medicineData.name}`);
+    showAlert(`✓ Medicine added successfully!\nID: ${result.medicineId}\nName: ${medicineData.name}`);
     return result;
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : 'Failed to add medicine';
-    alert(`Error: ${errorMsg}`);
+    showAlert(`Error: ${errorMsg}`);
     throw error;
   }
 }
@@ -66,11 +67,11 @@ export async function updateMedicineDetails(
     }
 
     const result = await response.json();
-    alert(`✓ Medicine updated successfully!`);
+    showAlert(`✓ Medicine updated successfully!`);
     return result;
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : 'Failed to update medicine';
-    alert(`Error: ${errorMsg}`);
+    showAlert(`Error: ${errorMsg}`);
     throw error;
   }
 }
@@ -94,11 +95,11 @@ export async function updateMedicineStock(medicineId: string, newStock: number) 
     }
 
     const result = await response.json();
-    alert(`✓ Stock updated!\nNew Stock: ${newStock} units`);
+    showAlert(`✓ Stock updated!\nNew Stock: ${newStock} units`);
     return result;
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : 'Failed to update stock';
-    alert(`Error: ${errorMsg}`);
+    showAlert(`Error: ${errorMsg}`);
     throw error;
   }
 }
@@ -172,11 +173,11 @@ export async function initializeSampleMedicines() {
     }
 
     const result = await response.json();
-    alert(`✓ Sample medicines loaded!\nTotal: ${result.count} medicines`);
+    showAlert(`✓ Sample medicines loaded!\nTotal: ${result.count} medicines`);
     return result;
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : 'Failed to initialize';
-    alert(`Error: ${errorMsg}`);
+    showAlert(`Error: ${errorMsg}`);
     throw error;
   }
 }

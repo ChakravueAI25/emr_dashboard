@@ -8,6 +8,7 @@ import Navbar from './components/Navbar';
 
 import { AnalyticsView } from './components/AnalyticsView';
 import { BillingView } from './components/BillingView';
+import { AlertModal, showAlert } from './components/ui/AlertModal';
 import { BillingDashboardView } from './components/BillingDashboardView';
 import { IndividualBillingView } from './components/IndividualBillingView';
 import { UserLoginView } from './components/UserLoginView';
@@ -382,7 +383,7 @@ export default function App() {
       console.error('updateActivePatientData error for path', path, 'value', value, e);
       try {
         // If possible, show a small UI alert to the user
-        alert('Failed to update field. See console for details.');
+        showAlert('Failed to update field. See console for details.');
       } catch { }
     }
   };
@@ -429,7 +430,7 @@ export default function App() {
 
       const savedPatient = await response.json();
 
-      alert(`Patient saved successfully! Registration ID: ${savedPatient.registrationId}`);
+      showAlert(`Patient saved successfully! Registration ID: ${savedPatient.registrationId}`);
 
       // Keep registration id for uploading documents to this patient
       setLastSavedRegistrationId(savedPatient.registrationId || null);
@@ -440,7 +441,7 @@ export default function App() {
       setIsNewPatientMode(false);
 
     } catch (error: any) {
-      alert(`Error: ${error.message}`);
+      showAlert(`Error: ${error.message}`);
     }
   };
 
@@ -541,12 +542,12 @@ export default function App() {
           } else {
             const errText = await response.text();
             console.error('MongoDB save returned status', response.status, ':', errText);
-            alert('Failed to save patient record to server. No browser fallback is active.');
+            showAlert('Failed to save patient record to server. No browser fallback is active.');
             return;
           }
         } catch (fetchErr) {
           console.error('MongoDB backend unreachable:', fetchErr);
-          alert('Failed to reach backend to save patient record. Data will NOT be stored locally.');
+          showAlert('Failed to reach backend to save patient record. Data will NOT be stored locally.');
           return;
         }
       }
@@ -563,7 +564,7 @@ export default function App() {
       const registrationId = activePatientData.patientDetails.registrationId;
 
       if (!registrationId || registrationId === 'Not Assigned') {
-        alert('Cannot complete: Patient has no registration ID');
+        showAlert('Cannot complete: Patient has no registration ID');
         return;
       }
 
@@ -667,10 +668,10 @@ export default function App() {
       // Step 7: Return to the Hub
       setCurrentView('login');
 
-      alert(`Patient ${activePatientData.patientDetails.name} checked in and sent to OPD queue successfully!`);
+      showAlert(`Patient ${activePatientData.patientDetails.name} checked in and sent to OPD queue successfully!`);
     } catch (error: any) {
       console.error('Error completing reception:', error);
-      alert(`Error: ${error.message}`);
+      showAlert(`Error: ${error.message}`);
     }
   };
 
@@ -681,7 +682,7 @@ export default function App() {
       : lastSavedRegistrationId;
 
     if (!regId) {
-      alert('No registration ID available. Save patient first from Reception.');
+      showAlert('No registration ID available. Save patient first from Reception.');
       return;
     }
 
@@ -761,10 +762,10 @@ export default function App() {
       // Clear dashboard
       setActivePatientData(null);
 
-      alert('OPD examination completed and patient sent to Doctor queue.');
+      showAlert('OPD examination completed and patient sent to Doctor queue.');
     } catch (err: any) {
       console.error('Error saving OPD data:', err);
-      alert(`Error saving OPD data: ${err.message || err}`);
+      showAlert(`Error saving OPD data: ${err.message || err}`);
     }
   };
 
@@ -775,7 +776,7 @@ export default function App() {
       : lastSavedRegistrationId;
 
     if (!regId) {
-      alert('No registration ID available. Save patient first from Reception.');
+      showAlert('No registration ID available. Save patient first from Reception.');
       return;
     }
 
@@ -858,10 +859,10 @@ export default function App() {
       // Clear dashboard
       setActivePatientData(null);
 
-      alert('Patient examination completed and discharged.');
+      showAlert('Patient examination completed and discharged.');
     } catch (err: any) {
       console.error('Error saving doctor data:', err);
-      alert(`Error saving doctor data: ${err.message || err}`);
+      showAlert(`Error saving doctor data: ${err.message || err}`);
     }
   };
 
@@ -1076,7 +1077,7 @@ export default function App() {
     }
 
     if (userRole !== ROLES.RECEPTIONIST) {
-      alert('Search is available to Receptionist role only.');
+      showAlert('Search is available to Receptionist role only.');
       return;
     }
 
@@ -1094,7 +1095,7 @@ export default function App() {
       setSearchResults(data.results || []);
     } catch (err: any) {
       console.error('Search error', err);
-      alert('Failed to search patients. See console for details.');
+      showAlert('Failed to search patients. See console for details.');
     } finally {
       setIsSearching(false);
     }
@@ -1243,7 +1244,7 @@ export default function App() {
       setSearchQuery('');
     } catch (err: any) {
       console.error('Load patient error', err);
-      alert('Failed to load patient.');
+      showAlert('Failed to load patient.');
     }
   };
 
@@ -1366,22 +1367,22 @@ export default function App() {
     // Protect all non-login views behind authentication
     if (!isAuthenticated) {
       // Minimal UX: send user to login and inform them
-      alert('Please sign in to access the dashboard.');
+      showAlert('Please sign in to access the dashboard.');
       setCurrentView('login');
       return;
     }
 
     // Role-based queue access
     if (view === 'reception-queue' && userRole && userRole !== 'receptionist' && userRole !== 'admin' && userRole !== 'patient') {
-      alert('Only reception staff can access this queue');
+      showAlert('Only reception staff can access this queue');
       return;
     }
     if (view === 'opd-queue' && userRole && userRole !== 'opd' && userRole !== 'admin' && userRole !== 'patient') {
-      alert('Only OPD staff can access this queue');
+      showAlert('Only OPD staff can access this queue');
       return;
     }
     if (view === 'doctor-queue' && userRole && userRole !== 'doctor' && userRole !== 'admin' && userRole !== 'patient') {
-      alert('Only doctors can access this queue');
+      showAlert('Only doctors can access this queue');
       return;
     }
 
@@ -1399,6 +1400,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[var(--theme-bg)] text-[var(--theme-text)]">
+      <AlertModal />
       {!isFullScreen && (
         <Sidebar
           currentView={currentView}

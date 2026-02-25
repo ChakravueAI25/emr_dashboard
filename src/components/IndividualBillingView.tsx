@@ -1,4 +1,5 @@
 ﻿import React, { useState, useEffect, useRef } from 'react';
+import { showAlert } from './ui/AlertModal';
 import {
   Plus,
   Trash2,
@@ -647,23 +648,23 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
   // Create Initial/Provisional Surgery Bill
   const handleCreateInitialBill = async () => {
     if (!patient || !currentRegId) {
-      alert('Please select a patient first');
+      showAlert('Please select a patient first');
       return;
     }
 
     const surgeryItems = items.filter(i => i.category === 'Surgery');
     if (surgeryItems.length === 0) {
-      alert('Please add at least one surgery item');
+      showAlert('Please add at least one surgery item');
       return;
     }
 
     if (!govtInsuranceEnabled) {
-      alert('Please enable insurance to create a surgery bill');
+      showAlert('Please enable insurance to create a surgery bill');
       return;
     }
 
     if (securityDeposit <= 0) {
-      alert('Please enter the Security Deposit / Upfront Amount');
+      showAlert('Please enter the Security Deposit / Upfront Amount');
       return;
     }
 
@@ -703,33 +704,33 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
 
       if (response.ok) {
         const result = await response.json();
-        alert(`âœ… Initial Bill Created!\n\nBill ID: ${result.billId}\n\nSecurity Deposit of ₹${securityDeposit.toLocaleString('en-IN')} collected.\n\nInsurance approval pending.`);
+        showAlert(`âœ… Initial Bill Created!\n\nBill ID: ${result.billId}\n\nSecurity Deposit of ₹${securityDeposit.toLocaleString('en-IN')} collected.\n\nInsurance approval pending.`);
         handlePrintInitialBill(billData, result.billId);
         fetchSurgeryBills(); // Refresh the list
       } else {
         const error = await response.json();
-        alert(`Error: ${error.detail || 'Failed to create initial bill'}`);
+        showAlert(`Error: ${error.detail || 'Failed to create initial bill'}`);
       }
     } catch (err) {
       console.error('Error creating initial bill:', err);
-      alert('Failed to create initial bill. Please try again.');
+      showAlert('Failed to create initial bill. Please try again.');
     }
   };
 
   // Create Final Settlement Surgery Bill
   const handleCreateFinalBill = async () => {
     if (!patient || !currentRegId) {
-      alert('Please select a patient first');
+      showAlert('Please select a patient first');
       return;
     }
 
     if (!existingInitialBill && !surgeryBillStage) {
-      alert('No initial bill found. Please create an initial bill first.');
+      showAlert('No initial bill found. Please create an initial bill first.');
       return;
     }
 
     if (insuranceApprovedAmount <= 0) {
-      alert('Please enter the Insurance Approved Amount (as per approval letter)');
+      showAlert('Please enter the Insurance Approved Amount (as per approval letter)');
       return;
     }
 
@@ -788,17 +789,17 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
           message += `âœ“ Bill Fully Settled - No Balance Due`;
         }
 
-        alert(message);
+        showAlert(message);
         handlePrintFinalBill(billData, result.billId, calc);
         fetchSurgeryBills();
         setExistingInitialBill(null); // Clear since it's now settled
       } else {
         const error = await response.json();
-        alert(`Error: ${error.detail || 'Failed to create final bill'}`);
+        showAlert(`Error: ${error.detail || 'Failed to create final bill'}`);
       }
     } catch (err) {
       console.error('Error creating final bill:', err);
-      alert('Failed to create final bill. Please try again.');
+      showAlert('Failed to create final bill. Please try again.');
     }
   };
 
@@ -1263,7 +1264,7 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
 
   const handlePrint = () => {
     if (!patient) {
-      alert('Please select a patient first');
+      showAlert('Please select a patient first');
       return;
     }
 
@@ -1652,7 +1653,7 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
 
   const handleSaveBill = async (status: 'paid' | 'pending' | 'draft' = 'paid') => {
     if (!currentRegId || items.length === 0) {
-      alert('Please select a patient and add items to the bill first.');
+      showAlert('Please select a patient and add items to the bill first.');
       return;
     }
 
@@ -1708,7 +1709,7 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
       });
 
       if (response.ok) {
-        alert(status === 'draft' ? 'Draft saved successfully!' : 'Bill processed successfully!');
+        showAlert(status === 'draft' ? 'Draft saved successfully!' : 'Bill processed successfully!');
 
         // Show popup to save as package if it's a surgery item
         const hasSurgeryItems = items.some(item => item.category === 'Surgery');
@@ -1727,17 +1728,17 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
         if (onBack && !hasSurgeryItems) onBack();
       } else {
         const errData = await response.json();
-        alert(`Error: ${errData.detail || 'Failed to process bill'}`);
+        showAlert(`Error: ${errData.detail || 'Failed to process bill'}`);
       }
     } catch (err) {
       console.error('Error saving bill:', err);
-      alert('Network error. Please check if the server is running.');
+      showAlert('Network error. Please check if the server is running.');
     }
   };
 
   const handleSaveAsPackage = async () => {
     if (!packageName.trim()) {
-      alert('Please enter a package name');
+      showAlert('Please enter a package name');
       return;
     }
 
@@ -1782,7 +1783,7 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
         throw new Error('Failed to save package');
       }
 
-      alert('Package saved successfully! You can now reuse it for future surgeries.');
+      showAlert('Package saved successfully! You can now reuse it for future surgeries.');
       setShowSaveAsPackagePopup(false);
       setPackageName('');
       // Refresh packages list
@@ -1794,7 +1795,7 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
       if (onBack) onBack();
     } catch (err) {
       console.error('Error saving package:', err);
-      alert(err instanceof Error ? err.message : 'Failed to save package');
+      showAlert(err instanceof Error ? err.message : 'Failed to save package');
     } finally {
       setIsSavingAsPackage(false);
     }
@@ -1846,7 +1847,7 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
     };
 
     setItems([...items, newItem]);
-    alert(`Package "${pkg.packageName}" loaded successfully!`);
+    showAlert(`Package "${pkg.packageName}" loaded successfully!`);
   };
 
   // Handle selecting a surgery package from the modal
@@ -1896,7 +1897,7 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
     };
 
     setItems(prevItems => [...prevItems, newItem]);
-    alert(`Package "${pkg.packageName}" added successfully!`);
+    showAlert(`Package "${pkg.packageName}" added successfully!`);
   };
 
   if (loading) {
@@ -2630,9 +2631,9 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
                     onClick={() => {
                       if (couponCode === 'GOVT50') {
                         setDiscountAmount(grandTotal * 0.5);
-                        alert('50% Govt Discount Applied');
+                        showAlert('50% Govt Discount Applied');
                       } else {
-                        alert('Invalid Coupon');
+                        showAlert('Invalid Coupon');
                       }
                     }}
                   >
@@ -2788,7 +2789,7 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
                       body: JSON.stringify({ workerId: currentUser, refreshedBy: currentUser, limit: 20 })
                     });
                     if (res.ok) {
-                      alert('Quota Refreshed!');
+                      showAlert('Quota Refreshed!');
                       fetchWorkerQuota();
                     }
                   }}
@@ -2900,9 +2901,9 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
                     setShowCompanyTpaModal(false);
                     setNewCompanyName('');
                     setNewTpaNames('');
-                    alert('Company and TPA added successfully!');
+                    showAlert('Company and TPA added successfully!');
                   } else {
-                    alert('Please enter a company name');
+                    showAlert('Please enter a company name');
                   }
                 }}
                 className="flex-1 bg-[#D4A574] text-[#0a0a0a] py-2 rounded-lg hover:bg-[#C9955E] font-medium"

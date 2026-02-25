@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Loader, AlertCircle, Trash2, Edit2, RefreshCw } from 'lucide-react';
+import { showAlert } from './ui/AlertModal';
 import { API_ENDPOINTS } from '../config/api';
 
 interface Hospital {
@@ -113,7 +114,7 @@ export const AdminDataManagementView: React.FC = () => {
       if (data.status === 'success') {
         // Reload patients
         await loadPatients(selectedHospital.organization_id);
-        alert('Patient deleted successfully');
+        showAlert('Patient deleted successfully');
       } else {
         setError(data.detail || 'Failed to delete patient');
       }

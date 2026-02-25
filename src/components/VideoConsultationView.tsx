@@ -90,7 +90,7 @@ export function VideoConsultationView({ onBack, username }: VideoConsultationVie
     } catch (error) {
       console.error("Call failed:", error);
       setCallStatus('error');
-      alert("Could not access camera/microphone.");
+      showAlert("Could not access camera/microphone.");
     }
   };
 

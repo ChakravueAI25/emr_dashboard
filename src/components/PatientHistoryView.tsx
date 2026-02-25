@@ -4,6 +4,7 @@ import API_ENDPOINTS from '../config/api';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
+import { showAlert } from './ui/AlertModal';
 
 interface VisitRecord {
   visitId: string;
@@ -237,7 +238,7 @@ export function PatientHistoryView() {
     if (!selectedPatient || !editingVisit || !editData) return;
 
     if (!editReason.trim()) {
-      alert('Please provide a reason for the correction');
+      showAlert('Please provide a reason for the correction');
       return;
     }
 
@@ -260,7 +261,7 @@ export function PatientHistoryView() {
         throw new Error('Failed to save changes');
       }
 
-      alert('Visit record updated successfully!');
+      showAlert('Visit record updated successfully!');
 
       // Refresh data
       await loadPatientRecords();
@@ -269,7 +270,7 @@ export function PatientHistoryView() {
       cancelEdit();
     } catch (err) {
       console.error('Error saving visit:', err);
-      alert('Failed to save changes. Please try again.');
+      showAlert('Failed to save changes. Please try again.');
     } finally {
       setSaving(false);
     }

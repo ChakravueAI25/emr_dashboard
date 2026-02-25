@@ -3,6 +3,7 @@ import {
   Calendar, CheckCircle2, Clock, Send, User, Search, Activity,
   ChevronRight, ClipboardList, Phone, UserPlus, Zap, UserCircle, ExternalLink, GripVertical, X
 } from 'lucide-react';
+import { showAlert } from './ui/AlertModal';
 import API_ENDPOINTS from '../config/api';
 import { Button } from './ui/button';
 import { QueuedPatient } from './queueTypes';
@@ -158,7 +159,7 @@ export function OperationsCenter({ onPatientSelected, compact, userRole, onNavig
       const checkExists = await fetch(`${API_ENDPOINTS.QUEUE_RECEPTION}?registrationId=${patient.patientRegistrationId}`);
       const checkData = await checkExists.json();
       if (checkData.items && checkData.items.some((i: any) => (i.status === 'waiting' || !i.status))) {
-        alert('Patient already at reception desk.');
+        showAlert('Patient already at reception desk.');
         return;
       }
 
@@ -185,9 +186,9 @@ export function OperationsCenter({ onPatientSelected, compact, userRole, onNavig
 
       fetchData();
       setSelectedPatient(null);
-      alert('Patient arrival marked successfully');
+      showAlert('Patient arrival marked successfully');
     } catch (err) {
-      alert('Error marking arrival');
+      showAlert('Error marking arrival');
     }
   };
 
@@ -233,10 +234,10 @@ export function OperationsCenter({ onPatientSelected, compact, userRole, onNavig
       fetchData();
       setSelectedPatient(null);
       setNotes('');
-      alert('Patient successfully pushed to OPD / Doctor Dashboard');
+      showAlert('Patient successfully pushed to OPD / Doctor Dashboard');
     } catch (err: any) {
       console.error('Check-in error:', err);
-      alert(`Check-in failed: ${err.message}`);
+      showAlert(`Check-in failed: ${err.message}`);
     }
   };
 
@@ -256,11 +257,11 @@ export function OperationsCenter({ onPatientSelected, compact, userRole, onNavig
       const resp = await fetch(endpoint, { method: 'DELETE' });
       if (!resp.ok) throw new Error('Failed to remove from queue');
 
-      alert('Patient removed from queue successfully');
+      showAlert('Patient removed from queue successfully');
       fetchData();
       setSelectedPatient(null);
     } catch (err: any) {
-      alert(`Error: ${err.message}`);
+      showAlert(`Error: ${err.message}`);
     }
   };
 

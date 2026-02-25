@@ -101,7 +101,7 @@ export function SlitLampView({ onBack, patientId, patientName, doctorName }: Sli
   const saveRecord = async () => {
     if (!capturedImage) return;
     if (!patientId) {
-      alert("No Patient ID found. Cannot save.");
+      showAlert("No Patient ID found. Cannot save.");
       return;
     }
 
@@ -123,15 +123,15 @@ export function SlitLampView({ onBack, patientId, patientName, doctorName }: Sli
       });
 
       if (res.ok) {
-        alert("Saved successfully!");
+        showAlert("Saved successfully!");
         setCapturedImage(null);
         setNotes('');
       } else {
-        alert("Failed to save.");
+        showAlert("Failed to save.");
       }
     } catch (e) {
       console.error(e);
-      alert("Error saving record.");
+      showAlert("Error saving record.");
     } finally {
       setIsSaving(false);
     }

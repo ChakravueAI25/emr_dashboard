@@ -1002,7 +1002,7 @@ export function PharmacyBillingView({
 
   const handleCheckout = async () => {
     if (!currentRegId || cart.length === 0) {
-      alert('Please select a patient and add items to cart');
+      showAlert('Please select a patient and add items to cart');
       return;
     }
 

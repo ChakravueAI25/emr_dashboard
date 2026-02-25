@@ -115,7 +115,7 @@ export function ReceptionQueueView({ userRole, onPatientSelected, updatedPatient
       const registrationId = (selectedPatient as any).registrationId || selectedPatient.patientRegistrationId || rd.patientRegistrationId;
 
       if (!registrationId || registrationId === 'Not Assigned') {
-        alert('Cannot complete: Patient has no registration ID');
+        showAlert('Cannot complete: Patient has no registration ID');
         return;
       }
 
@@ -160,10 +160,10 @@ export function ReceptionQueueView({ userRole, onPatientSelected, updatedPatient
       window.dispatchEvent(new CustomEvent('receptionQueueUpdated', { detail: { registrationId } }));
       setSelectedPatient(null);
       setNotes('');
-      alert('Patient check-in completed and moved to OPD queue');
+      showAlert('Patient check-in completed and moved to OPD queue');
     } catch (err) {
       console.error('Error completing reception:', err);
-      alert('Error completing check-in');
+      showAlert('Error completing check-in');
     }
   };
 

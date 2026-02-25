@@ -1,5 +1,6 @@
 ﻿import { useState, useEffect } from 'react';
 import { Calendar, CheckCircle, Clock, Send, AlertCircle, TrendingUp, ChevronLeft, ChevronRight, User, Search, Filter } from 'lucide-react';
+import { showAlert } from './ui/AlertModal';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { QueuedPatient, AppointmentStatus } from './queueTypes';
@@ -94,7 +95,7 @@ export function AppointmentQueueView() {
 
   const pushToReception = async (appointment: QueuedPatient) => {
     if (appointment.status !== 'booked') {
-      alert(`Cannot send to reception: appointment is already ${appointment.status}`);
+      showAlert(`Cannot send to reception: appointment is already ${appointment.status}`);
       return;
     }
 
@@ -122,7 +123,7 @@ export function AppointmentQueueView() {
       setAppointments(prev => prev.map(apt => apt._id === appointment._id ? updated : apt));
       window.dispatchEvent(new CustomEvent('receptionQueueUpdated', { detail: { updated } }));
       setSelectedAppointment(null);
-      alert('Patient pushed to reception workflow');
+      showAlert('Patient pushed to reception workflow');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to push to reception');
     }

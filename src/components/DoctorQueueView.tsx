@@ -1,5 +1,6 @@
 ﻿import { useState, useEffect } from 'react';
 import { CheckCircle2, Stethoscope, AlertCircle, Save, RotateCcw } from 'lucide-react';
+import { showAlert } from './ui/AlertModal';
 import API_ENDPOINTS from '../config/api';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
@@ -133,7 +134,7 @@ export function DoctorQueueView({ userRole, onPatientSelected, hideDetailView }:
       const queueId = (selectedPatient as any).id || selectedPatient._id;
 
       if (!registrationId) {
-        alert('Cannot complete: Patient has no registration ID');
+        showAlert('Cannot complete: Patient has no registration ID');
         return;
       }
 
@@ -162,7 +163,7 @@ export function DoctorQueueView({ userRole, onPatientSelected, hideDetailView }:
         console.log('Doctor queue updated, patient discharged');
       } catch (e) {
         console.error('Failed to update doctor queue:', e);
-        alert('Failed to persist doctor data to server. Please retry.');
+        showAlert('Failed to persist doctor data to server. Please retry.');
         return;
       }
 
@@ -172,7 +173,7 @@ export function DoctorQueueView({ userRole, onPatientSelected, hideDetailView }:
       setSelectedPatient(null);
       setDiagnosis('');
       setPrescription('');
-      alert('Patient discharged successfully');
+      showAlert('Patient discharged successfully');
     } catch (err) {
       console.error('Error completing consultation:', err);
     }
@@ -201,7 +202,7 @@ export function DoctorQueueView({ userRole, onPatientSelected, hideDetailView }:
         throw new Error('Failed to recall patient');
       }
 
-      alert('Patient recalled to OPD for corrections');
+      showAlert('Patient recalled to OPD for corrections');
       setSelectedPatient(null);
       fetchDoctorQueue();
 
@@ -209,7 +210,7 @@ export function DoctorQueueView({ userRole, onPatientSelected, hideDetailView }:
       window.dispatchEvent(new CustomEvent('opdQueueUpdated'));
     } catch (err) {
       console.error('Error recalling patient:', err);
-      alert('Failed to recall patient. Please try again.');
+      showAlert('Failed to recall patient. Please try again.');
     }
   };
 

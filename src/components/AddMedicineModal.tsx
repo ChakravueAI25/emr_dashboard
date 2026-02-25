@@ -1,5 +1,6 @@
 ﻿import React, { useState } from 'react';
 import { X, Plus } from 'lucide-react';
+import { showAlert } from './ui/AlertModal';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card } from './ui/card';
@@ -40,19 +41,19 @@ export function AddMedicineModal({ isOpen, onClose, onMedicineAdded }: AddMedici
 
     // Validation
     if (!formData.name.trim()) {
-      alert('Please enter medicine name');
+      showAlert('Please enter medicine name');
       return;
     }
     if (formData.price <= 0) {
-      alert('Price must be greater than 0');
+      showAlert('Price must be greater than 0');
       return;
     }
     if (formData.stock < 0) {
-      alert('Stock cannot be negative');
+      showAlert('Stock cannot be negative');
       return;
     }
     if (!formData.expiry_date) {
-      alert('Please enter expiry date');
+      showAlert('Please enter expiry date');
       return;
     }
 
