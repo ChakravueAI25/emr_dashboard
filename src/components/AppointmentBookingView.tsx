@@ -146,6 +146,7 @@ export function AppointmentBookingView() {
 
     setSearching(true);
     try {
+      // Search supports multiple fields: Name, Phone Number, Email, and Registration ID
       const response = await fetch(`${API_ENDPOINTS.PATIENTS_SEARCH}?q=${encodeURIComponent(query)}`);
       if (response.ok) {
         const data = await response.json();
@@ -501,7 +502,7 @@ export function AppointmentBookingView() {
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--theme-text-muted)] group-focus-within:text-[var(--theme-accent)] transition-colors" />
                     <Input
                       type="text"
-                      placeholder="Name or Patient ID..."
+                      placeholder="Name, phone number, or Patient ID..."
                       value={patientSearch}
                       onChange={(e) => {
                         setPatientSearch(e.target.value);
