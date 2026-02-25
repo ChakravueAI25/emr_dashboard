@@ -230,6 +230,15 @@ interface IndividualBillingViewProps {
   registrationId?: string;
   onBack?: () => void;
   currentUser?: string;
+  patientData?: {
+    _id?: string;
+    name?: string;
+    registrationId?: string;
+    contactInfo?: {
+      phone?: string;
+      email?: string;
+    };
+  };
 }
 
 interface PatientSearchResult {
@@ -251,7 +260,7 @@ const COMMON_SERVICES = [
   { id: 'S9', name: 'LASIK Surgery', category: 'Surgery', price: 65000 },
 ];
 
-export function IndividualBillingView({ registrationId: initialRegistrationId, onBack, currentUser }: IndividualBillingViewProps) {
+export function IndividualBillingView({ registrationId: initialRegistrationId, onBack, currentUser, patientData: initialPatientData }: IndividualBillingViewProps) {
   const [patient, setPatient] = useState<any>(null);
   const [items, setItems] = useState<BillingItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -262,12 +271,12 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
   const [newCompanyName, setNewCompanyName] = useState('');
   const [newTpaNames, setNewTpaNames] = useState('');
 
-  // Patient search state
   const [currentRegId, setCurrentRegId] = useState<string | undefined>(initialRegistrationId);
   const [patientSearchQuery, setPatientSearchQuery] = useState('');
   const [patientSearchResults, setPatientSearchResults] = useState<PatientSearchResult[]>([]);
   const [showPatientDropdown, setShowPatientDropdown] = useState(false);
   const [isSearchingPatient, setIsSearchingPatient] = useState(false);
+  const [hasInitialPatientData, setHasInitialPatientData] = useState(!!initialPatientData);
   const searchTimeoutRef = useRef<number | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -392,11 +401,50 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
     }
   };
 
+  // Handle patient data passed from AppointmentBooking FIRST
+  useEffect(() => {
+    if (initialPatientData && initialPatientData.registrationId) {
+      console.log('📋 Pre-filling patient data from appointment booking:', initialPatientData);
+      
+      // Set the registration ID
+      setCurrentRegId(initialPatientData.registrationId);
+      setHasInitialPatientData(true);
+      
+      // Pre-fill patient object immediately
+      const prefilledPatient = {
+        patientDetails: {
+          name: initialPatientData.name || '',
+          registrationId: initialPatientData.registrationId || '',
+          phone: initialPatientData.contactInfo?.phone || '',
+          email: initialPatientData.contactInfo?.email || '',
+          age: '',
+          sex: '',
+          address: '',
+          bloodType: '',
+          allergies: '',
+          emergencyContact: ''
+        }
+      };
+      
+      setPatient(prefilledPatient);
+      setLoading(false);
+      console.log('✅ Patient data pre-filled successfully');
+    }
+  }, [initialPatientData]);
+
   useEffect(() => {
     if (currentRegId && currentRegId !== 'Not Assigned') {
-      fetchPatientDetails();
-      fetchWorkerQuota();
-      fetchSurgeryBills();
+      // Skip fetching if we already have pre-filled data from appointment booking
+      if (hasInitialPatientData) {
+        console.log('⏭️ Skipping fetch - using pre-filled patient data');
+        fetchWorkerQuota();
+        fetchSurgeryBills();
+      } else {
+        console.log('🔄 Fetching patient details for registration:', currentRegId);
+        fetchPatientDetails();
+        fetchWorkerQuota();
+        fetchSurgeryBills();
+      }
     } else {
       setLoading(false);
     }

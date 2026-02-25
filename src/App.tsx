@@ -1,3 +1,6 @@
+// ...existing imports...
+
+// Place this inside the App component, after all hooks are defined
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { produce } from 'immer'
@@ -145,6 +148,8 @@ export default function App() {
   const [newVisit, setNewVisit] = useState(false);  // Flag: true = fresh visit, false = editing existing
   // Track last saved patient registration ID so receptionist can upload documents for that patient
   const [lastSavedRegistrationId, setLastSavedRegistrationId] = useState<string | null>(null);
+  // Track patient data passed from appointment booking for pre-filling
+  const [lastAppointmentPatientData, setLastAppointmentPatientData] = useState<any>(null);
   // Track if currently viewed patient is discharged (read-only mode)
   const [isPatientDischarged, setIsPatientDischarged] = useState(false);
   // Header show/hide on scroll
@@ -1398,6 +1403,19 @@ export default function App() {
     }
   };
 
+  // Listen for global navigation events from ReceptionistPortal
+  useEffect(() => {
+    function handleNavigateToBilling(e) {
+      const { registrationId, patientData } = e.detail || {};
+      console.log('📍 [App] Received global navigate-to-billing event:', { registrationId, patientData });
+      setLastSavedRegistrationId(registrationId);
+      setLastAppointmentPatientData(patientData);
+      setCurrentView('individual-billing');
+    }
+    window.addEventListener('navigate-to-billing', handleNavigateToBilling);
+    return () => window.removeEventListener('navigate-to-billing', handleNavigateToBilling);
+  }, []);
+
   return (
     <div className="min-h-screen bg-[var(--theme-bg)] text-[var(--theme-text)]">
       <AlertModal />
@@ -1427,8 +1445,6 @@ export default function App() {
           </div>
         )}
 
-        {/* Navbar */}
-        {/* Navbar */}
         {/* Navbar */}
         {!isFullScreen && (
           <Navbar
@@ -1710,9 +1726,29 @@ export default function App() {
                 registrationId={lastSavedRegistrationId || activePatientData?.patientDetails?.registrationId}
                 onBack={() => setCurrentView('billing-dashboard')}
                 currentUser={currentUsername || 'Admin'}
+                patientData={lastAppointmentPatientData}
               />
             ) : currentView === 'appointments' ? (
-              <AppointmentBookingView />
+              <AppointmentBookingView 
+                onNavigateToBilling={(registrationId, patientData) => {
+                  console.log('📍 [App] AppointmentBooking callback invoked with:', { registrationId, patientData });
+                  window._debugBillingNav = {
+                    registrationId,
+                    patientData,
+                    stack: new Error().stack
+                  };
+                  setLastSavedRegistrationId(registrationId);
+                  setLastAppointmentPatientData(patientData);
+                  setCurrentView('individual-billing');
+                  setTimeout(() => {
+                    console.log('📍 [App] After setCurrentView, state:', {
+                      lastSavedRegistrationId,
+                      lastAppointmentPatientData,
+                      currentView: 'individual-billing'
+                    });
+                  }, 100);
+                }}
+              />
             ) : currentView === 'appointment-queue' ? (
               <AppointmentQueueView />
             ) : currentView === 'reception-queue' ? (

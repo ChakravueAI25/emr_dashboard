@@ -38,7 +38,12 @@ interface Patient {
   };
 }
 
-export function AppointmentBookingView() {
+interface AppointmentBookingViewProps {
+  onNavigateToBilling?: (registrationId: string, patientData?: Patient) => void;
+}
+
+export function AppointmentBookingView(props: AppointmentBookingViewProps) {
+  const { onNavigateToBilling } = props;
   // Patient Selection
   const [patientSearch, setPatientSearch] = useState('');
   const [searchResults, setSearchResults] = useState<Patient[]>([]);
@@ -195,17 +200,50 @@ export function AppointmentBookingView() {
     // Check if a patient with this name already exists
     try {
       const response = await fetch(`${API_ENDPOINTS.PATIENTS_SEARCH}?q=${encodeURIComponent(newPatientName)}`);
+      console.log('🔍 Patient search response status:', response.status);
+      
       if (response.ok) {
         const data = await response.json();
+        console.log('🔍 Patient search results:', data);
+        
         if (data.results && data.results.length > 0) {
-          // Patient with this name already exists
+          // Patient with this name already exists - redirect to billing page
           const existingPatient = data.results[0];
-          setError(`A patient named "${newPatientName}" already exists with ID ${existingPatient.registrationId}. Please select from search results instead.`);
+          console.log('✅ Patient found:', existingPatient);
+          console.log('📱 onNavigateToBilling callback available:', !!onNavigateToBilling);
+          
+          setSuccess(`Patient "${newPatientName}" found! Redirecting to billing page...`);
+          
+          // Format the patient data
+          const patientData: Patient = {
+            _id: existingPatient.registrationId,
+            name: existingPatient.name,
+            registrationId: existingPatient.registrationId,
+            contactInfo: {
+              phone: existingPatient.phone,
+              email: existingPatient.email,
+            },
+          };
+
+          // Redirect to billing page after 1 second
+          setTimeout(() => {
+            console.log('⏱️ Timeout executed, calling onNavigateToBilling with:', existingPatient.registrationId);
+            if (onNavigateToBilling) {
+              console.log('🚀 Calling onNavigateToBilling');
+              onNavigateToBilling(existingPatient.registrationId, patientData);
+            } else {
+              console.error('❌ onNavigateToBilling is not provided as a prop');
+            }
+          }, 1000);
           return;
+        } else {
+          console.log('ℹ️ No results found for patient, creating new');
         }
+      } else {
+        console.warn('⚠️ Search request failed with status:', response.status);
       }
     } catch (err) {
-      console.warn('Could not check for duplicates:', err);
+      console.warn('⚠️ Could not check for duplicates:', err);
       // Continue anyway if search fails
     }
 
@@ -367,24 +405,28 @@ export function AppointmentBookingView() {
       }
 
       setSuccess(`Appointment booked successfully for ${selectedPatient.name}`);
+      console.log('✅ Appointment booked, preparing redirect with patient data:', selectedPatient);
 
-      // Reset form
+      // Redirect to billing page after brief delay to show success message
       setTimeout(() => {
-        setSelectedPatient(null);
-        setSelectedDoctor(null);
-        setAppointmentDate('');
-        setSelectedTime('');
-        setPatientSearch('');
-        setNewPatientName('');
-        setNewPatientPhone('');
-        setNewPatientEmail('');
-        setNewRegistrationId(null);
-        setSuccess(null);
-        setIsNewPatient(false);
-      }, 2000);
+        console.log('🚀 Triggering redirect callback with:', { 
+          registrationId: selectedPatient.registrationId, 
+          patientName: selectedPatient.name,
+          patientData: selectedPatient 
+        });
+        if (onNavigateToBilling) {
+          console.log('✅ Calling onNavigateToBilling callback');
+          onNavigateToBilling(selectedPatient.registrationId, selectedPatient);
+        } else {
+          console.error('❌ onNavigateToBilling callback is NOT available');
+          setError('Cannot redirect to billing. Please navigate manually.');
+        }
+      }, 800);
+      
+      setLoading(false);
     } catch (err) {
+      console.error('❌ Error in handleBookAppointment:', err);
       setError(err instanceof Error ? err.message : 'Failed to book appointment');
-    } finally {
       setLoading(false);
     }
   };
