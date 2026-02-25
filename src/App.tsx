@@ -1083,6 +1083,11 @@ export default function App() {
     setIsSearching(true);
     setShowSearchResults(true);
     try {
+      // Search supports multiple fields:
+      // 1. Patient Name (existing)
+      // 2. Patient ID / Registration ID (existing)
+      // 3. Phone Number (extended)
+      // The query is flexible and searches across all these fields
       const resp = await fetch(`${API_ENDPOINTS.PATIENTS_SEARCH}?q=${encodeURIComponent(q)}`);
       if (!resp.ok) throw new Error('Search failed');
       const data = await resp.json();

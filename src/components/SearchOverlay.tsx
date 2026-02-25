@@ -60,7 +60,7 @@ export const SearchOverlay = ({
                                 <input
                                     ref={overlayInputRef}
                                     type="text"
-                                    placeholder="Search by name, email, phone or registration id"
+                                    placeholder="Search by name, phone number, email or registration ID"
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                     onKeyDown={handleSearchInputKeyDown}
@@ -68,7 +68,7 @@ export const SearchOverlay = ({
                                 />
                             </div>
                             <div className="text-xs text-[#9aa0a6] mt-3">{isSearching ? 'Searching...' : `${searchResults.length} results`}</div>
-                            <div className="text-xs text-[#6b7280] mt-1">Use ↑/↓ to navigate, Enter to select, Esc to close</div>
+                            <div className="text-xs text-[#6b7280] mt-1">Filter by: Name • Phone • Email • Registration ID | Use ↑/↓ to navigate, Enter to select, Esc to close</div>
                         </div>
                     </div>
 
