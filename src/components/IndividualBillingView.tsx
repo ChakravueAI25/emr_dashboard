@@ -2025,16 +2025,14 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
                 <button
                   key={service.id}
                   onClick={() => addItem(service)}
-                  className="flex items-center justify-between p-4 bg-[#0a0a0a] border border-[#D4A574] rounded-xl hover:bg-[#151515] transition-all group text-left ring-1 ring-[#D4A574]/30"
+                  className="relative flex flex-col p-4 pt-5 bg-[#0a0a0a] border border-[#D4A574] rounded-xl hover:bg-[#151515] transition-all group text-left ring-1 ring-[#D4A574]/30 min-h-[100px]"
                 >
-                  <div>
-                    <p className="text-sm font-medium text-white group-hover:text-[#D4A574]">{service.name}</p>
-                    <p className="text-[10px] text-[#5a5a5a] uppercase tracking-wider mt-1">{service.category}</p>
+                  <div className="absolute top-2 right-2 w-7 h-7 flex items-center justify-center rounded-lg bg-[#D4A574] group-hover:bg-[#C9955E] transition-colors">
+                    <Plus className="w-4 h-4" style={{ color: '#ffffff' }} />
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-semibold text-[#D4A574]">₹{service.price}</p>
-                    <Plus className="w-4 h-4 text-[#5a5a5a] group-hover:text-[#D4A574] mt-1 ml-auto" />
-                  </div>
+                  <p className="text-sm font-semibold text-white group-hover:text-[#D4A574] pr-8 leading-tight">{service.name}</p>
+                  <p className="text-sm font-bold text-[#D4A574] mt-auto pt-2">₹{service.price.toLocaleString('en-IN')}</p>
+                  <p className="text-[10px] text-[#5a5a5a] uppercase tracking-wider mt-1 font-medium">{service.category}</p>
                 </button>
               ))}
 
@@ -2043,20 +2041,18 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
                 <button
                   key={pkg._id}
                   onClick={() => handleLoadPackage(pkg)}
-                  className="flex items-center justify-between p-4 bg-[#0a0a0a] border border-[#D4A574] rounded-xl hover:border-[#D4A574] hover:bg-[#151515] transition-all group text-left ring-1 ring-[#D4A574]/30"
+                  className="relative flex flex-col p-4 pt-5 bg-[#0a0a0a] border border-[#D4A574] rounded-xl hover:border-[#D4A574] hover:bg-[#151515] transition-all group text-left ring-1 ring-[#D4A574]/30 min-h-[100px]"
                   title={`Saved Package • ${pkg.items?.length || 0} items`}
                 >
-                  <div>
-                    <p className="text-sm font-medium text-white group-hover:text-[#D4A574]">{pkg.packageName || pkg.name}</p>
-                    <p className="text-[10px] text-[#5a5a5a] uppercase tracking-wider mt-1">Saved Package</p>
-                    {pkg.usageCount && pkg.usageCount > 1 && (
-                      <p className="text-[9px] text-[#8B8B8B] mt-1">Used {pkg.usageCount}x</p>
-                    )}
+                  <div className="absolute top-2 right-2 w-7 h-7 flex items-center justify-center rounded-lg bg-[#D4A574] group-hover:bg-[#C9955E] transition-colors">
+                    <Plus className="w-4 h-4" style={{ color: '#ffffff' }} />
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-semibold text-[#D4A574]">₹{(pkg.totalAmount || pkg.price || 0).toLocaleString('en-IN')}</p>
-                    <Plus className="w-4 h-4 text-[#5a5a5a] group-hover:text-[#D4A574] mt-1 ml-auto" />
-                  </div>
+                  <p className="text-sm font-semibold text-white group-hover:text-[#D4A574] pr-8 leading-tight">{pkg.packageName || pkg.name}</p>
+                  <p className="text-sm font-bold text-[#D4A574] mt-auto pt-2">₹{(pkg.totalAmount || pkg.price || 0).toLocaleString('en-IN')}</p>
+                  <p className="text-[10px] text-[#5a5a5a] uppercase tracking-wider mt-1 font-medium">Saved Package</p>
+                  {pkg.usageCount && pkg.usageCount > 1 && (
+                    <p className="text-[9px] text-[#8B8B8B] mt-0.5">Used {pkg.usageCount}x</p>
+                  )}
                 </button>
               ))}
             </div>
@@ -2164,66 +2160,316 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
               </div>
             </Card>
           ))}
+
+          {/* ============ SURGERY INSURANCE BILLING SECTION ============ */}
+          {items.some(i => i.category === 'Surgery') && (
+            <Card id="surgery-billing-section" className="bg-[#0f0f0f] border-[#D4A574] p-6">
+              {/* Insurance Toggle */}
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-[#1a1a1a] flex items-center justify-center border border-[#D4A574]/30">
+                    <CreditCard className={`w-5 h-5 ${govtInsuranceEnabled ? 'text-blue-500' : 'text-[#5a5a5a]'}`} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-white">Govt. Insurance (For Surgery)</h3>
+                    <p className="text-[10px] text-[#8B8B8B]">Late claim processing</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleInsuranceToggle(!govtInsuranceEnabled)}
+                  className={`w-12 h-6 rounded-full transition-colors relative ${govtInsuranceEnabled ? 'bg-blue-600' : 'bg-[#2a2a2a]'}`}
+                >
+                  <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${govtInsuranceEnabled ? 'left-7' : 'left-1'}`} />
+                </button>
+              </div>
+
+              {govtInsuranceEnabled && (
+                <div className="space-y-5">
+                  {/* Insurance Type */}
+                  <div className="space-y-2">
+                    <label className="text-xs text-[#8B8B8B] font-medium">Insurance Type</label>
+                    <select
+                      value={insuranceCategory || ''}
+                      onChange={(e) => {
+                        setInsuranceCategory(e.target.value as InsuranceCategory);
+                        setInsuranceCompany('');
+                        setInsuranceTPA('');
+                      }}
+                      className="w-full bg-[#0a0a0a] border border-[#D4A574]/30 rounded-lg h-10 px-3 text-sm text-white focus:border-[#D4A574]"
+                    >
+                      <option value="">Select Insurance Type</option>
+                      <option value="CGHS">CGHS</option>
+                      <option value="SGHS">SGHS</option>
+                      <option value="PRIVATE">PRIVATE</option>
+                    </select>
+                  </div>
+
+                  {/* Company & TPA */}
+                  {insuranceCategory && (
+                    <>
+                      <div className="space-y-2">
+                        <label className="text-xs text-[#8B8B8B] font-medium">Insurance Company</label>
+                        <select
+                          value={insuranceCompany}
+                          onChange={(e) => {
+                            setInsuranceCompany(e.target.value);
+                            setInsuranceTPA('');
+                          }}
+                          className="w-full bg-[#0a0a0a] border border-[#D4A574]/30 rounded-lg h-10 px-3 text-sm text-white focus:border-[#D4A574]"
+                        >
+                          <option value="">Select Company</option>
+                          {MOCK_INSURANCE_PLANS[insuranceCategory]?.map((plan) => (
+                            <option key={plan.company} value={plan.company}>{plan.company}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {insuranceCompany && (
+                        <div className="space-y-2">
+                          <label className="text-xs text-[#8B8B8B] font-medium">TPA</label>
+                          <select
+                            value={insuranceTPA}
+                            onChange={(e) => setInsuranceTPA(e.target.value)}
+                            className="w-full bg-[#0a0a0a] border border-[#D4A574]/30 rounded-lg h-10 px-3 text-sm text-white focus:border-[#D4A574]"
+                          >
+                            <option value="">Select TPA</option>
+                            {MOCK_INSURANCE_PLANS[insuranceCategory]
+                              ?.find(p => p.company === insuranceCompany)
+                              ?.tpas.map((tpa) => (
+                                <option key={tpa} value={tpa}>{tpa}</option>
+                              ))}
+                          </select>
+                        </div>
+                      )}
+
+                      {insuranceCompany && (
+                        <div className="space-y-2">
+                          <label className="text-xs text-[#8B8B8B] font-medium">Claim Number</label>
+                          <input
+                            value={claimNumber}
+                            onChange={(e) => setClaimNumber(e.target.value)}
+                            className="w-full bg-[#0a0a0a] border border-[#D4A574]/30 rounded-lg h-10 px-3 text-sm font-mono text-white focus:border-[#D4A574]"
+                            placeholder="Enter claim number"
+                          />
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {/* Date of Surgery & Discharge */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-xs text-[#8B8B8B] font-medium">Date of Surgery</label>
+                      <input
+                        type="date"
+                        value={dateOfSurgery}
+                        onChange={(e) => setDateOfSurgery(e.target.value)}
+                        className="w-full bg-[#0a0a0a] border border-[#D4A574]/30 rounded-lg h-10 px-3 text-sm text-white focus:border-[#D4A574]"
+                      />
+                      <p className="text-[9px] text-[#5a5a5a]">DD/MM/YYYY format</p>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs text-[#8B8B8B] font-medium">Date of Discharge</label>
+                      <input
+                        type="date"
+                        value={dateOfDischarge}
+                        onChange={(e) => setDateOfDischarge(e.target.value)}
+                        className="w-full bg-[#0a0a0a] border border-[#D4A574]/30 rounded-lg h-10 px-3 text-sm text-white focus:border-[#D4A574]"
+                      />
+                      <p className="text-[9px] text-[#5a5a5a]">DD/MM/YYYY format</p>
+                    </div>
+                  </div>
+
+                  {/* Surgery Insurance Billing - Two Bill System */}
+                  <div className="border-t border-[#D4A574]/20 pt-5">
+                    <div className="flex items-center gap-2 mb-4">
+                      <AlertCircle className="w-5 h-5 text-[#D4A574]" />
+                      <div>
+                        <h4 className="text-sm font-bold text-white">Surgery Insurance Billing</h4>
+                        <p className="text-[10px] text-[#8B8B8B]">Two-Bill System: Initial → Final Settlement</p>
+                      </div>
+                    </div>
+
+                    {/* Stage Toggle */}
+                    <div className="grid grid-cols-2 gap-2 mb-5">
+                      <button
+                        onClick={() => setSurgeryBillStage('initial')}
+                        className={`py-2.5 px-4 rounded-lg text-xs font-bold transition-all ${surgeryBillStage === 'initial'
+                          ? 'bg-[#D4A574] text-[#0a0a0a] shadow-lg'
+                          : 'bg-[#1a1a1a] text-[#8B8B8B] border border-[#D4A574]/20 hover:border-[#D4A574]/50'
+                          }`}
+                      >
+                        Initial Bill
+                      </button>
+                      <button
+                        onClick={() => setSurgeryBillStage('final')}
+                        className={`py-2.5 px-4 rounded-lg text-xs font-bold transition-all ${surgeryBillStage === 'final'
+                          ? 'bg-[#D4A574] text-[#0a0a0a] shadow-lg'
+                          : 'bg-[#1a1a1a] text-[#8B8B8B] border border-[#D4A574]/20 hover:border-[#D4A574]/50'
+                          }`}
+                      >
+                        Final Settlement
+                      </button>
+                    </div>
+
+                    {/* Existing Initial Bill Detected */}
+                    {existingInitialBill && surgeryBillStage === 'initial' && (
+                      <div className="mb-5 p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/30">
+                        <p className="text-sm font-bold text-yellow-400 mb-1">⚠️ Pending Initial Bill Found</p>
+                        <p className="text-[11px] text-[#8B8B8B]">Bill ID: {existingInitialBill.billId}</p>
+                        <p className="text-[11px] text-[#8B8B8B]">Security Deposit: ₹{(existingInitialBill.securityDeposit || 0).toLocaleString('en-IN')}</p>
+                        <button
+                          onClick={() => handleContinueToFinalBill(existingInitialBill)}
+                          className="w-full mt-3 py-2.5 bg-[#D4A574] text-[#0a0a0a] rounded-lg text-xs font-bold hover:bg-[#C9955E] transition-all"
+                        >
+                          Continue to Final Settlement →
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Security Deposit (Initial Bill) */}
+                    {surgeryBillStage === 'initial' && (
+                      <div className="space-y-3 p-4 rounded-xl bg-[#1a1a1a] border border-[#D4A574]/20">
+                        <h4 className="text-xs font-bold text-[#D4A574]">💰 Security Deposit / Upfront Amount (Paid by Patient)</h4>
+                        <input
+                          type="number"
+                          value={securityDeposit || ''}
+                          onChange={(e) => setSecurityDeposit(Number(e.target.value))}
+                          className="w-full bg-[#0a0a0a] border border-[#D4A574]/30 rounded-lg h-10 px-3 text-sm text-white focus:border-[#D4A574]"
+                          placeholder="Enter amount collected"
+                        />
+                        <p className="text-[9px] text-[#5a5a5a]">This is a temporary payment collected before surgery. Enter or adjust based on hospital policy.</p>
+                      </div>
+                    )}
+
+                    {/* Insurance Approved Amount (Final Bill) */}
+                    {surgeryBillStage === 'final' && (
+                      <div className="space-y-3 p-4 rounded-xl bg-[#1a1a1a] border border-blue-500/20">
+                        <h4 className="text-xs font-bold text-blue-400">📋 Insurance Approved Amount (As per approval letter)</h4>
+                        <input
+                          type="number"
+                          value={insuranceApprovedAmount || ''}
+                          onChange={(e) => setInsuranceApprovedAmount(Number(e.target.value))}
+                          className="w-full bg-[#0a0a0a] border border-blue-500/30 rounded-lg h-10 px-3 text-sm text-white focus:border-blue-500"
+                          placeholder="Enter approved amount"
+                        />
+                      </div>
+                    )}
+
+                    {/* Cost Summary */}
+                    <div className="mt-4 p-4 rounded-xl bg-[#0a0a0a] border border-[#D4A574]/20 space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-[#8B8B8B]">Total Surgery Cost:</span>
+                        <span className="text-white font-bold">₹{totalSurgeryCost.toLocaleString('en-IN')}</span>
+                      </div>
+                      {surgeryBillStage === 'final' && insuranceApprovedAmount > 0 && (
+                        <>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-blue-400">Insurance Approved:</span>
+                            <span className="text-blue-400 font-bold">- ₹{insuranceApprovedAmount.toLocaleString('en-IN')}</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-[#8B8B8B]">Security Deposit Paid:</span>
+                            <span className="text-[#8B8B8B] font-bold">- ₹{securityDeposit.toLocaleString('en-IN')}</span>
+                          </div>
+                          <div className="pt-2 border-t border-[#D4A574]/20 flex justify-between text-sm">
+                            <span className="text-white font-bold">{balancePayable > 0 ? 'Balance Payable:' : 'Refund Due:'}</span>
+                            <span className={`font-bold ${balancePayable > 0 ? 'text-[#D4A574]' : 'text-green-500'}`}>
+                              ₹{(balancePayable > 0 ? balancePayable : refundAmount).toLocaleString('en-IN')}
+                            </span>
+                          </div>
+                        </>
+                      )}
+                      {surgeryBillStage === 'initial' && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-[#8B8B8B]">Patient's Payable Amount:</span>
+                          <span className="text-white font-bold">₹{totalSurgeryCost.toLocaleString('en-IN')}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="mt-4">
+                      {surgeryBillStage === 'initial' ? (
+                        <Button
+                          className="w-full bg-[#D4A574] text-[#0a0a0a] hover:bg-[#C9955E] h-11 font-bold text-sm rounded-xl"
+                          onClick={handleCreateInitialBill}
+                          disabled={!insuranceCategory || !insuranceCompany || securityDeposit <= 0}
+                        >
+                          Create Initial Bill (Collect Security Deposit)
+                        </Button>
+                      ) : (
+                        <Button
+                          className="w-full bg-blue-600 text-white hover:bg-blue-700 h-11 font-bold text-sm rounded-xl"
+                          onClick={handleCreateFinalBill}
+                          disabled={insuranceApprovedAmount <= 0}
+                        >
+                          Create Final Settlement Bill
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </Card>
+          )}
         </div>
 
         <div className="space-y-6">
           <Card className="bg-[#0f0f0f] border-[#D4A574] p-6 sticky top-6 shadow-2xl">
-            <h3 className="text-sm font-bold text-[#D4A574]/80 uppercase tracking-[0.2em] mb-6">In the Bill</h3>
+            <h3 className="text-sm font-bold text-[#D4A574]/80 uppercase tracking-[0.2em] mb-6">Bill Summary</h3>
 
-            {/* Redesigned Patient Profile Block - Sidebar Version */}
-            <div className="mb-6 p-4 rounded-xl bg-[#1a1a1a] border border-[#D4A574]/30">
-              <div className="flex items-center gap-4 mb-3 pb-3 border-b border-[#D4A574]/10">
+            {/* Redesigned Identity Block - Unified with Main Card */}
+            <div className="mb-4">
+              <div className="flex gap-4 mb-3 pb-3 border-b border-[#D4A574]/20">
                 <div className="w-14 h-14 rounded-full bg-[#0a0a0a] flex items-center justify-center border border-[#D4A574] flex-shrink-0">
                   <User className="w-8 h-8 text-[#D4A574]" />
                 </div>
-                <div className="flex-1 min-w-0">
-                  <h2 className="text-xl font-bold text-white truncate leading-tight">
-                    {patient?.name || 'Ram'}
-                  </h2>
-                  <p className="text-[10px] text-[#8B8B8B] font-mono tracking-wider mt-0.5">
-                    REG: {patient?.registrationId || '-2026-116120'}
-                  </p>
-                  <p className="text-[11px] text-[#D4A574] font-medium mt-1">
-                    {patient ? `${patient.demographics?.age || patient.patientDetails?.age || patient.age || '24'} / ${patient.demographics?.sex || patient.patientDetails?.sex || patient.sex || 'M'}` : '24 / M'} / {patient?.contactInfo?.phone || '789654'}
-                  </p>
+                <div className="flex-1 flex gap-2 items-start">
+                  <div className="flex-1 min-w-0">
+                    <h2 className="text-xl font-bold text-white truncate leading-tight">
+                      {patient?.name || 'Ram'}
+                    </h2>
+                    <p className="text-[10px] text-[#8B8B8B] font-mono tracking-wider mt-0.5 uppercase">
+                      REG: {patient?.registrationId || '-2026-116120'}
+                    </p>
+                    <p className="text-[11px] text-[#D4A574] font-medium mt-1">
+                      {patient ? `${patient.demographics?.age || '24'} / ${patient.demographics?.sex || 'M'}` : '24 / M'} / {patient?.contactInfo?.phone || '789654'}
+                    </p>
+                  </div>
+                  <div className="w-[50px] flex-shrink-0 text-[10px] font-black text-[#5a5a5a] uppercase tracking-widest text-center mt-2.5">Qty</div>
+                  <div className="w-[80px] flex-shrink-0 text-[10px] font-black text-[#5a5a5a] uppercase tracking-widest text-right mt-2.5">Price</div>
+                  <div className="w-[50px] flex-shrink-0 text-[10px] font-black text-[#5a5a5a] uppercase tracking-widest text-center mt-2.5">Action</div>
                 </div>
               </div>
 
-              {/* Sidebar Header for Items */}
-              <div className="grid grid-cols-[1fr,40px,80px,40px] gap-2 px-1 mb-2">
-                <div className="text-[9px] font-bold text-[#5a5a5a] uppercase">Service</div>
-                <div className="text-[9px] font-bold text-[#5a5a5a] uppercase text-center">Qty</div>
-                <div className="text-[9px] font-bold text-[#5a5a5a] uppercase text-right">Price</div>
-                <div className="text-[9px] font-bold text-[#5a5a5a] uppercase text-right">Action</div>
-              </div>
-
               {/* Compact Items List */}
-              <div className="space-y-1 max-h-[350px] overflow-y-auto pr-1 custom-scrollbar">
+              <div className="space-y-0.5 max-h-[350px] overflow-y-auto pr-1 custom-scrollbar">
                 {items.length === 0 ? (
-                  <div className="py-8 text-center border-t border-[#D4A574]/10">
-                    <p className="text-xs text-[#5a5a5a]">No items added to the bill yet.</p>
+                  <div className="py-10 text-center">
+                    <p className="text-xs text-[#5a5a5a] font-medium">No items added to the bill yet.</p>
                   </div>
                 ) : (
                   items.map((item) => (
-                    <div key={item.id} className="group grid grid-cols-[1fr,40px,80px,40px] gap-2 items-center py-2 border-t border-[#D4A574]/10 hover:bg-[#1a1a1a] transition-colors rounded-lg px-1">
-                      <div className="min-w-0">
-                        <p className="text-xs text-white truncate font-medium">{item.name}</p>
+                    <div key={item.id} className="group flex gap-2 items-center py-3 border-b border-[#D4A574]/10 last:border-b-0 hover:bg-[#D4A574]/5 transition-colors rounded-lg px-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-white truncate font-semibold">{item.name}</p>
                         {item.category === 'Surgery' && (
-                          <p className="text-[8px] text-[#D4A574] uppercase tracking-tighter">Right Eye â†’</p>
+                          <p className="text-[9px] text-[#D4A574] uppercase tracking-widest font-bold mt-0.5 leading-none">Right Eye →</p>
                         )}
                       </div>
-                      <div className="text-xs text-[#8B8B8B] text-center font-mono">
+                      <div className="w-[50px] flex-shrink-0 text-xs text-[#8B8B8B] text-center font-mono font-bold">
                         {item.quantity}
                       </div>
-                      <div className="text-xs text-white text-right font-medium">
+                      <div className="w-[80px] flex-shrink-0 text-xs text-white text-right font-bold tracking-tight">
                         ₹{item.price.toLocaleString('en-IN')}
                       </div>
-                      <div className="text-right">
+                      <div className="w-[50px] flex-shrink-0 text-center">
                         <button
                           onClick={() => removeItem(item.id)}
-                          className="p-1.5 text-[#5a5a5a] hover:text-red-500 hover:bg-red-500/10 rounded transition-all"
+                          className="p-2 text-[#5a5a5a] hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     </div>
@@ -2233,7 +2479,7 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
             </div>
 
             {/* Bill Totals & Breakdown */}
-            <div className="space-y-3 mb-6 pt-4 border-t border-[#D4A574]/20">
+            <div className="space-y-3 mb-6 pt-4 border-t border-[#D4A574]/30">
               <div className="flex justify-between text-sm">
                 <span className="text-[#8B8B8B] font-medium">Subtotal</span>
                 <span className="text-white font-bold tracking-tight">₹{subtotal.toLocaleString('en-IN')}</span>
@@ -2303,22 +2549,6 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
 
             {/* Re-integrated Insurance & Coupon Section */}
             <div className="space-y-4 pt-4 border-t border-[#D4A574]/20">
-              {/* Insurance Toggle - Only show if there are Surgery items */}
-              {items.some(i => i.category === 'Surgery') && (
-                <div className="flex items-center justify-between p-3 rounded-xl bg-[#1a1a1a]/50 border border-blue-500/20">
-                  <div className="flex items-center gap-2">
-                    <CreditCard className={`w-4 h-4 ${govtInsuranceEnabled ? 'text-blue-500' : 'text-[#5a5a5a]'}`} />
-                    <span className="text-[11px] font-medium text-white">Govt. Insurance</span>
-                  </div>
-                  <button
-                    onClick={() => handleInsuranceToggle(!govtInsuranceEnabled)}
-                    className={`w-10 h-5 rounded-full transition-colors relative ${govtInsuranceEnabled ? 'bg-blue-600' : 'bg-[#2a2a2a]'}`}
-                  >
-                    <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${govtInsuranceEnabled ? 'left-5.5' : 'left-0.5'}`} />
-                  </button>
-                </div>
-              )}
-
               {/* Coupon Section */}
               <div className="space-y-2">
                 <div className="flex justify-between items-center px-1">
@@ -2383,58 +2613,60 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
             )}
           </Card>
         </div>
-      </div>
+      </div >
 
       {/* Save as Package Popup Modal */}
-      {showSaveAsPackagePopup && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-[#0f0f0f] border border-[#D4A574] rounded-lg p-8 w-96 shadow-2xl">
-            <div className="flex items-center gap-2 mb-4">
-              <CheckCircle className="w-6 h-6 text-green-500" />
-              <h3 className="text-xl font-bold">Save as Reusable Package</h3>
-            </div>
+      {
+        showSaveAsPackagePopup && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-[#0f0f0f] border border-[#D4A574] rounded-lg p-8 w-96 shadow-2xl">
+              <div className="flex items-center gap-2 mb-4">
+                <CheckCircle className="w-6 h-6 text-green-500" />
+                <h3 className="text-xl font-bold">Save as Reusable Package</h3>
+              </div>
 
-            <p className="text-[#8B8B8B] text-sm mb-6">
-              Would you like to save this surgery configuration as a reusable package? You can use it for future similar surgeries.
-            </p>
+              <p className="text-[#8B8B8B] text-sm mb-6">
+                Would you like to save this surgery configuration as a reusable package? You can use it for future similar surgeries.
+              </p>
 
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-[#D4A574] mb-2">
-                Package Name
-              </label>
-              <input
-                type="text"
-                value={packageName}
-                onChange={(e) => setPackageName(e.target.value)}
-                placeholder="e.g., Standard Cataract Surgery"
-                className="w-full px-4 py-2 bg-[#1a1a1a] border border-[#D4A574] rounded-lg text-white placeholder-[#5a5a5a] focus:outline-none focus:border-[#D4A574]"
-                autoFocus
-              />
-            </div>
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-[#D4A574] mb-2">
+                  Package Name
+                </label>
+                <input
+                  type="text"
+                  value={packageName}
+                  onChange={(e) => setPackageName(e.target.value)}
+                  placeholder="e.g., Standard Cataract Surgery"
+                  className="w-full px-4 py-2 bg-[#1a1a1a] border border-[#D4A574] rounded-lg text-white placeholder-[#5a5a5a] focus:outline-none focus:border-[#D4A574]"
+                  autoFocus
+                />
+              </div>
 
-            <div className="flex gap-3">
-              <button
-                onClick={handleSaveAsPackage}
-                disabled={isSavingAsPackage || !packageName.trim()}
-                className="flex-1 bg-green-500 text-white py-2 rounded-lg hover:bg-green-600 transition disabled:opacity-50 font-medium"
-              >
-                {isSavingAsPackage ? 'Saving...' : 'Save Package'}
-              </button>
-              <button
-                onClick={() => {
-                  setShowSaveAsPackagePopup(false);
-                  setPackageName('');
-                  if (onBack) onBack();
-                }}
-                disabled={isSavingAsPackage}
-                className="flex-1 bg-[#2a2a2a] text-[#D4A574] py-2 rounded-lg hover:bg-[#3a3a3a] transition disabled:opacity-50 font-medium"
-              >
-                Skip
-              </button>
+              <div className="flex gap-3">
+                <button
+                  onClick={handleSaveAsPackage}
+                  disabled={isSavingAsPackage || !packageName.trim()}
+                  className="flex-1 bg-green-500 text-white py-2 rounded-lg hover:bg-green-600 transition disabled:opacity-50 font-medium"
+                >
+                  {isSavingAsPackage ? 'Saving...' : 'Save Package'}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowSaveAsPackagePopup(false);
+                    setPackageName('');
+                    if (onBack) onBack();
+                  }}
+                  disabled={isSavingAsPackage}
+                  className="flex-1 bg-[#2a2a2a] text-[#D4A574] py-2 rounded-lg hover:bg-[#3a3a3a] transition disabled:opacity-50 font-medium"
+                >
+                  Skip
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* Surgery Selection Modal */}
       <SurgerySelectionModal
@@ -2444,69 +2676,71 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
       />
 
       {/* Add Company/TPA Modal */}
-      {showCompanyTpaModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-[#0f0f0f] border border-[#D4A574] rounded-lg p-8 w-96 shadow-2xl">
-            <h3 className="text-xl font-bold text-white mb-4">Add Insurance Company & TPA</h3>
+      {
+        showCompanyTpaModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-[#0f0f0f] border border-[#D4A574] rounded-lg p-8 w-96 shadow-2xl">
+              <h3 className="text-xl font-bold text-white mb-4">Add Insurance Company & TPA</h3>
 
-            <div className="space-y-4 mb-6">
-              <div>
-                <label className="block text-sm text-[#D4A574] font-medium mb-2">Company Name</label>
-                <input
-                  type="text"
-                  value={newCompanyName}
-                  onChange={(e) => setNewCompanyName(e.target.value)}
-                  placeholder="e.g., Star Health"
-                  className="w-full px-4 py-2 bg-[#1a1a1a] border border-[#D4A574] rounded-lg text-white placeholder-[#5a5a5a] focus:outline-none focus:border-[#D4A574]"
-                />
+              <div className="space-y-4 mb-6">
+                <div>
+                  <label className="block text-sm text-[#D4A574] font-medium mb-2">Company Name</label>
+                  <input
+                    type="text"
+                    value={newCompanyName}
+                    onChange={(e) => setNewCompanyName(e.target.value)}
+                    placeholder="e.g., Star Health"
+                    className="w-full px-4 py-2 bg-[#1a1a1a] border border-[#D4A574] rounded-lg text-white placeholder-[#5a5a5a] focus:outline-none focus:border-[#D4A574]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm text-[#D4A574] font-medium mb-2">TPA Names (comma-separated)</label>
+                  <textarea
+                    value={newTpaNames}
+                    onChange={(e) => setNewTpaNames(e.target.value)}
+                    placeholder="e.g., MediAssist, FHPL"
+                    className="w-full px-4 py-2 bg-[#1a1a1a] border border-[#D4A574] rounded-lg text-white placeholder-[#5a5a5a] focus:outline-none focus:border-[#D4A574] h-20"
+                  />
+                  <p className="text-[10px] text-[#5a5a5a] mt-1">Separate multiple TPA names with commas</p>
+                </div>
               </div>
 
-              <div>
-                <label className="block text-sm text-[#D4A574] font-medium mb-2">TPA Names (comma-separated)</label>
-                <textarea
-                  value={newTpaNames}
-                  onChange={(e) => setNewTpaNames(e.target.value)}
-                  placeholder="e.g., MediAssist, FHPL"
-                  className="w-full px-4 py-2 bg-[#1a1a1a] border border-[#D4A574] rounded-lg text-white placeholder-[#5a5a5a] focus:outline-none focus:border-[#D4A574] h-20"
-                />
-                <p className="text-[10px] text-[#5a5a5a] mt-1">Separate multiple TPA names with commas</p>
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => {
-                  if (newCompanyName.trim()) {
-                    setInsuranceCompany(newCompanyName);
-                    if (newTpaNames.trim()) {
-                      setInsuranceTPA(newTpaNames.split(',')[0].trim());
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    if (newCompanyName.trim()) {
+                      setInsuranceCompany(newCompanyName);
+                      if (newTpaNames.trim()) {
+                        setInsuranceTPA(newTpaNames.split(',')[0].trim());
+                      }
+                      setShowCompanyTpaModal(false);
+                      setNewCompanyName('');
+                      setNewTpaNames('');
+                      showAlert('Company and TPA added successfully!');
+                    } else {
+                      showAlert('Please enter a company name');
                     }
+                  }}
+                  className="flex-1 bg-[#D4A574] text-[#0a0a0a] py-2 rounded-lg hover:bg-[#C9955E] font-medium"
+                >
+                  Add Company
+                </button>
+                <button
+                  onClick={() => {
                     setShowCompanyTpaModal(false);
                     setNewCompanyName('');
                     setNewTpaNames('');
-                    showAlert('Company and TPA added successfully!');
-                  } else {
-                    showAlert('Please enter a company name');
-                  }
-                }}
-                className="flex-1 bg-[#D4A574] text-[#0a0a0a] py-2 rounded-lg hover:bg-[#C9955E] font-medium"
-              >
-                Add Company
-              </button>
-              <button
-                onClick={() => {
-                  setShowCompanyTpaModal(false);
-                  setNewCompanyName('');
-                  setNewTpaNames('');
-                }}
-                className="flex-1 bg-[#2a2a2a] text-[#D4A574] py-2 rounded-lg hover:bg-[#3a3a3a] font-medium"
-              >
-                Cancel
-              </button>
+                  }}
+                  className="flex-1 bg-[#2a2a2a] text-[#D4A574] py-2 rounded-lg hover:bg-[#3a3a3a] font-medium"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )
+      }
+    </div >
   );
 }
