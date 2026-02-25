@@ -16,7 +16,8 @@ import {
   ChevronUp,
   ArrowLeft,
   User,
-  Calendar
+  Calendar,
+  Mail
 } from 'lucide-react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
@@ -2060,573 +2061,279 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
             </div>
           </Card>
 
-          {/* Items Table */}
-          <Card className="bg-[#0f0f0f] border-[#D4A574] overflow-hidden">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-[#151515] border-b border-[#D4A574]">
-                  <th className="p-4 text-xs font-semibold text-[#8B8B8B] uppercase">Service / Item</th>
-                  <th className="p-4 text-xs font-semibold text-[#8B8B8B] uppercase text-center">Qty</th>
-                  <th className="p-4 text-xs font-semibold text-[#8B8B8B] uppercase text-right">Price</th>
-                  <th className="p-4 text-xs font-semibold text-[#8B8B8B] uppercase text-right">Total</th>
-                  <th className="p-4 text-xs font-semibold text-[#8B8B8B] uppercase text-center">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#D4A574]">
-                {items.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="p-12 text-center text-[#5a5a5a]">
-                      {patient ? 'No items added to the bill yet.' : 'Search and select a patient first, then add items.'}
-                    </td>
-                  </tr>
-                ) : (
-                  items.map((item) => (
-                    <React.Fragment key={item.id}>
-                      <tr className="hover:bg-[#151515] transition-colors">
-                        <td className="p-4">
-                          <div className="flex items-center gap-2">
-                            {item.category === 'Surgery' && item.surgeryBreakdown && (
-                              <button
-                                onClick={() => toggleItemExpansion(item.id)}
-                                className="p-1 text-[#D4A574] hover:bg-[#1a1a1a] rounded transition-colors"
-                              >
-                                {expandedItems.has(item.id) ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                              </button>
-                            )}
-                            <div>
-                              <p className="text-sm font-medium text-white">{item.name}</p>
-                              <p className="text-[10px] text-[#5a5a5a] uppercase">{item.category}</p>
-                              {item.category === 'Surgery' && (
-                                <p className="text-[10px] text-[#D4A574]">Click arrow to view/edit breakdown</p>
-                              )}
-                            </div>
+          {/* Surgery Breakdown Section - Main Column managed */}
+          {items.filter(item => item.category === 'Surgery').map((surgeryItem) => (
+            <Card key={surgeryItem.id} className="bg-[#0f0f0f] border-[#D4A574] overflow-hidden">
+              <div className="bg-[#D4A574]/10 p-4 border-b border-[#D4A574]/20 flex justify-between items-center">
+                <div>
+                  <h3 className="text-base font-bold text-white uppercase tracking-wider">{surgeryItem.name}</h3>
+                  <p className="text-[10px] text-[#D4A574] font-medium uppercase mt-0.5">Edit Detailed Particulars & Costs</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => addSurgeryParticular(surgeryItem.id)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-[#D4A574] text-[#0a0a0a] rounded-lg text-[10px] font-black uppercase hover:bg-[#C9955E] transition-all"
+                  >
+                    <Plus className="w-3 h-3" /> Add Particular
+                  </button>
+                </div>
+              </div>
+
+              {/* Package Quick Select */}
+              <div className="p-4 bg-[#151515] border-b border-[#D4A574]/10">
+                <p className="text-[10px] text-[#5a5a5a] uppercase font-bold tracking-widest mb-3">Select Pricing Package (IOL Type)</p>
+                <div className="flex flex-wrap gap-2">
+                  {([35000, 40000, 50000, 60000, 75000] as PackageAmount[]).map((pkg) => (
+                    <button
+                      key={pkg}
+                      onClick={() => applySurgeryPackage(surgeryItem.id, pkg)}
+                      className={`px-4 py-2 rounded-lg text-xs font-black transition-all border ${surgeryItem.selectedPackage === pkg
+                        ? 'bg-[#D4A574] text-[#0a0a0a] border-[#D4A574] shadow-lg shadow-[#D4A574]/10'
+                        : 'bg-[#0a0a0a] text-[#8B8B8B] border-[#D4A574]/20 hover:border-[#D4A574]/50'
+                        }`}
+                    >
+                      ₹{pkg.toLocaleString('en-IN')}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Breakdown Table */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-[11px] border-collapse">
+                  <thead>
+                    <tr className="bg-[#0a0a0a] border-b border-[#D4A574]/20">
+                      <th className="p-3 text-left font-bold text-[#5a5a5a] uppercase">Particulars</th>
+                      <th className="p-3 text-right font-bold text-[#5a5a5a] uppercase">Cost</th>
+                      <th className="p-3 text-center font-bold text-[#5a5a5a] uppercase">Qty</th>
+                      <th className="p-3 text-right font-bold text-[#5a5a5a] uppercase">Net Amt</th>
+                      <th className="p-3 text-center font-bold text-[#5a5a5a] uppercase">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#D4A574]/10">
+                    {surgeryItem.surgeryBreakdown?.map((particular) => (
+                      <tr key={particular.sNo} className="hover:bg-[#1a1a1a]/50 transition-colors">
+                        <td className="p-3 text-white font-medium">
+                          <input
+                            type="text"
+                            value={particular.particular}
+                            onChange={(e) => updateSurgeryParticular(surgeryItem.id, particular.sNo, 'particular', e.target.value)}
+                            className="bg-transparent border-none text-white w-full focus:ring-0 p-0 text-[11px]"
+                          />
+                        </td>
+                        <td className="p-3">
+                          <div className="flex items-center justify-end">
+                            <span className="text-[#5a5a5a] mr-1">₹</span>
+                            <input
+                              type="number"
+                              value={particular.cost}
+                              onChange={(e) => updateSurgeryParticular(surgeryItem.id, particular.sNo, 'cost', Number(e.target.value))}
+                              className="bg-transparent border-none text-right text-white w-20 focus:ring-0 p-0 text-[11px] font-mono"
+                            />
                           </div>
                         </td>
-                        <td className="p-4">
-                          <div className="flex items-center justify-center gap-3">
-                            <button
-                              onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                              className="w-6 h-6 rounded bg-[#1a1a1a] border border-[#D4A574] flex items-center justify-center text-[#8B8B8B] hover:text-[#D4A574]"
-                            >
-                              -
-                            </button>
-                            <span className="text-sm font-mono w-4 text-center">{item.quantity}</span>
-                            <button
-                              onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                              className="w-6 h-6 rounded bg-[#1a1a1a] border border-[#D4A574] flex items-center justify-center text-[#8B8B8B] hover:text-[#D4A574]"
-                            >
-                              +
-                            </button>
-                          </div>
+                        <td className="p-3 text-center">
+                          <input
+                            type="number"
+                            value={particular.qty}
+                            onChange={(e) => updateSurgeryParticular(surgeryItem.id, particular.sNo, 'qty', Number(e.target.value))}
+                            className="bg-transparent border-none text-center text-[#D4A574] w-10 focus:ring-0 p-0 text-[11px] font-mono"
+                          />
                         </td>
-                        <td className="p-4 text-right text-sm text-[#8B8B8B]">₹{item.price.toLocaleString('en-IN')}</td>
-                        <td className="p-4 text-right text-sm font-semibold text-white">₹{item.total.toLocaleString('en-IN')}</td>
-                        <td className="p-4 text-center">
+                        <td className="p-3 text-right text-white font-bold">₹{particular.netAmt.toLocaleString('en-IN')}</td>
+                        <td className="p-3 text-center">
                           <button
-                            onClick={() => removeItem(item.id)}
-                            className="p-2 text-[#5a5a5a] hover:text-red-500 transition-colors"
+                            onClick={() => removeSurgeryParticular(surgeryItem.id, particular.sNo)}
+                            className="p-1.5 text-[#5a5a5a] hover:text-red-500 hover:bg-red-500/10 rounded transition-all"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </td>
                       </tr>
-
-                      {/* Surgery Breakdown Expandable Section */}
-                      {item.category === 'Surgery' && item.surgeryBreakdown && expandedItems.has(item.id) && (
-                        <tr>
-                          <td colSpan={5} className="p-0">
-                            <div className="bg-[#0a0a0a] border-t border-b border-[#D4A574] p-4">
-                              {/* Surgery Name and Add Button */}
-                              <div className="flex items-center justify-between mb-4">
-                                <h4 className="text-sm font-semibold text-[#D4A574]">Surgery Breakdown - {item.name}</h4>
-                                <button
-                                  onClick={() => addSurgeryParticular(item.id)}
-                                  className="flex items-center gap-1 px-3 py-1.5 bg-[#D4A574] text-[#0a0a0a] rounded text-xs font-semibold hover:bg-[#C9955E]"
-                                >
-                                  <Plus className="w-3 h-3" /> Add Particular
-                                </button>
-                              </div>
-
-                              {/* Package Selection Buttons */}
-                              <div className="mb-4 p-3 bg-[#151515] rounded-lg border border-[#D4A574]">
-                                <p className="text-xs text-[#8B8B8B] mb-2 font-medium">Select Surgery Package / IOL Category:</p>
-                                <div className="flex flex-wrap gap-2">
-                                  {([35000, 40000, 50000, 60000, 75000] as PackageAmount[]).map((pkg) => (
-                                    <button
-                                      key={pkg}
-                                      onClick={() => applySurgeryPackage(item.id, pkg)}
-                                      className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${item.selectedPackage === pkg
-                                        ? 'bg-[#D4A574] text-[#0a0a0a] shadow-lg shadow-[#D4A574]/30'
-                                        : 'bg-[#1a1a1a] text-white border border-[#D4A574] hover:border-[#D4A574] hover:text-[#D4A574]'
-                                        }`}
-                                    >
-                                      ₹{pkg.toLocaleString('en-IN')}
-                                    </button>
-                                  ))}
-                                </div>
-                                {item.selectedPackage && (
-                                  <p className="text-[10px] text-green-500 mt-2">
-                                    âœ“ Package ₹{item.selectedPackage.toLocaleString('en-IN')} selected - All 18 particulars loaded
-                                  </p>
-                                )}
-                              </div>
-
-                              {/* 18 Particulars Table */}
-                              <table className="w-full text-xs border border-[#D4A574] rounded overflow-hidden">
-                                <thead>
-                                  <tr className="bg-[#D4A574] text-[#0a0a0a]">
-                                    <th className="p-2 text-left border-r border-[#D4A574]">S.No</th>
-                                    <th className="p-2 text-left border-r border-[#D4A574]">Particulars</th>
-                                    <th className="p-2 text-right border-r border-[#D4A574]">Cost</th>
-                                    <th className="p-2 text-center border-r border-[#D4A574]">Qty</th>
-                                    <th className="p-2 text-right border-r border-[#D4A574]">Net Amt</th>
-                                    <th className="p-2 text-right border-r border-[#D4A574]">Gross Amt</th>
-                                    <th className="p-2 text-center">Action</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {item.surgeryBreakdown.map((particular, idx) => (
-                                    <tr key={particular.sNo} className={idx % 2 === 0 ? 'bg-[#1a1a1a]' : 'bg-[#151515]'}>
-                                      <td className="p-2 border-r border-[#D4A574] text-white">{particular.sNo}</td>
-                                      <td className="p-2 border-r border-[#D4A574]">
-                                        <input
-                                          type="text"
-                                          value={particular.particular}
-                                          onChange={(e) => updateSurgeryParticular(item.id, particular.sNo, 'particular', e.target.value)}
-                                          className="bg-transparent text-white w-full focus:outline-none focus:bg-[#0a0a0a] px-1 rounded"
-                                        />
-                                      </td>
-                                      <td className="p-2 border-r border-[#D4A574]">
-                                        <input
-                                          type="number"
-                                          value={particular.cost}
-                                          onChange={(e) => updateSurgeryParticular(item.id, particular.sNo, 'cost', Number(e.target.value))}
-                                          className="bg-transparent text-white w-20 text-right focus:outline-none focus:bg-[#0a0a0a] px-1 rounded"
-                                        />
-                                      </td>
-                                      <td className="p-2 border-r border-[#D4A574] text-center">
-                                        <input
-                                          type="number"
-                                          value={particular.qty}
-                                          onChange={(e) => updateSurgeryParticular(item.id, particular.sNo, 'qty', Number(e.target.value))}
-                                          className="bg-transparent text-white w-12 text-center focus:outline-none focus:bg-[#0a0a0a] px-1 rounded"
-                                        />
-                                      </td>
-                                      <td className="p-2 border-r border-[#D4A574] text-right text-white">₹{particular.netAmt.toLocaleString('en-IN')}</td>
-                                      <td className="p-2 border-r border-[#D4A574] text-right text-white">₹{particular.grossAmt.toLocaleString('en-IN')}</td>
-                                      <td className="p-2 text-center">
-                                        <button
-                                          onClick={() => removeSurgeryParticular(item.id, particular.sNo)}
-                                          className="text-[#5a5a5a] hover:text-red-500"
-                                        >
-                                          <X className="w-3 h-3" />
-                                        </button>
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                                <tfoot>
-                                  <tr className="bg-[#0f0f0f] border-t border-[#D4A574]">
-                                    <td colSpan={5} className="p-2 text-right font-semibold text-white">Total Gross Amt:</td>
-                                    <td className="p-2 text-right font-bold text-[#D4A574]">₹{(item.totalGrossAmt || 0).toLocaleString('en-IN')}</td>
-                                    <td></td>
-                                  </tr>
-                                  <tr className="bg-[#0f0f0f]">
-                                    <td colSpan={5} className="p-2 text-right font-semibold text-white">MOU Discount:</td>
-                                    <td className="p-2 text-right">
-                                      <input
-                                        type="number"
-                                        value={item.mouDiscount || 0}
-                                        onChange={(e) => updateMouDiscount(item.id, Number(e.target.value))}
-                                        className="bg-[#0a0a0a] border border-[#D4A574] text-green-500 w-24 text-right px-2 py-1 rounded focus:outline-none focus:border-[#D4A574]"
-                                      />
-                                    </td>
-                                    <td></td>
-                                  </tr>
-                                  <tr className="bg-[#151515] border-t border-[#D4A574]">
-                                    <td colSpan={5} className="p-2 text-right font-bold text-white">Received:</td>
-                                    <td className="p-2 text-right font-bold text-[#4CAF50] text-base">₹{(item.receivedAmt || 0).toLocaleString('en-IN')}</td>
-                                    <td></td>
-                                  </tr>
-                                </tfoot>
-                              </table>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </Card>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-[#1a1a1a] border-t border-[#D4A574]/30">
+                      <td colSpan={3} className="p-4 text-right text-[#8B8B8B] font-bold uppercase tracking-widest text-[9px]">Item Total Gross</td>
+                      <td className="p-4 text-right text-[#D4A574] font-black text-sm">₹{surgeryItem.totalGrossAmt?.toLocaleString('en-IN')}</td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </Card>
+          ))}
         </div>
 
-        {/* Right Column: Summary & Payment */}
         <div className="space-y-6">
-          {/* Insurance & Discounts Section */}
-          <Card className="bg-[#0f0f0f] border-[#D4A574] p-6">
-            <h3 className="text-sm font-semibold text-[#D4A574] uppercase tracking-wider mb-4">Insurance & Discounts</h3>
+          <Card className="bg-[#0f0f0f] border-[#D4A574] p-6 sticky top-6 shadow-2xl">
+            <h3 className="text-sm font-bold text-[#D4A574]/80 uppercase tracking-[0.2em] mb-6">In the Bill</h3>
 
-            <div className="space-y-4">
-              {/* Insurance Toggle - FIXED: Only show if there are Surgery items */}
+            {/* Redesigned Patient Profile Block - Sidebar Version */}
+            <div className="mb-6 p-4 rounded-xl bg-[#1a1a1a] border border-[#D4A574]/30">
+              <div className="flex items-center gap-4 mb-3 pb-3 border-b border-[#D4A574]/10">
+                <div className="w-14 h-14 rounded-full bg-[#0a0a0a] flex items-center justify-center border border-[#D4A574] flex-shrink-0">
+                  <User className="w-8 h-8 text-[#D4A574]" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-xl font-bold text-white truncate leading-tight">
+                    {patient?.name || 'Ram'}
+                  </h2>
+                  <p className="text-[10px] text-[#8B8B8B] font-mono tracking-wider mt-0.5">
+                    REG: {patient?.registrationId || '-2026-116120'}
+                  </p>
+                  <p className="text-[11px] text-[#D4A574] font-medium mt-1">
+                    {patient ? `${patient.demographics?.age || patient.patientDetails?.age || patient.age || '24'} / ${patient.demographics?.sex || patient.patientDetails?.sex || patient.sex || 'M'}` : '24 / M'} / {patient?.contactInfo?.phone || '789654'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Sidebar Header for Items */}
+              <div className="grid grid-cols-[1fr,40px,80px,40px] gap-2 px-1 mb-2">
+                <div className="text-[9px] font-bold text-[#5a5a5a] uppercase">Service</div>
+                <div className="text-[9px] font-bold text-[#5a5a5a] uppercase text-center">Qty</div>
+                <div className="text-[9px] font-bold text-[#5a5a5a] uppercase text-right">Price</div>
+                <div className="text-[9px] font-bold text-[#5a5a5a] uppercase text-right">Action</div>
+              </div>
+
+              {/* Compact Items List */}
+              <div className="space-y-1 max-h-[350px] overflow-y-auto pr-1 custom-scrollbar">
+                {items.length === 0 ? (
+                  <div className="py-8 text-center border-t border-[#D4A574]/10">
+                    <p className="text-xs text-[#5a5a5a]">No items added to the bill yet.</p>
+                  </div>
+                ) : (
+                  items.map((item) => (
+                    <div key={item.id} className="group grid grid-cols-[1fr,40px,80px,40px] gap-2 items-center py-2 border-t border-[#D4A574]/10 hover:bg-[#1a1a1a] transition-colors rounded-lg px-1">
+                      <div className="min-w-0">
+                        <p className="text-xs text-white truncate font-medium">{item.name}</p>
+                        {item.category === 'Surgery' && (
+                          <p className="text-[8px] text-[#D4A574] uppercase tracking-tighter">Right Eye â†’</p>
+                        )}
+                      </div>
+                      <div className="text-xs text-[#8B8B8B] text-center font-mono">
+                        {item.quantity}
+                      </div>
+                      <div className="text-xs text-white text-right font-medium">
+                        ₹{item.price.toLocaleString('en-IN')}
+                      </div>
+                      <div className="text-right">
+                        <button
+                          onClick={() => removeItem(item.id)}
+                          className="p-1.5 text-[#5a5a5a] hover:text-red-500 hover:bg-red-500/10 rounded transition-all"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Bill Totals & Breakdown */}
+            <div className="space-y-3 mb-6 pt-4 border-t border-[#D4A574]/20">
+              <div className="flex justify-between text-sm">
+                <span className="text-[#8B8B8B] font-medium">Subtotal</span>
+                <span className="text-white font-bold tracking-tight">₹{subtotal.toLocaleString('en-IN')}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-[#8B8B8B] font-medium">Discount</span>
+                <span className="text-green-500 font-bold tracking-tight">- ₹{(totalDiscount + discountAmount).toLocaleString('en-IN')}</span>
+              </div>
+
+              {govtInsuranceEnabled && items.some(i => i.category === 'Surgery') && (
+                <div className="pt-2 space-y-2 border-t border-[#D4A574]/10">
+                  <div className="flex justify-between text-[11px]">
+                    <span className="text-blue-400">Insurance Covered</span>
+                    <span className="text-blue-400 font-bold">- ₹{insuranceCovered.toLocaleString('en-IN')}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-[#8B8B8B] font-semibold">Patient Payable</span>
+                    <span className="text-white font-bold">₹{patientPayable.toLocaleString('en-IN')}</span>
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-4 border-t border-[#D4A574]/30 flex justify-between items-end">
+                <span className="text-base font-bold text-white uppercase tracking-tight">
+                  {govtInsuranceEnabled ? 'Patient Payable' : 'Grand Total'}
+                </span>
+                <span className="text-3xl font-black text-[#D4A574] tracking-tighter">
+                  ₹{(govtInsuranceEnabled ? patientPayable : grandTotal).toLocaleString('en-IN')}
+                </span>
+              </div>
+            </div>
+
+            {/* Payment Method Preservation */}
+            <div className="space-y-3 mb-6">
+              <label className="text-[10px] font-bold text-[#5a5a5a] uppercase tracking-widest">Payment Method</label>
+              <div className="grid grid-cols-2 gap-2">
+                {['Cash', 'Card', 'UPI', 'Insurance'].map((method) => (
+                  <button
+                    key={method}
+                    onClick={() => setPaymentMethod(method as any)}
+                    className={`py-2.5 px-3 rounded-lg border text-xs font-bold transition-all ${paymentMethod === method
+                      ? 'bg-[#D4A574] border-[#D4A574] text-[#0a0a0a] shadow-lg shadow-[#D4A574]/20'
+                      : 'bg-[#1a1a1a] border-[#D4A574]/20 text-[#8B8B8B] hover:border-[#D4A574]/50'}`}
+                  >
+                    {method}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="space-y-3">
+              <Button
+                className="w-full bg-[#D4A574] text-[#0a0a0a] hover:bg-[#C9955E] h-12 font-bold text-base shadow-xl shadow-[#D4A574]/20 rounded-xl"
+                onClick={() => handleSaveBill('paid')}
+                disabled={items.length === 0}
+              >
+                COLLECT ₹{(govtInsuranceEnabled ? patientPayable : grandTotal).toLocaleString('en-IN')}
+              </Button>
+              <Button
+                className="w-full bg-transparent border border-[#D4A574]/40 text-[#D4A574] hover:bg-[#1a1a1a] h-11 font-bold text-sm rounded-xl"
+                onClick={() => handleSaveBill('draft')}
+              >
+                Save as Draft
+              </Button>
+            </div>
+
+            {/* Re-integrated Insurance & Coupon Section */}
+            <div className="space-y-4 pt-4 border-t border-[#D4A574]/20">
+              {/* Insurance Toggle - Only show if there are Surgery items */}
               {items.some(i => i.category === 'Surgery') && (
-                <div className="flex items-center justify-between p-3 rounded-xl bg-[#1a1a1a]/50 border border-[#D4A574]">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${govtInsuranceEnabled ? 'bg-blue-500/20 text-blue-500' : 'bg-[#0a0a0a] text-[#5a5a5a]'}`}>
-                      <CreditCard className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium">Govt. Insurance (For Surgery)</p>
-                      <p className="text-[10px] text-[#5a5a5a]">Late claim processing</p>
-                    </div>
+                <div className="flex items-center justify-between p-3 rounded-xl bg-[#1a1a1a]/50 border border-blue-500/20">
+                  <div className="flex items-center gap-2">
+                    <CreditCard className={`w-4 h-4 ${govtInsuranceEnabled ? 'text-blue-500' : 'text-[#5a5a5a]'}`} />
+                    <span className="text-[11px] font-medium text-white">Govt. Insurance</span>
                   </div>
                   <button
                     onClick={() => handleInsuranceToggle(!govtInsuranceEnabled)}
-                    className={`w-12 h-6 rounded-full transition-colors relative ${govtInsuranceEnabled ? 'bg-blue-600' : 'bg-[#2a2a2a]'}`}
+                    className={`w-10 h-5 rounded-full transition-colors relative ${govtInsuranceEnabled ? 'bg-blue-600' : 'bg-[#2a2a2a]'}`}
                   >
-                    <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${govtInsuranceEnabled ? 'left-7' : 'left-1'}`} />
+                    <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${govtInsuranceEnabled ? 'left-5.5' : 'left-0.5'}`} />
                   </button>
-                </div>
-              )}
-
-              {govtInsuranceEnabled && items.some(i => i.category === 'Surgery') && (
-                <>
-                  <div className="mt-4">
-                    <label className="text-sm block mb-2">Insurance Type</label>
-                    <select
-                      className="w-full bg-[#0a0a0a] border-[#D4A574] rounded p-2 text-sm text-white focus:outline-none focus:border-[#D4A574]"
-                      value={insuranceCategory || ''}
-                      onChange={(e) => {
-                        const val = e.target.value as InsuranceCategory;
-                        setInsuranceCategory(val || null);
-                        setInsuranceCompany('');
-                        setInsuranceTPA('');
-                      }}
-                    >
-                      <option value="">Select Insurance Type</option>
-                      {(['CGHS', 'SGHS', 'PRIVATE'] as const).map(type => (
-                        <option key={type} value={type}>{type}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {insuranceCategory && (
-                    <div className="grid grid-cols-2 gap-4 mt-4">
-                      <div>
-                        <label className="text-sm">Insurance Company</label>
-                        <select
-                          className="w-full bg-[#0a0a0a] border-[#D4A574] rounded p-2 text-sm text-white focus:outline-none focus:border-[#D4A574]"
-                          value={insuranceCompany}
-                          onChange={(e) => {
-                            setInsuranceCompany(e.target.value);
-                            setInsuranceTPA('');
-                          }}
-                        >
-                          <option value="">Select Company</option>
-                          {MOCK_INSURANCE_PLANS[insuranceCategory].map(plan => (
-                            <option key={plan.company} value={plan.company}>
-                              {plan.company}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="text-sm">TPA</label>
-                        <select
-                          className="w-full bg-[#0a0a0a] border-[#D4A574] rounded p-2 text-sm text-white focus:outline-none focus:border-[#D4A574]"
-                          value={insuranceTPA}
-                          disabled={!insuranceCompany}
-                          onChange={(e) => setInsuranceTPA(e.target.value)}
-                        >
-                          <option value="">Select TPA</option>
-                          {insuranceCompany &&
-                            MOCK_INSURANCE_PLANS[insuranceCategory]
-                              .find(p => p.company === insuranceCompany)
-                              ?.tpas.map(tpa => (
-                                <option key={tpa} value={tpa}>{tpa}</option>
-                              ))}
-                        </select>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Claim Number Input - shown when insurance is enabled */}
-                  {govtInsuranceEnabled && insuranceCompany && insuranceTPA && (
-                    <div className="mt-4">
-                      <label className="text-sm">Claim Number</label>
-                      <Input
-                        type="text"
-                        placeholder="Enter insurance claim number"
-                        value={claimNumber}
-                        onChange={(e) => setClaimNumber(e.target.value)}
-                        className="w-full bg-[#0a0a0a] border border-[#D4A574] rounded p-2 text-sm text-white focus:outline-none focus:border-[#D4A574]"
-                      />
-                      <p className="text-[10px] text-[#8B8B8B] mt-1">
-                        Enter the insurance company's claim/policy reference number
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Date Fields */}
-                  <div className="mt-4 grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-sm">Date of Surgery</label>
-                      <Input
-                        type="date"
-                        value={dateOfSurgery}
-                        onChange={(e) => setDateOfSurgery(e.target.value)}
-                        className="w-full bg-[#0a0a0a] border border-[#D4A574] rounded p-2 text-sm text-white focus:outline-none focus:border-[#D4A574]"
-                      />
-                      <p className="text-[10px] text-[#8B8B8B] mt-1">DD/MM/YYYY format</p>
-                    </div>
-                    <div>
-                      <label className="text-sm">Date of Discharge</label>
-                      <Input
-                        type="date"
-                        value={dateOfDischarge}
-                        onChange={(e) => setDateOfDischarge(e.target.value)}
-                        className="w-full bg-[#0a0a0a] border border-[#D4A574] rounded p-2 text-sm text-white focus:outline-none focus:border-[#D4A574]"
-                      />
-                      <p className="text-[10px] text-[#8B8B8B] mt-1">DD/MM/YYYY format</p>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {/* ============ SURGERY BILLING SECTION ============ */}
-              {isSurgeryBillingMode && govtInsuranceEnabled && (
-                <div id="surgery-billing-section" className="pt-4 border-t border-[#D4A574]">
-                  <div className="flex items-center gap-2 mb-4">
-                    <div className="w-8 h-8 rounded-full bg-orange-500/20 flex items-center justify-center">
-                      <AlertCircle className="w-4 h-4 text-orange-500" />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-semibold text-orange-500">Surgery Insurance Billing</h4>
-                      <p className="text-[10px] text-[#5a5a5a]">Two-Bill System: Initial â†’ Final Settlement</p>
-                    </div>
-                  </div>
-
-                  {/* Bill Stage Toggle */}
-                  <div className="flex gap-2 mb-4">
-                    <button
-                      onClick={() => setSurgeryBillStage('initial')}
-                      className={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold transition-all ${surgeryBillStage === 'initial'
-                        ? 'bg-orange-500 text-white'
-                        : 'bg-[#1a1a1a] text-[#8B8B8B] hover:bg-[#2a2a2a]'
-                        }`}
-                    >
-                      Initial Bill
-                    </button>
-                    <button
-                      onClick={() => setSurgeryBillStage('final')}
-                      className={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold transition-all ${surgeryBillStage === 'final'
-                        ? 'bg-green-500 text-white'
-                        : 'bg-[#1a1a1a] text-[#8B8B8B] hover:bg-[#2a2a2a]'
-                        }`}
-                    >
-                      Final Settlement
-                    </button>
-                  </div>
-
-                  {/* Existing Initial Bills Alert */}
-                  {existingInitialBill && surgeryBillStage === 'initial' && (
-                    <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 mb-4">
-                      <p className="text-yellow-500 text-xs font-semibold mb-1">âš ï¸ Pending Initial Bill Found</p>
-                      <p className="text-[10px] text-[#8B8B8B]">
-                        Bill ID: {existingInitialBill.billId}<br />
-                        Security Deposit: ₹{existingInitialBill.securityDeposit?.toLocaleString('en-IN')}
-                      </p>
-                      <button
-                        onClick={() => handleContinueToFinalBill(existingInitialBill)}
-                        className="mt-2 w-full py-2 bg-yellow-500 text-black text-xs font-semibold rounded-lg hover:bg-yellow-400"
-                      >
-                        Continue to Final Settlement â†’
-                      </button>
-                    </div>
-                  )}
-
-                  {/* INITIAL BILL: Security Deposit Input */}
-                  {surgeryBillStage === 'initial' && (
-                    <div className="space-y-3">
-                      <div className="bg-orange-500/10 rounded-lg p-3 border border-orange-500/30">
-                        <label className="text-xs text-orange-400 font-semibold block mb-2">
-                          ðŸ’° Security Deposit / Upfront Amount (Paid by Patient)
-                        </label>
-                        <Input
-                          type="number"
-                          value={securityDeposit || ''}
-                          onChange={(e) => setSecurityDeposit(Number(e.target.value))}
-                          className="bg-[#0a0a0a] border-orange-500/50 h-10 text-white text-lg font-bold"
-                          placeholder="Enter amount collected"
-                        />
-                        <p className="text-[10px] text-[#8B8B8B] mt-2">
-                          This is a temporary payment collected before surgery. Enter or adjust based on hospital policy.
-                        </p>
-                      </div>
-
-                      <div className="bg-[#1a1a1a] rounded-lg p-3 border border-[#D4A574]">
-                        <div className="flex justify-between text-xs mb-1">
-                          <span className="text-[#8B8B8B]">Total Surgery Cost:</span>
-                          <span className="text-white font-medium">₹{totalSurgeryCost.toLocaleString('en-IN')}</span>
-                        </div>
-                        <div className="flex justify-between text-xs pt-2 border-t border-[#D4A574]">
-                          <span className="text-[#8B8B8B]">Patient's Payable Amount:</span>
-                          <span className="text-white font-semibold">₹{patientPayable.toLocaleString('en-IN')}</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* FINAL BILL: Insurance Approved Amount Input */}
-                  {surgeryBillStage === 'final' && (
-                    <div className="space-y-3">
-                      {existingInitialBill && (
-                        <div className="bg-[#1a1a1a] rounded-lg p-3 border border-[#D4A574]">
-                          <p className="text-[10px] text-[#8B8B8B] uppercase mb-1">Initial Bill Reference</p>
-                          <p className="text-xs text-white">{existingInitialBill.billId}</p>
-                          <p className="text-xs text-green-400 mt-1">
-                            Security Deposit Paid: ₹{(existingInitialBill.securityDeposit || securityDeposit).toLocaleString('en-IN')}
-                          </p>
-                        </div>
-                      )}
-
-                      <div className="bg-green-500/10 rounded-lg p-3 border border-green-500/30">
-                        <label className="text-xs text-green-400 font-semibold block mb-2">
-                          âœ“ Insurance Approved Amount (As per approval letter)
-                        </label>
-                        <Input
-                          type="number"
-                          value={insuranceApprovedAmount || ''}
-                          onChange={(e) => setInsuranceApprovedAmount(Number(e.target.value))}
-                          className="bg-[#0a0a0a] border-green-500/50 h-10 text-white text-lg font-bold"
-                          placeholder="Enter approved amount"
-                        />
-                        <p className="text-[10px] text-[#8B8B8B] mt-2">
-                          Enter the exact amount approved by insurance company.
-                        </p>
-                      </div>
-
-                      {/* Auto-Calculation Preview */}
-                      <div className="bg-[#1a1a1a] rounded-lg p-4 border border-[#D4A574]">
-                        <h5 className="text-xs text-[#D4A574] font-semibold mb-3 uppercase">Auto-Calculation</h5>
-                        <div className="space-y-2 text-xs">
-                          <div className="flex justify-between">
-                            <span className="text-[#8B8B8B]">Total Surgery Cost:</span>
-                            <span className="text-white">₹{(existingInitialBill?.totalSurgeryCost || totalSurgeryCost).toLocaleString('en-IN')}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-[#8B8B8B]">Insurance Approved:</span>
-                            <span className="text-green-400">- ₹{insuranceApprovedAmount.toLocaleString('en-IN')}</span>
-                          </div>
-                          <div className="flex justify-between pt-2 border-t border-[#D4A574]">
-                            <span className="text-[#8B8B8B]">Patient's Total Share:</span>
-                            <span className="text-white font-medium">₹{((existingInitialBill?.totalSurgeryCost || totalSurgeryCost) - insuranceApprovedAmount).toLocaleString('en-IN')}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-[#8B8B8B]">Security Deposit Paid:</span>
-                            <span className="text-green-400">- ₹{(existingInitialBill?.securityDeposit || securityDeposit).toLocaleString('en-IN')}</span>
-                          </div>
-                          <div className="flex justify-between pt-2 border-t border-[#D4A574] text-base">
-                            {(() => {
-                              const surgCost = existingInitialBill?.totalSurgeryCost || totalSurgeryCost;
-                              const patShare = surgCost - insuranceApprovedAmount;
-                              const secDep = existingInitialBill?.securityDeposit || securityDeposit;
-                              const balance = patShare - secDep;
-
-                              if (balance > 0) {
-                                return (
-                                  <>
-                                    <span className="text-red-400 font-semibold">Balance Payable:</span>
-                                    <span className="text-red-400 font-bold">₹{balance.toLocaleString('en-IN')}</span>
-                                  </>
-                                );
-                              } else {
-                                return (
-                                  <>
-                                    <span className="text-green-400 font-semibold">Status:</span>
-                                    <span className="text-green-400 font-bold">Fully Settled âœ“</span>
-                                  </>
-                                );
-                              }
-                            })()}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* View Bill History Button */}
-              {existingSurgeryBills.length > 0 && (
-                <div className="pt-4 border-t border-[#D4A574]">
-                  <button
-                    onClick={() => setShowBillHistory(!showBillHistory)}
-                    className="w-full py-2 text-xs text-[#D4A574] hover:text-white transition-colors flex items-center justify-center gap-2"
-                  >
-                    {showBillHistory ? 'â–² Hide' : 'â–¼ View'} Surgery Bill History ({existingSurgeryBills.length})
-                  </button>
-
-                  {showBillHistory && (
-                    <div className="mt-3 space-y-2 max-h-40 overflow-y-auto">
-                      {existingSurgeryBills.map((bill, idx) => (
-                        <div
-                          key={bill.billId || idx}
-                          className={`p-2 rounded-lg border text-xs ${bill.billType === 'initial'
-                            ? 'bg-orange-500/10 border-orange-500/30'
-                            : 'bg-green-500/10 border-green-500/30'
-                            }`}
-                        >
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <span className={`font-semibold ${bill.billType === 'initial' ? 'text-orange-400' : 'text-green-400'}`}>
-                                {bill.billType === 'initial' ? 'Initial' : 'Final'}: {bill.billId}
-                              </span>
-                              <p className="text-[#8B8B8B] text-[10px]">{bill.surgeryName}</p>
-                            </div>
-                            <span className={`text-[10px] px-2 py-0.5 rounded ${bill.status === 'settled' ? 'bg-green-500/20 text-green-400' :
-                              bill.status === 'pending_approval' ? 'bg-yellow-500/20 text-yellow-400' :
-                                'bg-[#2a2a2a] text-[#8B8B8B]'
-                              }`}>
-                              {bill.status}
-                            </span>
-                          </div>
-                          {bill.billType === 'initial' && bill.status !== 'settled' && (
-                            <button
-                              onClick={() => handleContinueToFinalBill(bill)}
-                              className="mt-2 w-full py-1 bg-green-500/20 text-green-400 text-[10px] rounded hover:bg-green-500/30"
-                            >
-                              Create Final Bill â†’
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
               )}
 
               {/* Coupon Section */}
-              <div className="pt-4 border-t border-[#D4A574]">
-                <div className="flex justify-between items-center mb-2">
-                  <label className="text-[10px] text-[#8B8B8B] uppercase">Apply Coupon</label>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center px-1">
+                  <label className="text-[10px] text-[#5a5a5a] uppercase font-bold tracking-widest">Apply Coupon</label>
                   {workerQuota && (
-                    <span className="text-[10px] text-[#D4A574]">
-                      Quota: {workerQuota.remaining}/{workerQuota.limit} left
-                    </span>
+                    <span className="text-[9px] text-[#D4A574] font-medium">Quota: {workerQuota.remaining}/{workerQuota.limit}</span>
                   )}
                 </div>
                 <div className="flex gap-2">
-                  <Input
+                  <input
                     value={couponCode}
                     onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                    className="bg-[#0a0a0a] border-[#D4A574] h-9 text-sm font-mono"
-                    placeholder="COUPON10"
+                    className="flex-1 bg-[#0a0a0a] border border-[#D4A574]/30 rounded-lg h-9 px-3 text-xs font-mono text-white focus:border-[#D4A574]"
+                    placeholder="Enter code"
                   />
-                  <Button
-                    className="h-9 bg-[#D4A574] text-[#0a0a0a] hover:bg-[#C9955E] font-bold text-xs"
+                  <button
                     onClick={() => {
                       if (couponCode === 'GOVT50') {
                         setDiscountAmount(grandTotal * 0.5);
@@ -2635,168 +2342,21 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
                         alert('Invalid Coupon');
                       }
                     }}
+                    className="h-9 px-4 bg-[#D4A574]/10 border border-[#D4A574]/30 text-[#D4A574] rounded-lg text-xs font-bold hover:bg-[#D4A574] hover:text-[#0a0a0a] transition-all"
                   >
                     Apply
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </Card>
-
-          <Card className="bg-[#0f0f0f] border-[#D4A574] p-6 sticky top-6">
-            <h3 className="text-lg font-medium mb-4">Bill Summary</h3>
-
-            {/* Patient Info details in Summary - Compact & Side-by-Side */}
-            <div className="mb-6 p-4 rounded-xl bg-[#1a1a1a]/50 border border-[#D4A574]/30 flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full bg-[#0a0a0a] flex items-center justify-center border border-[#D4A574] flex-shrink-0">
-                <User className="w-6 h-6 text-[#D4A574]" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex justify-between items-start mb-1">
-                  <h2 className="text-base font-semibold text-white truncate pr-2">{patient?.name || 'N/A'}</h2>
-                  <span className={`text-[9px] px-1.5 py-0.5 rounded flex-shrink-0 border ${patient ? "bg-green-500/10 text-green-500 border-green-500/20" : "bg-[#2a2a2a] text-[#5a5a5a] border-transparent"}`}>
-                    {patient ? "Active Visit" : "No Visit"}
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 border-t border-[#D4A574]/10 pt-2">
-                  <div className="text-[10px] text-[#8B8B8B] font-mono truncate">
-                    {patient?.registrationId || 'Not Selected'}
-                  </div>
-                  <div className="text-[10px] text-[#D4A574] text-right font-medium">
-                    {patient ? `${patient.demographics?.age || patient.patientDetails?.age || patient.age || 'N/A'}Y / ${patient.demographics?.sex || patient.patientDetails?.sex || patient.sex || 'N/A'}` : 'N/A'}
-                  </div>
-                  <div className="col-span-2 text-[10px] text-[#5a5a5a] truncate mt-0.5">
-                    Phone: <span className="text-[#8B8B8B] font-medium">{patient?.contactInfo?.phone || 'N/A'}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-4 mb-8">
-              <div className="flex justify-between text-sm">
-                <span className="text-[#8B8B8B]">Subtotal</span>
-                <span className="text-white font-medium">₹{subtotal}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-[#8B8B8B]">Discount</span>
-                <span className="text-green-500 font-medium">- ₹{totalDiscount + discountAmount}</span>
-              </div>
-
-              {govtInsuranceEnabled && items.some(i => i.category === 'Surgery') && (
-                <div className="pt-2 space-y-2 border-t border-[#D4A574]/50">
-                  <div className="flex justify-between text-xs">
-                    <span className="text-blue-400">Insurance Covered</span>
-                    <span className="text-blue-400">- ₹{insuranceCovered}</span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-[#8B8B8B]">Patient Payable</span>
-                    <span className="text-white">₹{patientPayable}</span>
-                  </div>
-                </div>
-              )}
-
-              <div className="pt-4 border-t border-[#D4A574] flex justify-between items-end">
-                <span className="text-base font-semibold text-white">
-                  {govtInsuranceEnabled ? 'Patient Payable' : 'Grand Total'}
-                </span>
-                <span className="text-3xl font-bold text-[#D4A574]">
-                  ₹{govtInsuranceEnabled ? patientPayable : grandTotal}
-                </span>
-              </div>
-            </div>
-
-            <div className="space-y-4 mb-8">
-              <label className="text-xs font-semibold text-[#8B8B8B] uppercase tracking-wider">Payment Method</label>
-              <div className="grid grid-cols-2 gap-2">
-                {['Cash', 'Card', 'UPI', 'Insurance'].map((method) => (
-                  <button
-                    key={method}
-                    onClick={() => setPaymentMethod(method as any)}
-                    className={`p-3 rounded-xl border text-xs font-medium transition-all ${paymentMethod === method ? 'bg-[#D4A574] border-[#D4A574] text-[#0a0a0a]' : 'bg-[#0a0a0a] border-[#D4A574] text-[#8B8B8B] hover:border-[#D4A574]'}`}
-                  >
-                    {method}
                   </button>
-                ))}
+                </div>
               </div>
             </div>
 
-            <div className="space-y-3">
-              {/* Surgery Billing Buttons - Show only in surgery mode with insurance */}
-              {isSurgeryBillingMode && govtInsuranceEnabled ? (
-                <>
-                  {surgeryBillStage === 'initial' ? (
-                    <Button
-                      className="w-full bg-orange-500 text-white hover:bg-orange-600 h-12 font-bold text-base shadow-lg shadow-orange-500/20"
-                      onClick={handleCreateInitialBill}
-                      disabled={securityDeposit <= 0 || !insuranceCategory || !insuranceCompany}
-                    >
-                      ðŸ“‹ Generate Initial Insurance Bill
-                    </Button>
-                  ) : (
-                    <Button
-                      className="w-full bg-green-500 text-white hover:bg-green-600 h-12 font-bold text-base shadow-lg shadow-green-500/20"
-                      onClick={handleCreateFinalBill}
-                      disabled={insuranceApprovedAmount <= 0}
-                    >
-                      âœ“ Generate Final Settlement Bill
-                    </Button>
-                  )}
-                  <Button
-                    variant="outline"
-                    className="w-full border-[#D4A574] text-[#8B8B8B] hover:bg-[#1a1a1a] h-10 text-xs"
-                    onClick={handlePrint}
-                  >
-                    Print Regular Invoice
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Button
-                    className="w-full bg-[#D4A574] text-[#0a0a0a] hover:bg-[#C9955E] h-12 font-bold text-base shadow-lg shadow-[#D4A574]/20"
-                    onClick={() => handleSaveBill('paid')}
-                  >
-                    COLLECT ₹{grandTotal}
-                  </Button>
-                  <Button
-                    className="w-full bg-[#D4A574] text-[#0a0a0a] hover:bg-[#C9955E] h-12 font-bold text-base shadow-lg shadow-[#D4A574]/20"
-                    onClick={() => handleSaveBill('draft')}
-                  >
-                    Save as Draft
-                  </Button>
-                </>
-              )}
-            </div>
-
-            <div className="mt-6 p-4 bg-[#1a1a1a]/50 rounded-xl border border-[#D4A574]">
-              <div className="flex items-center gap-2 text-xs text-[#8B8B8B]">
-                <AlertCircle className="w-3 h-3 text-[#D4A574]" />
-                <span>Invoice will be sent to {patient?.contactInfo?.email || 'patient email'}</span>
+            {/* Email Footer */}
+            <div className="mt-6 p-4 bg-[#1a1a1a] rounded-xl border border-[#D4A574]/10">
+              <div className="flex items-center gap-3 text-[11px] text-[#8B8B8B]">
+                <Mail className="w-4 h-4 text-[#D4A574]" />
+                <span>Invoice will be sent to: <span className="text-white font-medium">{patient?.contactInfo?.email || 'raj@gmail.com'}</span></span>
               </div>
             </div>
-
-            {/* Admin Quota Refresh (Only for CEO/Main Doc) */}
-            {(currentUser === 'CEO' || currentUser === 'MainDoctor' || currentUser === 'Admin') && (
-              <div className="mt-4 pt-4 border-t border-[#D4A574]">
-                <Button
-                  variant="ghost"
-                  className="w-full text-[10px] text-[#5a5a5a] hover:text-[#D4A574]"
-                  onClick={async () => {
-                    const res = await fetch(API_ENDPOINTS.COUPONS.REFRESH, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ workerId: currentUser, refreshedBy: currentUser, limit: 20 })
-                    });
-                    if (res.ok) {
-                      alert('Quota Refreshed!');
-                      fetchWorkerQuota();
-                    }
-                  }}
-                >
-                  Refresh My Coupon Quota (Admin Only)
-                </Button>
-              </div>
-            )}
           </Card>
         </div>
       </div>
