@@ -1910,71 +1910,69 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
   return (
     <div className="max-w-[1600px] mx-auto p-12 space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700 bg-[#0a0a0a]">
       {/* Header */}
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-4">
+      <div className="flex items-center gap-12 mb-6">
+        <div className="flex-shrink-0">
+          <h1 className="text-3xl font-light tracking-tight">Patient Billing</h1>
+          {/* Selected Patient Info */}
+          {patient ? (
+            <p className="text-[#8B8B8B] text-sm mt-1">
+              Selected: <span className="text-[#D4A574] font-medium">{patient.name}</span> ({patient.registrationId})
+            </p>
+          ) : (
+            <p className="text-[#8B8B8B] text-sm mt-1">Search and select a patient to create invoice</p>
+          )}
+        </div>
 
-          <div>
-            <h1 className="text-3xl font-light tracking-tight">Patient Billing</h1>
-            {/* Patient Search Input */}
-            <div className="relative mt-2" ref={dropdownRef}>
-              <div className="flex items-center gap-2">
-                <Search className="w-4 h-4 text-[#5a5a5a]" />
-                <input
-                  type="text"
-                  placeholder="Search patient by name, phone, or email..."
-                  value={patientSearchQuery}
-                  onChange={(e) => setPatientSearchQuery(e.target.value)}
-                  className="bg-[#1a1a1a] border border-[#D4A574] rounded-lg px-3 py-1.5 text-sm text-white placeholder-[#5a5a5a] focus:outline-none focus:border-[#D4A574] w-72"
-                />
-                {isSearchingPatient && (
-                  <div className="w-4 h-4 border-2 border-[#D4A574] border-t-transparent rounded-full animate-spin"></div>
-                )}
-              </div>
-
-              {/* Search Results Dropdown */}
-              {showPatientDropdown && patientSearchResults.length > 0 && (
-                <div className="absolute top-full left-0 mt-1 w-80 bg-[#1a1a1a] border border-[#D4A574] rounded-lg shadow-xl z-50 max-h-64 overflow-y-auto">
-                  {patientSearchResults.map((result) => (
-                    <button
-                      key={result.registrationId}
-                      onClick={() => handleSelectPatient(result)}
-                      className="w-full px-4 py-3 text-left hover:bg-[#2a2a2a] border-b border-[#D4A574] last:border-b-0 transition-colors"
-                    >
-                      <p className="text-white text-sm font-medium">{result.name}</p>
-                      <p className="text-[#5a5a5a] text-xs font-mono">{result.registrationId}</p>
-                      {result.phone && <p className="text-[#5a5a5a] text-xs">{result.phone}</p>}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {showPatientDropdown && patientSearchResults.length === 0 && patientSearchQuery && !isSearchingPatient && (
-                <div className="absolute top-full left-0 mt-1 w-80 bg-[#1a1a1a] border border-[#D4A574] rounded-lg shadow-xl z-50 p-4">
-                  <p className="text-[#5a5a5a] text-sm text-center">No patients found</p>
-                </div>
-              )}
-            </div>
-
-            {/* Selected Patient Info */}
-            {patient ? (
-              <p className="text-[#8B8B8B] text-sm mt-2">
-                Selected: <span className="text-[#D4A574]">{patient.name}</span> ({patient.registrationId})
-              </p>
-            ) : (
-              <p className="text-[#8B8B8B] text-sm mt-2">Search and select a patient to create invoice</p>
+        {/* Patient Search Input - Expanded */}
+        <div className="flex-1 relative" ref={dropdownRef}>
+          <div className="flex items-center gap-3 bg-[#1a1a1a] border border-[#D4A574] rounded-lg px-4 py-1.5 focus-within:ring-1 focus-within:ring-[#D4A574]">
+            <Search className="w-4 h-4 text-[#5a5a5a]" />
+            <input
+              type="text"
+              placeholder="Search patient by name, phone, or email..."
+              value={patientSearchQuery}
+              onChange={(e) => setPatientSearchQuery(e.target.value)}
+              className="bg-transparent border-none text-sm text-white placeholder-[#5a5a5a] focus:outline-none w-full"
+            />
+            {isSearchingPatient && (
+              <div className="w-4 h-4 border-2 border-[#D4A574] border-t-transparent rounded-full animate-spin"></div>
             )}
           </div>
+
+          {/* Search Results Dropdown */}
+          {showPatientDropdown && patientSearchResults.length > 0 && (
+            <div className="absolute top-full left-0 mt-1 w-full bg-[#1a1a1a] border border-[#D4A574] rounded-lg shadow-xl z-50 max-h-64 overflow-y-auto">
+              {patientSearchResults.map((result) => (
+                <button
+                  key={result.registrationId}
+                  onClick={() => handleSelectPatient(result)}
+                  className="w-full px-4 py-3 text-left hover:bg-[#2a2a2a] border-b border-[#D4A574] last:border-b-0 transition-colors"
+                >
+                  <p className="text-white text-sm font-medium">{result.name}</p>
+                  <p className="text-[#5a5a5a] text-xs font-mono">{result.registrationId}</p>
+                  {result.phone && <p className="text-[#5a5a5a] text-xs">{result.phone}</p>}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {showPatientDropdown && patientSearchResults.length === 0 && patientSearchQuery && !isSearchingPatient && (
+            <div className="absolute top-full left-0 mt-1 w-full bg-[#1a1a1a] border border-[#D4A574] rounded-lg shadow-xl z-50 p-4">
+              <p className="text-[#5a5a5a] text-sm text-center">No patients found</p>
+            </div>
+          )}
         </div>
-        <div className="flex items-center gap-3">
+
+        <div className="flex-shrink-0 flex items-center gap-3">
           <Button
-            className="bg-[#D4A574] text-[#0a0a0a] hover:bg-[#C9955E] font-bold"
+            className="bg-[#D4A574] text-[#0a0a0a] hover:bg-[#C9955E] font-bold h-[38px]"
             onClick={() => setShowCompanyTpaModal(true)}
           >
             <Plus className="w-4 h-4 mr-2" />
             Add Company/TPA
           </Button>
           <Button
-            className="bg-[#D4A574] text-[#0a0a0a] hover:bg-[#C9955E] font-bold disabled:opacity-50"
+            className="bg-[#D4A574] text-[#0a0a0a] hover:bg-[#C9955E] font-bold disabled:opacity-50 h-[38px]"
             onClick={handlePrint}
             disabled={!patient}
           >
@@ -1982,7 +1980,7 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
             Print Invoice
           </Button>
           <Button
-            className="bg-[#D4A574] text-[#0a0a0a] hover:bg-[#C9955E] font-bold disabled:opacity-50"
+            className="bg-[#D4A574] text-[#0a0a0a] hover:bg-[#C9955E] font-bold disabled:opacity-50 h-[38px]"
             onClick={() => handleSaveBill('paid')}
             disabled={!patient || items.length === 0}
           >
@@ -1995,33 +1993,6 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Left Column: Service Selection */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Patient Info Card */}
-          <Card className="bg-[#0f0f0f] border-[#D4A574] p-6">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-full bg-[#1a1a1a] flex items-center justify-center border border-[#D4A574]">
-                  <User className="w-8 h-8 text-[#D4A574]" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-semibold">{patient?.name}</h2>
-                  <p className="text-sm text-[#8B8B8B] font-mono">{patient?.registrationId}</p>
-                  <div className="flex items-center gap-4 mt-2 text-xs text-[#5a5a5a]">
-                    <span className="text-[#D4A574] font-medium">
-                      {patient?.demographics?.age || patient?.patientDetails?.age || patient?.age || 'N/A'}Y / {patient?.demographics?.sex || patient?.patientDetails?.sex || patient?.sex || 'N/A'}
-                    </span>
-                    <span className="text-[#444]">|</span>
-                    <span>{patient?.contactInfo?.phone}</span>
-                  </div>
-                </div>
-              </div>
-              <div className="text-right">
-                <span className="text-xs px-2 py-1 rounded-full bg-green-500/10 text-green-500 border border-green-500/20">
-                  Active Visit
-                </span>
-                <p className="text-xs text-[#5a5a5a] mt-2">Check-in: 10:30 AM</p>
-              </div>
-            </div>
-          </Card>
 
           {/* Service Search & List */}
           <Card className="bg-[#0f0f0f] border-[#D4A574] p-6">
@@ -2673,7 +2644,34 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
           </Card>
 
           <Card className="bg-[#0f0f0f] border-[#D4A574] p-6 sticky top-6">
-            <h3 className="text-lg font-medium mb-6">Bill Summary</h3>
+            <h3 className="text-lg font-medium mb-4">Bill Summary</h3>
+
+            {/* Patient Info details in Summary - Compact & Side-by-Side */}
+            <div className="mb-6 p-4 rounded-xl bg-[#1a1a1a]/50 border border-[#D4A574]/30 flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-[#0a0a0a] flex items-center justify-center border border-[#D4A574] flex-shrink-0">
+                <User className="w-6 h-6 text-[#D4A574]" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex justify-between items-start mb-1">
+                  <h2 className="text-base font-semibold text-white truncate pr-2">{patient?.name || 'N/A'}</h2>
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded flex-shrink-0 border ${patient ? "bg-green-500/10 text-green-500 border-green-500/20" : "bg-[#2a2a2a] text-[#5a5a5a] border-transparent"}`}>
+                    {patient ? "Active Visit" : "No Visit"}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 border-t border-[#D4A574]/10 pt-2">
+                  <div className="text-[10px] text-[#8B8B8B] font-mono truncate">
+                    {patient?.registrationId || 'Not Selected'}
+                  </div>
+                  <div className="text-[10px] text-[#D4A574] text-right font-medium">
+                    {patient ? `${patient.demographics?.age || patient.patientDetails?.age || patient.age || 'N/A'}Y / ${patient.demographics?.sex || patient.patientDetails?.sex || patient.sex || 'N/A'}` : 'N/A'}
+                  </div>
+                  <div className="col-span-2 text-[10px] text-[#5a5a5a] truncate mt-0.5">
+                    Phone: <span className="text-[#8B8B8B] font-medium">{patient?.contactInfo?.phone || 'N/A'}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
 
             <div className="space-y-4 mb-8">
               <div className="flex justify-between text-sm">
