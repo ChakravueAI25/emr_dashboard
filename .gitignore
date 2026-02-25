@@ -1,16 +1,35 @@
 node_modules
-backend/
-.env
-.venv/
-__pycache__/
-*.pyc
 node_modules/
 build/
+
+# Python environment - never commit these
+backend/venv/
+backend/.venv/
+.venv/
+.env
+backend/.env
+
+# Python cache files
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Vector databases & large binary data files (too large for GitHub)
+backend/chroma_db/
+backend/vector_db/
 vector_db/
+chroma_db/
+*.sqlite3
+
+# Other large/binary file types
 *.bin
 *.pickle
-*.sqlite3
+*.pkl
 *.pdf
 *.xls
+*.xlsx
+
+# IDE
 .vscode/
-.env
