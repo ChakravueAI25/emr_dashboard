@@ -699,6 +699,7 @@ export default function App() {
         iop: activePatientData.iop || {},
         ophthalmicInvestigations: activePatientData.ophthalmicInvestigations || {},
         systemicInvestigations: activePatientData.systemicInvestigations || {},
+        drugHistory: activePatientData.drugHistory || {},
         lastStage: 'opd',
         lastUpdated: new Date().toISOString()
       };
@@ -1732,12 +1733,6 @@ export default function App() {
             ) : currentView === 'appointments' ? (
               <AppointmentBookingView
                 onNavigateToBilling={(registrationId, patientData) => {
-                  console.log('📍 [App] AppointmentBooking callback invoked with:', { registrationId, patientData });
-                  (window as any)._debugBillingNav = {
-                    registrationId,
-                    patientData,
-                    stack: new Error().stack
-                  };
                   setLastSavedRegistrationId(registrationId);
                   setLastAppointmentPatientData(patientData);
                   setCurrentView('individual-billing');
