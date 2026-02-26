@@ -14,8 +14,9 @@ export const API_ENDPOINTS = {
   AUTH_LOGIN: `${API_BASE_URL}/auth/login`,
   USERS_NEW: `${API_BASE_URL}/users/new`,
   USERS_ALL: `${API_BASE_URL}/users/all`,
+  USERS_ONE: (username: string) => `${API_BASE_URL}/users/${encodeURIComponent(username)}`,
   USERS_BY_ROLE: (role: string) => `${API_BASE_URL}/users/all?role=${encodeURIComponent(role)}`,
-  
+
   // Telemedicine & Slit Lamp
   SLIT_LAMP_UPLOAD: `${API_BASE_URL}/slit-lamp/upload`,
   SLIT_LAMP_PATIENT_IMAGES: (id: string) => `${API_BASE_URL}/slit-lamp/patient/${id}`,
@@ -28,7 +29,7 @@ export const API_ENDPOINTS = {
   PATIENT_VISITS: (registrationId: string) => `${API_BASE_URL}/patients/${encodeURIComponent(registrationId)}/visits`,
   PATIENT_VISIT_SAVE: (registrationId: string) => `${API_BASE_URL}/patients/${encodeURIComponent(registrationId)}/visit`,
   PATIENT_DOCUMENTS: (registrationId: string) => `${API_BASE_URL}/patients/${encodeURIComponent(registrationId)}/documents`,
-  PATIENT_DOCUMENT_DOWNLOAD: (registrationId: string, docId: string, inline: boolean = false) => 
+  PATIENT_DOCUMENT_DOWNLOAD: (registrationId: string, docId: string, inline: boolean = false) =>
     `${API_BASE_URL}/patients/${encodeURIComponent(registrationId)}/documents/${encodeURIComponent(docId)}/download${inline ? '?inline=1' : ''}`,
 
   // Queue endpoints

@@ -3,6 +3,7 @@ import { Calendar, Stethoscope, User, Search, Activity, Users, Filter } from 'lu
 import { DoctorQueueView } from './DoctorQueueView';
 import { UnifiedOperationsHub } from './UnifiedOperationsHub';
 import API_ENDPOINTS from '../config/api';
+import { DoctorProfileView } from './DoctorProfileView';
 import { useIsLightTheme } from '../hooks/useTheme';
 
 interface DoctorPortalProps {
