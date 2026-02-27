@@ -124,15 +124,21 @@ export function DoctorProfileView({ username, userRole, onBack, onPatientSelecte
 
                 // Filter appointments for the selected day AND for this specific doctor
                 const selectedDayAppts = appointments.filter((apt: any) => {
-                    const matchesDate = apt.appointmentDate === dateKey || apt.appointmentDate?.startsWith(dateKey);
+                    const aptDate = apt.appointmentDate;
 
-                    // Filter by doctor name (username prop passed from App.tsx)
-                    // The backend stores this as doctorName
-                    const doctorMatches = username && apt.doctorName &&
-                        apt.doctorName.toLowerCase().trim() === username.toLowerCase().trim();
+                    // Lenient date matching (YYYY-MM-DD or ignoring time in ISO strings)
+                    let matchesDate = aptDate === dateKey || aptDate?.startsWith(dateKey);
 
-                    return matchesDate && doctorMatches;
+                    if (!matchesDate && aptDate) {
+                        try {
+                            matchesDate = new Date(aptDate).toISOString().startsWith(dateKey);
+                        } catch (e) { /* ignore invalid dates */ }
+                    }
+
+                    return matchesDate;
                 });
+
+                console.log(`[DoctorProfileView] Fetched ${appointments.length} total appts. Showing ${selectedDayAppts.length} for ${dateKey} for Dr. ${username}`);
 
                 // Sort by time (soonest first)
                 const sortedAppts = [...selectedDayAppts].sort((a, b) => {
@@ -180,7 +186,7 @@ export function DoctorProfileView({ username, userRole, onBack, onPatientSelecte
                     const res = await fetch(API_ENDPOINTS.PATIENTS_ALL);
                     if (res.ok) {
                         const data = await res.json();
-                        patients = data.patients || [];
+                        patients = data.patients || (Array.isArray(data) ? data : []);
                         setAllPatients(patients);
                     }
                 }
@@ -192,11 +198,16 @@ export function DoctorProfileView({ username, userRole, onBack, onPatientSelecte
                         return dateB - dateA;
                     })
                     .slice(0, 3)
-                    .map((patient: any, idx: number) => ({
-                        label: idx === 0 ? 'New Patients' : idx === 1 ? 'Existing Patients' : 'Patient On Hold',
-                        value: patient.name || patient.patientName || 'Unknown Patient',
-                        type: idx === 0 ? 'New Patient' : 'Existing Patient'
-                    }));
+                    .map((patient: any, idx: number) => {
+                        // Extract name depending on how the backend returns it
+                        const patientName = patient.name || patient.patientName || (patient.patientDetails && patient.patientDetails.name) || 'Unknown Patient';
+
+                        return {
+                            label: idx === 0 ? 'New Patients' : idx === 1 ? 'Existing Patients' : 'Patient On Hold',
+                            value: patientName,
+                            type: idx === 0 ? 'New Patient' : 'Existing Patient'
+                        };
+                    });
 
                 setMonthlyReports(sortedPatients);
             } catch (error) {

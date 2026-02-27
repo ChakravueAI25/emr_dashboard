@@ -29,7 +29,7 @@ export function PatientsListView() {
   const [filteredPatients, setFilteredPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Filter states
   const [searchName, setSearchName] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
@@ -50,13 +50,13 @@ export function PatientsListView() {
       setLoading(true);
       setError(null);
       const response = await fetch(API_ENDPOINTS.PATIENTS_ALL);
-      
+
       if (!response.ok) {
         throw new Error('Failed to fetch patients');
       }
-      
+
       const data = await response.json();
-      setPatients(data.patients || []);
+      setPatients(data.patients || (Array.isArray(data) ? data : []));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
       console.error('Error fetching patients:', err);
@@ -80,15 +80,15 @@ export function PatientsListView() {
     if (selectedDate) {
       filtered = filtered.filter(p => {
         if (!p.created_at && !p.lastUpdated) return false;
-        
+
         const dateStr = p.created_at || p.lastUpdated;
         const patientDate = new Date(dateStr);
-        
+
         // Skip invalid dates (including epoch 1970)
         if (isNaN(patientDate.getTime()) || patientDate.getFullYear() === 1970) {
           return false;
         }
-        
+
         const patientDateStr = patientDate.toDateString();
         const filterDate = new Date(selectedDate).toDateString();
         return patientDateStr === filterDate;
@@ -110,14 +110,14 @@ export function PatientsListView() {
 
   const formatDate = (dateString: string) => {
     if (!dateString) return 'Not registered';
-    
+
     const date = new Date(dateString);
-    
+
     // Check if date is valid and not the Unix epoch (1970-01-01)
     if (isNaN(date.getTime()) || date.getFullYear() === 1970) {
       return 'Not registered';
     }
-    
+
     return date.toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
@@ -127,14 +127,14 @@ export function PatientsListView() {
 
   const formatTime = (dateString: string) => {
     if (!dateString) return 'N/A';
-    
+
     const date = new Date(dateString);
-    
+
     // Check if date is valid and not the Unix epoch
     if (isNaN(date.getTime()) || date.getFullYear() === 1970) {
       return 'N/A';
     }
-    
+
     return date.toLocaleTimeString('en-US', {
       hour: '2-digit',
       minute: '2-digit',
@@ -254,11 +254,10 @@ export function PatientsListView() {
                   className={`group cursor-pointer transition-all duration-200`}
                 >
                   <div
-                    className={`bg-[#0f0f0f] border rounded-lg px-6 py-4 flex items-center justify-between hover:bg-[#151515] transition-all duration-200 ${
-                      selectedPatient?._id === patient._id
+                    className={`bg-[#0f0f0f] border rounded-lg px-6 py-4 flex items-center justify-between hover:bg-[#151515] transition-all duration-200 ${selectedPatient?._id === patient._id
                         ? 'border-[#D4A574] shadow-lg shadow-[#D4A574]/10'
                         : 'border-[#D4A574] hover:border-[#D4A574]'
-                    }`}
+                      }`}
                   >
                     {/* Patient Info */}
                     <div className="flex-1 min-w-0">
