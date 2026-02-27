@@ -316,7 +316,11 @@ export const CARD_ACCESS: Record<UserRole, string[]> = {
     'OptometryCard', 'IOPCard', 'OphthalmicInvestigationsCard', 'SystemicInvestigationsCard',
     'OphthalmologistExaminationCard', 'SpecialExaminationCard', 'MedicationPrescribedCard', 'InvestigationsSurgeriesCard'
   ],
-  patient: ['PatientDetailsCard', 'MedicationsCard'],
+  patient: [
+    'PatientDetailsCard', 'VitalSignsCard', 'AppointmentsCard', 'MedicationsCard',
+    'OptometryCard', 'IOPCard', 'OphthalmicInvestigationsCard', 'SystemicInvestigationsCard',
+    'OphthalmologistExaminationCard', 'SpecialExaminationCard', 'MedicationPrescribedCard', 'InvestigationsSurgeriesCard'
+  ],
   admin: [
     'PatientDetailsCard', 'VitalSignsCard', 'AppointmentsCard', 'MedicationsCard',
     'OptometryCard', 'IOPCard', 'OphthalmicInvestigationsCard', 'SystemicInvestigationsCard',

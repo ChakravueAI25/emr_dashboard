@@ -234,6 +234,8 @@ interface IndividualBillingViewProps {
     _id?: string;
     name?: string;
     registrationId?: string;
+    age?: string;
+    sex?: string;
     contactInfo?: {
       phone?: string;
       email?: string;
@@ -405,27 +407,39 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
   useEffect(() => {
     if (initialPatientData && initialPatientData.registrationId) {
       console.log('📋 Pre-filling patient data from appointment booking:', initialPatientData);
-      
+
       // Set the registration ID
       setCurrentRegId(initialPatientData.registrationId);
       setHasInitialPatientData(true);
-      
-      // Pre-fill patient object immediately
+
+      // Pre-fill patient object immediately with top-level properties to match component expectations
       const prefilledPatient = {
+        name: initialPatientData.name || '',
+        registrationId: initialPatientData.registrationId || '',
+        contactInfo: {
+          phone: initialPatientData.contactInfo?.phone || '',
+          email: initialPatientData.contactInfo?.email || '',
+          address: ''
+        },
+        demographics: {
+          age: (initialPatientData as any).age || '',
+          sex: (initialPatientData as any).sex || '',
+          bloodType: ''
+        },
         patientDetails: {
           name: initialPatientData.name || '',
           registrationId: initialPatientData.registrationId || '',
           phone: initialPatientData.contactInfo?.phone || '',
           email: initialPatientData.contactInfo?.email || '',
-          age: '',
-          sex: '',
+          age: (initialPatientData as any).age || '',
+          sex: (initialPatientData as any).sex || '',
           address: '',
           bloodType: '',
           allergies: '',
           emergencyContact: ''
         }
       };
-      
+
       setPatient(prefilledPatient);
       setLoading(false);
       console.log('✅ Patient data pre-filled successfully');
@@ -2476,13 +2490,13 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
                 <div className="flex-1 flex gap-2 items-start">
                   <div className="flex-1 min-w-0">
                     <h2 className="text-xl font-bold text-white truncate leading-tight">
-                      {patient?.name || 'Ram'}
+                      {patient?.name || 'No Patient'}
                     </h2>
                     <p className="text-[10px] text-[#8B8B8B] font-mono tracking-wider mt-0.5 uppercase">
-                      REG: {patient?.registrationId || '-2026-116120'}
+                      REG: {patient?.registrationId || 'N/A'}
                     </p>
                     <p className="text-[11px] text-[#D4A574] font-medium mt-1">
-                      {patient ? `${patient.demographics?.age || '24'} / ${patient.demographics?.sex || 'M'}` : '24 / M'} / {patient?.contactInfo?.phone || '789654'}
+                      {patient ? `${patient.demographics?.age || 'N/A'} / ${patient.demographics?.sex || 'N/A'}` : 'N/A'} / {patient?.contactInfo?.phone || 'N/A'}
                     </p>
                   </div>
                   <div className="w-[50px] flex-shrink-0 text-[10px] font-black text-[#5a5a5a] uppercase tracking-widest text-center mt-2.5">Qty</div>
