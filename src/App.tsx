@@ -30,6 +30,7 @@ import { MedicineManagementView } from './components/MedicineManagementView';
 import { PatientHistoryView } from './components/PatientHistoryView';
 import { DataRepairView } from './components/DataRepairView';
 import { ProfileSettings } from './components/ProfileSettings';
+import { DoctorProfileView } from './components/DoctorProfileView';
 import { DeviceInfoDisplay } from './components/DeviceInfoDisplay';
 import { PaymentSetupView } from './components/PaymentSetupView';
 import { OrganizationLoginView } from './components/OrganizationLoginView';
@@ -133,7 +134,7 @@ export default function App() {
   const [dashboardTitle, setDashboardTitle] = useState('Chakravue AI');
   const [dashboardSubtitle, setDashboardSubtitle] = useState('');
   // Default to the login view so users must sign in first
-  const [currentView, setCurrentView] = useState<'dashboard' | 'analytics' | 'billing' | 'billing-dashboard' | 'individual-billing' | 'login' | 'documents' | 'notifications' | 'settings' | 'profile-settings' | 'patients' | 'appointments' | 'appointment-queue' | 'reception-queue' | 'opd-queue' | 'doctor-queue' | 'patient-history' | 'data-repair' | 'pharmacy-billing' | 'medicine-management' | 'payment-setup' | 'organization-login' | 'admin-dashboard' | 'admin-data-management' | 'telemedicine' | 'reception-patient-view'>('login');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'analytics' | 'billing' | 'billing-dashboard' | 'individual-billing' | 'login' | 'documents' | 'notifications' | 'settings' | 'profile-settings' | 'patients' | 'appointments' | 'appointment-queue' | 'reception-queue' | 'opd-queue' | 'doctor-queue' | 'patient-history' | 'data-repair' | 'pharmacy-billing' | 'medicine-management' | 'payment-setup' | 'organization-login' | 'admin-dashboard' | 'admin-data-management' | 'telemedicine' | 'reception-patient-view' | 'doctor-profile'>('login');
 
   // --- Auth & State Management ---
   // Start unauthenticated. After login `isAuthenticated` becomes true and `userRole` is set.
@@ -698,6 +699,7 @@ export default function App() {
         iop: activePatientData.iop || {},
         ophthalmicInvestigations: activePatientData.ophthalmicInvestigations || {},
         systemicInvestigations: activePatientData.systemicInvestigations || {},
+        drugHistory: activePatientData.drugHistory || {},
         lastStage: 'opd',
         lastUpdated: new Date().toISOString()
       };
@@ -1405,15 +1407,15 @@ export default function App() {
 
   // Listen for global navigation events from ReceptionistPortal
   useEffect(() => {
-    function handleNavigateToBilling(e) {
+    function handleNavigateToBilling(e: any) {
       const { registrationId, patientData } = e.detail || {};
       console.log('📍 [App] Received global navigate-to-billing event:', { registrationId, patientData });
       setLastSavedRegistrationId(registrationId);
       setLastAppointmentPatientData(patientData);
       setCurrentView('individual-billing');
     }
-    window.addEventListener('navigate-to-billing', handleNavigateToBilling);
-    return () => window.removeEventListener('navigate-to-billing', handleNavigateToBilling);
+    window.addEventListener('navigate-to-billing' as any, handleNavigateToBilling);
+    return () => window.removeEventListener('navigate-to-billing' as any, handleNavigateToBilling);
   }, []);
 
   return (
@@ -1432,7 +1434,7 @@ export default function App() {
       <div className={`${!isFullScreen ? 'pl-16 pt-20' : ''} min-h-screen transition-all duration-300`}>
 
         {/* Back Button - In-flow at top of content (prevents overlap) */}
-        {currentView !== 'dashboard' && isAuthenticated && (
+        {currentView !== 'dashboard' && currentView !== 'doctor-profile' && isAuthenticated && (
           <div className="px-6 py-4 mb-4">
             <button
               onClick={() => handleViewChange('dashboard')}
@@ -1729,14 +1731,8 @@ export default function App() {
                 patientData={lastAppointmentPatientData}
               />
             ) : currentView === 'appointments' ? (
-              <AppointmentBookingView 
+              <AppointmentBookingView
                 onNavigateToBilling={(registrationId, patientData) => {
-                  console.log('📍 [App] AppointmentBooking callback invoked with:', { registrationId, patientData });
-                  window._debugBillingNav = {
-                    registrationId,
-                    patientData,
-                    stack: new Error().stack
-                  };
                   setLastSavedRegistrationId(registrationId);
                   setLastAppointmentPatientData(patientData);
                   setCurrentView('individual-billing');
@@ -1792,6 +1788,12 @@ export default function App() {
               <ProfileSettings username={currentUsername || undefined} role={userRole || undefined} />
             ) : currentView === 'profile-settings' ? (
               <ProfileSettings username={currentUsername || undefined} role={userRole || undefined} />
+            ) : currentView === 'doctor-profile' ? (
+              <DoctorProfileView
+                username={currentUsername || undefined}
+                userRole={userRole || undefined}
+                onBack={() => setCurrentView('dashboard')}
+              />
             ) : (
               <NotificationsView />
             )}

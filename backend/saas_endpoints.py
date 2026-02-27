@@ -49,6 +49,40 @@ master_db = master_client["chakravue_master"]
 organizations = master_db["organizations"]
 org_users = master_db["organization_users"]
 
+# Connection Cache: Reuses MongoDB clients to avoid repeated TLS handshakes (slow)
+_client_cache = {}
+
+def get_org_db(org_id: str):
+    """Retrieves or creates a cached MongoDB client for an organization."""
+    if org_id in _client_cache:
+        return _client_cache[org_id]
+        
+    org = organizations.find_one({"organization_id": org_id})
+    if not org:
+        return None
+        
+    connection_string = org.get("mongodb_connection_string")
+    db_name = org.get("mongodb_database_name", org.get("database_name"))
+    
+    try:
+        if connection_string and (".mongodb.net" in connection_string or "mongodb+srv://" in connection_string):
+            # Optimally reuse connection pool
+            client = pymongo.MongoClient(
+                connection_string, 
+                tlsCAFile=certifi.where(),
+                maxPoolSize=50,
+                serverSelectionTimeoutMS=5000
+            )
+        else:
+            client = pymongo.MongoClient("mongodb://localhost:27017")
+            
+        org_db = client[db_name]
+        _client_cache[org_id] = org_db
+        return org_db
+    except Exception as e:
+        print(f"[CACHE] ERROR creating client for {org_id}: {e}")
+        return None
+
 # ============= DATA MODELS =============
 
 class PlanDetails(BaseModel):
@@ -238,45 +272,11 @@ async def add_user_to_organization(user: UserSetup):
         if org["status"] != "active":
             raise HTTPException(status_code=400, detail="Organization is not active")
         
-        # Use MongoDB Atlas connection string instead of local
-        connection_string = org.get("mongodb_connection_string")
-        print(f"[ADD-USER] Connection string exists: {bool(connection_string)}")
-        
-        # Determine if this is a real Atlas connection or a mock/local one
-        # Real Atlas: mongodb+srv://user:pass@clusterX.xxxx.mongodb.net/database
-        # Mock: mongodb+srv://user:pass@hospitalname.mongodb.net/database (fake)
-        
-        is_real_atlas = (
-            connection_string and 
-            "mongodb+srv://" in connection_string and 
-            ".mongodb.net" in connection_string and
-            "localhost" not in connection_string
-        )
-        
-        # Check if it's actually a mock by looking for Atlas project structure
-        is_mock = is_real_atlas and not any(x in connection_string for x in ["cluster", "a1b2c", "l6uewin", "2f1"])
-        
-        if not connection_string or is_mock:
-            # Use local MongoDB for mock/testing or if no connection string
-            print("[ADD-USER] Using local MongoDB (mock response or testing)")
-            org_client = pymongo.MongoClient("mongodb://localhost:27017")
-            org_db = org_client[org["database_name"]]
-        else:
-            print(f"[ADD-USER] Connecting to real MongoDB Atlas...")
-            try:
-                # Use certifi for SSL certificates only for Atlas connections to avoid handshake errors on Windows
-                client_kwargs = {"serverSelectionTimeoutMS": 5000}
-                if "mongodb.net" in connection_string or "mongodb+srv://" in connection_string:
-                    client_kwargs["tlsCAFile"] = certifi.where()
-                
-                org_client = pymongo.MongoClient(connection_string, **client_kwargs)
-                org_db = org_client[org["mongodb_database_name"]]
-                print(f"[ADD-USER] Connected to Atlas database: {org['mongodb_database_name']}")
-            except Exception as e:
-                print(f"[ADD-USER] Atlas connection error: {e}, falling back to local MongoDB")
-                org_client = pymongo.MongoClient("mongodb://localhost:27017")
-                org_db = org_client[org["database_name"]]
-        
+        # Get organization database using cache
+        org_db = get_org_db(user.organization_id)
+        if not org_db:
+            raise HTTPException(status_code=404, detail="Organization or database not found")
+            
         # Check if user already exists
         existing_user = org_db.users.find_one({"email": user.email})
         if existing_user:
@@ -350,14 +350,10 @@ async def list_organization_users(organization_id: str):
         if not org:
             raise HTTPException(status_code=404, detail="Organization not found")
         
-        # Connect to organization database
-        connection_string = org.get("mongodb_connection_string")
-        if connection_string and ("mongodb+srv://" in connection_string or "mongodb.net" in connection_string):
-            org_client = pymongo.MongoClient(connection_string, tlsCAFile=certifi.where())
-            org_db = org_client[org.get("mongodb_database_name", org["database_name"])]
-        else:
-            org_client = pymongo.MongoClient("mongodb://localhost:27017")
-            org_db = org_client[org["database_name"]]
+        # Connect to organization database using cache
+        org_db = get_org_db(organization_id)
+        if not org_db:
+            raise HTTPException(status_code=404, detail="Database not reachable")
         
         users = list(org_db.users.find({}, {"password": 0, "_id": 0}))
         
@@ -383,14 +379,10 @@ async def organization_login(email: str, password: str, organization_id: str):
         if not org or org["status"] != "active":
             raise HTTPException(status_code=401, detail="Invalid organization")
         
-        # Connect to organization database
-        connection_string = org.get("mongodb_connection_string")
-        if connection_string and ("mongodb+srv://" in connection_string or "mongodb.net" in connection_string):
-            org_client = pymongo.MongoClient(connection_string, tlsCAFile=certifi.where())
-            org_db = org_client[org.get("mongodb_database_name", org["database_name"])]
-        else:
-            org_client = pymongo.MongoClient("mongodb://localhost:27017")
-            org_db = org_client[org["database_name"]]
+        # Connect to organization database using cache
+        org_db = get_org_db(organization_id)
+        if not org_db:
+            raise HTTPException(status_code=404, detail="Database not reachable")
         
         # Find user
         user = org_db.users.find_one({"email": email})

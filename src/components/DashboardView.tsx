@@ -65,23 +65,17 @@ export function DashboardView({ appSettings, setAppSettings, username, userRole 
 
       setLoadingDoctor(true);
       try {
-        // Fetch all users and find the current doctor
-        const res = await fetch(API_ENDPOINTS.USERS_ALL);
+        const res = await fetch(API_ENDPOINTS.USERS_ONE(username));
         if (res.ok) {
-          const data = await res.json();
-          const doctors = data.users || [];
-          const foundDoctor = doctors.find((u: any) => u.username === username);
-
-          if (foundDoctor) {
-            setDoctorInfo({
-              username: foundDoctor.username,
-              full_name: (foundDoctor.full_name && foundDoctor.full_name.startsWith('Dr.') ? foundDoctor.full_name : `Dr. ${foundDoctor.full_name || foundDoctor.username}`),
-              role: foundDoctor.role,
-              specialty: foundDoctor.specialty || 'Ophthalmologist',
-              location: foundDoctor.location || 'Hospital',
-              age: foundDoctor.age
-            });
-          }
+          const foundDoctor = await res.json();
+          setDoctorInfo({
+            username: foundDoctor.username,
+            full_name: (foundDoctor.full_name && foundDoctor.full_name.startsWith('Dr.') ? foundDoctor.full_name : `Dr. ${foundDoctor.full_name || foundDoctor.username}`),
+            role: foundDoctor.role,
+            specialty: foundDoctor.specialty || 'Ophthalmologist',
+            location: foundDoctor.location || 'Hospital',
+            age: foundDoctor.age
+          });
         }
       } catch (error) {
         console.error('Failed to fetch doctor info:', error);

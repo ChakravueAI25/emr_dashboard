@@ -200,6 +200,22 @@ export function AppointmentBookingView(props: AppointmentBookingViewProps) {
       newErrors.name = 'Patient name is required';
     }
 
+    // Check if a patient with this name already exists
+    try {
+      const response = await fetch(`${API_ENDPOINTS.PATIENTS_SEARCH}?q=${encodeURIComponent(newPatientName)}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.results && data.results.length > 0) {
+          // Patient with this name already exists
+          const existingPatient = data.results[0];
+          setError(`A patient named "${newPatientName}" already exists with ID ${existingPatient.registrationId}. Please select from search results instead.`);
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn('Could not check for duplicates:', err);
+      // Continue anyway if search fails
+    }
     // Validate phone number
     if (!newPatientPhone.trim()) {
       newErrors.phone = 'Contact number is required';
@@ -383,18 +399,21 @@ export function AppointmentBookingView(props: AppointmentBookingViewProps) {
 
       // Redirect to billing page after brief delay to show success message
       setTimeout(() => {
-        setSelectedPatient(null);
-        setSelectedDoctor(null);
-        setAppointmentDate('');
-        setSelectedTime('');
-        setPatientSearch('');
-        setNewPatientName('');
-        setNewPatientPhone('');
-        setNewPatientEmail('');
-        setNewRegistrationId(null);
-        setSuccess(null);
-        setIsNewPatient(false);
-      }, 5000);
+        console.log('🚀 Triggering redirect callback with:', { 
+          registrationId: selectedPatient.registrationId, 
+          patientName: selectedPatient.name,
+          patientData: selectedPatient 
+        });
+        if (onNavigateToBilling) {
+          console.log('✅ Calling onNavigateToBilling callback');
+          onNavigateToBilling(selectedPatient.registrationId, selectedPatient);
+        } else {
+          console.error('❌ onNavigateToBilling callback is NOT available');
+          setError('Cannot redirect to billing. Please navigate manually.');
+        }
+      }, 800);
+      
+      setLoading(false);
     } catch (err) {
       console.error('❌ Error in handleBookAppointment:', err);
       setError(err instanceof Error ? err.message : 'Failed to book appointment');
