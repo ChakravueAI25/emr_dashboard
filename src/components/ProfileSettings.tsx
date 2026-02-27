@@ -1,9 +1,5 @@
 ﻿import React, { useState } from 'react';
-<<<<<<< HEAD
-import { Camera, Save, User, Mail, Phone, Shield, Zap, CalendarPlus } from 'lucide-react';
-=======
-import { Camera, Save, User, Mail, Phone, Shield, CheckCircle2, Circle, Plus, TrendingUp, Users, Activity, IndianRupee, Pill } from 'lucide-react';
->>>>>>> 0ea76a72455c5f967acb3596c57a6939f677cd68
+import { Camera, Save, User, Mail, Phone, Shield, CheckCircle2, Circle, Plus, TrendingUp, Users, Activity, IndianRupee, Pill, Zap, CalendarPlus } from 'lucide-react';
 import { Button } from './ui/button';
 import { useIsLightTheme } from '../hooks/useTheme';
 import { UnifiedOperationsHub } from './UnifiedOperationsHub';
@@ -30,12 +26,10 @@ export function ProfileSettings({ username, role, onNavigateToDashboard, onNavig
       department: role === 'doctor' ? 'Cardiology' : 'Operations'
    });
 
-<<<<<<< HEAD
    const [activeTab, setActiveTab] = useState<PortalView>('dashboard');
    const isLight = useIsLightTheme();
    const activeCol = isLight ? '#753d3e' : 'var(--theme-accent)';
    const inactiveCol = isLight ? '#6c757d' : 'var(--theme-text-muted)';
-=======
    // Calendar state
    const [selectedDate, setSelectedDate] = useState(new Date());
    const [selectedCalendarDate, setSelectedCalendarDate] = useState<number | null>(new Date().getDate());
@@ -49,7 +43,6 @@ export function ProfileSettings({ username, role, onNavigateToDashboard, onNavig
       { id: 3, text: 'Update clinic schedule', completed: false },
    ]);
    const [newTodo, setNewTodo] = useState('');
->>>>>>> 0ea76a72455c5f967acb3596c57a6939f677cd68
 
    // Update profile when props change
    React.useEffect(() => {
@@ -68,7 +61,6 @@ export function ProfileSettings({ username, role, onNavigateToDashboard, onNavig
       setProfile(prev => ({ ...prev, [field]: value }));
    };
 
-<<<<<<< HEAD
    const navItems = [
       { id: 'dashboard' as PortalView, label: 'Operations Hub', icon: Zap, desc: 'Overview & Status' },
       { id: 'booking' as PortalView, label: 'Fix Appointment', icon: CalendarPlus, desc: 'New Patient Booking' },
@@ -78,7 +70,6 @@ export function ProfileSettings({ username, role, onNavigateToDashboard, onNavig
    console.log('ProfileSettings - Current role:', role, 'Username:', username);
 
    // Default Profile Settings for non-receptionist roles
-=======
    const generateCalendar = () => {
       const year = selectedDate.getFullYear();
       const month = selectedDate.getMonth();
@@ -115,7 +106,6 @@ export function ProfileSettings({ username, role, onNavigateToDashboard, onNavig
       setTodos(todos.map(todo => todo.id === id ? { ...todo, completed: !todo.completed } : todo));
    };
 
->>>>>>> 0ea76a72455c5f967acb3596c57a6939f677cd68
    return (
       <div className="max-w-7xl mx-auto p-8 h-[calc(100vh-5rem)] flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-700">
          {/* Header */}
