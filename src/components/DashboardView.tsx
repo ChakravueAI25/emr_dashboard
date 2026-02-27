@@ -11,6 +11,7 @@ import {
 } from "recharts";
 import { Activity } from 'lucide-react';
 import API_ENDPOINTS from '../config/api';
+import { OpdDashboardView } from './OpdDashboardView';
 
 interface DashboardViewProps {
   appSettings: AppSettings;
@@ -238,6 +239,12 @@ export function DashboardView({ appSettings, setAppSettings, username, userRole 
     followups: "#7CFF6B",
   };
 
+  // OPD-specific dashboard layout
+  if (userRole === 'opd') {
+    return <OpdDashboardView appSettings={appSettings} setAppSettings={setAppSettings} username={username} userRole={userRole} />;
+  }
+
+  // Original universal dashboard layout for other roles
   return (
     <div className="max-w-[1600px] mx-auto p-12 space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700 bg-[#050406]">
       <div className="w-full">
