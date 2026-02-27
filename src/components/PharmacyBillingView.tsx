@@ -58,6 +58,16 @@ export function PharmacyBillingView({
   const [showPinModal, setShowPinModal] = useState(false);
   const [pin, setPin] = useState('');
   const [pinError, setPinError] = useState('');
+  const [gstRate, setGstRate] = useState<number>(0);
+
+  // Payment & Insurance State
+  const [paymentMode, setPaymentMode] = useState('Cash');
+  const [isInsuranceClaim, setIsInsuranceClaim] = useState(false);
+  const [insuranceDetails, setInsuranceDetails] = useState({
+    provider: '',
+    claimNumber: '',
+    amount: 0
+  });
 
   const WAVE_OFF_REASONS = ['Staff', 'Charity', 'Camp', 'Other'];
   const STAFF_PIN = "1234"; 
@@ -212,7 +222,16 @@ export function PharmacyBillingView({
     }
   };
 
-  const cartTotal = isWaveOffMode ? 0 : cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const cartSubTotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const gstAmount = (cartSubTotal * gstRate) / 100;
+
+  // Insurance Calculation
+  const insuranceDeduction = isInsuranceClaim ? (insuranceDetails.amount || 0) : 0;
+  const totalBeforeInsurance = cartSubTotal + gstAmount;
+
+  // Final Amount Logic - Ensure non-negative
+  const cartTotal = isWaveOffMode ? 0 : Math.max(0, totalBeforeInsurance - insuranceDeduction);
+  
   const cartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   const handlePrintPharmacyBill = (billId: string, items: CartItem[], total: number) => {
@@ -276,16 +295,18 @@ export function PharmacyBillingView({
             </div>
           </div>
 
-          <div class="bill-title">PHARMACY CASH BILL</div>
+          <div class="bill-title">PHARMACY ${isWaveOffMode ? 'WAVEOFF' : paymentMode.toUpperCase()} BILL</div>
 
           <div class="patient-info">
             <div>
               <div class="info-row"><strong>Name:</strong> ${currentPatientName || 'Walk-in Patient'}</div>
               <div class="info-row"><strong>Reg ID:</strong> ${currentRegId || '-'}</div>
+              ${isInsuranceClaim ? `<div class="info-row"><strong>Insurance:</strong> ${insuranceDetails.provider}</div>` : ''}
             </div>
             <div style="text-align: right;">
               <div class="info-row"><strong>Bill No:</strong> ${billId}</div>
               <div class="info-row"><strong>Date:</strong> ${dateStr} ${timeStr}</div>
+              ${isInsuranceClaim ? `<div class="info-row"><strong>Claim #:</strong> ${insuranceDetails.claimNumber}</div>` : ''}
             </div>
           </div>
 
@@ -303,6 +324,22 @@ export function PharmacyBillingView({
               ${itemsRows}
             </tbody>
             <tfoot>
+               ${gstRate > 0 ? `
+               <tr>
+                 <td colspan="4" style="text-align: right; padding: 6px; font-weight: bold; border: 1px solid #333;">Subtotal</td>
+                 <td style="text-align: right; padding: 6px; border: 1px solid #333;">₹${cartSubTotal.toLocaleString('en-IN')}</td>
+               </tr>
+               <tr>
+                 <td colspan="4" style="text-align: right; padding: 6px; font-weight: bold; border: 1px solid #333;">GST (${gstRate}%)</td>
+                 <td style="text-align: right; padding: 6px; border: 1px solid #333;">₹${gstAmount.toLocaleString('en-IN')}</td>
+               </tr>
+               ` : ''}
+               ${isInsuranceClaim ? `
+               <tr>
+                 <td colspan="4" style="text-align: right; padding: 6px; font-weight: bold; border: 1px solid #333;">Insurance Claim</td>
+                 <td style="text-align: right; padding: 6px; border: 1px solid #333;">-₹${(insuranceDetails.amount || 0).toLocaleString('en-IN')}</td>
+               </tr>
+               ` : ''}
                <tr>
                 <td colspan="4" style="text-align: right; padding: 6px; font-weight: bold; border: 1px solid #333;">Net Total</td>
                 <td style="text-align: right; padding: 6px; font-weight: bold; border: 1px solid #333;">₹${total.toLocaleString('en-IN')}</td>
@@ -356,8 +393,13 @@ export function PharmacyBillingView({
           total: isWaveOffMode ? 0 : item.price * item.quantity
         })),
         totalAmount: cartTotal,
-        paymentMethod: isWaveOffMode ? 'WaveOff' : 'cash',
-        waveOffReason: isWaveOffMode ? finalWaveOffReason : undefined
+        gstRate: isWaveOffMode ? 0 : gstRate,
+        gstAmount: isWaveOffMode ? 0 : gstAmount,
+        subTotal: isWaveOffMode ? 0 : cartSubTotal,
+        paymentMethod: isWaveOffMode ? 'WaveOff' : paymentMode,
+        waveOffReason: isWaveOffMode ? finalWaveOffReason : undefined,
+        isInsuranceClaimed: isWaveOffMode ? false : isInsuranceClaim,
+        insuranceDetails: isWaveOffMode ? {} : insuranceDetails
       };
 
       const response = await fetch(API_ENDPOINTS.PHARMACY.CREATE_BILL, {
@@ -380,6 +422,9 @@ export function PharmacyBillingView({
       
       setWaveOffReason('');
       setCustomReason('');
+      setIsInsuranceClaim(false);
+      setInsuranceDetails({ provider: '', claimNumber: '', amount: 0 });
+      setPaymentMode('Cash');
 
       // Refresh medicines
       const refreshResponse = await fetch(API_ENDPOINTS.PHARMACY.GET_MEDICINES);
@@ -736,14 +781,101 @@ export function PharmacyBillingView({
                     {/* Subtotal */}
                     <div className="flex justify-between items-center">
                       <span className="text-[#8B8B8B] text-xs">Subtotal</span>
-                      <span className="text-white font-semibold text-xs">₹{cartTotal.toFixed(2)}</span>
+                      <span className="text-white font-semibold text-xs">₹{cartSubTotal.toFixed(2)}</span>
                     </div>
 
-                    {/* Taxes */}
+                    {/* GST Selection */}
                     <div className="flex justify-between items-center">
-                      <span className="text-[#8B8B8B] text-xs">Taxes</span>
-                      <span className="text-white font-semibold text-xs">₹0.00</span>
+                      <span className="text-[#8B8B8B] text-xs">GST</span>
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={gstRate}
+                          onChange={(e) => setGstRate(Number(e.target.value))}
+                          className="bg-[#1a1a1a] text-white text-xs border border-[#D4A574] rounded px-1 py-0.5 outline-none focus:border-[#C9955E]"
+                          disabled={isWaveOffMode}
+                        >
+                          <option value="0">0%</option>
+                          <option value="5">5%</option>
+                          <option value="10">10%</option>
+                          <option value="12">12%</option>
+                          <option value="18">18%</option>
+                        </select>
+                        <span className="text-white font-semibold text-xs">₹{gstAmount.toFixed(2)}</span>
+                      </div>
                     </div>
+
+                    {/* Payment Mode Selection */}
+                    {!isWaveOffMode && (
+                        <div className="flex justify-between items-center mt-2">
+                          <span className="text-[#8B8B8B] text-xs">Payment Mode</span>
+                          <select
+                            value={paymentMode}
+                            onChange={(e) => setPaymentMode(e.target.value)}
+                            className="bg-[#1a1a1a] text-white text-xs border border-[#D4A574] rounded px-1 py-0.5 outline-none focus:border-[#C9955E] w-[100px]"
+                          >
+                            <option value="Cash">Cash</option>
+                            <option value="UPI">UPI</option>
+                            <option value="Card">Card</option>
+                          </select>
+                        </div>
+                    )}
+
+                    {/* Insurance Section */}
+                    {!isWaveOffMode && (
+                        <div className="mt-2 pt-2 border-t border-[#D4A574]/30">
+                           <div className="flex items-center justify-between mb-1">
+                             <label className="text-[#8B8B8B] text-xs flex items-center gap-1 cursor-pointer">
+                               <input 
+                                 type="checkbox" 
+                                 checked={isInsuranceClaim}
+                                 onChange={(e) => {
+                                    setIsInsuranceClaim(e.target.checked);
+                                    if(!e.target.checked) {
+                                        setInsuranceDetails(prev => ({...prev, amount: 0}));
+                                    }
+                                 }}
+                                 className="accent-[#D4A574]"
+                               />
+                               Apply Insurance
+                             </label>
+                           </div>
+
+                           {isInsuranceClaim && (
+                             <div className="space-y-1 bg-[#1a1a1a] p-2 rounded border border-[#D4A574]/30">
+                                <input
+                                  type="text"
+                                  placeholder="Provider Name"
+                                  value={insuranceDetails.provider}
+                                  onChange={(e) => setInsuranceDetails({...insuranceDetails, provider: e.target.value})}
+                                  className="w-full bg-[#121212] border border-[#D4A574]/50 rounded px-2 py-1 text-xs text-white outline-none focus:border-[#D4A574] placeholder-[#4a4a4a]"
+                                />
+                                <div className="flex gap-1">
+                                    <input
+                                      type="text"
+                                      placeholder="Claim No."
+                                      value={insuranceDetails.claimNumber}
+                                      onChange={(e) => setInsuranceDetails({...insuranceDetails, claimNumber: e.target.value})}
+                                      className="flex-1 bg-[#121212] border border-[#D4A574]/50 rounded px-2 py-1 text-xs text-white outline-none focus:border-[#D4A574] placeholder-[#4a4a4a]"
+                                    />
+                                    <input
+                                      type="number"
+                                      placeholder="Amount"
+                                      value={insuranceDetails.amount || ''}
+                                      onChange={(e) => setInsuranceDetails({...insuranceDetails, amount:  Number(e.target.value)})}
+                                      className="w-20 bg-[#121212] border border-[#D4A574]/50 rounded px-2 py-1 text-xs text-white outline-none focus:border-[#D4A574] placeholder-[#4a4a4a]"
+                                    />
+                                </div>
+                             </div>
+                           )}
+
+                           {isInsuranceClaim && insuranceDetails.amount > 0 && (
+                             <div className="flex justify-between items-center mt-1">
+                               <span className="text-[#8B8B8B] text-xs">Insurance Coverage</span>
+                               <span className="text-red-400 font-semibold text-xs">- ₹{insuranceDetails.amount.toFixed(2)}</span>
+                             </div>
+                           )}
+                        </div>
+                    )}
 
                     {/* Divider */}
                     <div className="border-t border-[#D4A574] pt-1"></div>
