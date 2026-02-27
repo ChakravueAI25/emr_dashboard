@@ -1,9 +1,10 @@
-﻿import { useState, useEffect } from 'react';
-import { Calendar, Stethoscope, User, Search, Activity, Users, Filter } from 'lucide-react';
+﻿import { useState } from 'react';
+import { Activity, User, ArrowLeft } from 'lucide-react';
 import { DoctorQueueView } from './DoctorQueueView';
 import { UnifiedOperationsHub } from './UnifiedOperationsHub';
-import API_ENDPOINTS from '../config/api';
 import { DoctorProfileView } from './DoctorProfileView';
+import { PatientDashboard } from './dashboard/PatientDashboard';
+import { PatientData, UserRole, ROLES } from './patient';
 import { useIsLightTheme } from '../hooks/useTheme';
 
 interface DoctorPortalProps {
@@ -11,11 +12,38 @@ interface DoctorPortalProps {
     onLogout: () => void;
     onViewChange: (view: any) => void;
     onPatientSelected?: (patient: any) => void;
+    activePatientData?: PatientData | null;
+    onClearPatient?: () => void;
+    handleDoctorSave?: () => Promise<void>;
+    updateActivePatientData?: (path: (string | number)[], value: any) => void;
+    isPatientDischarged?: boolean;
+    setIsPatientDischarged?: (v: boolean) => void;
+    visitIndex?: number;
+    totalVisits?: number;
+    setVisitIndex?: React.Dispatch<React.SetStateAction<number>>;
+    handlePrevVisit?: () => void;
+    handleNextVisit?: () => void;
 }
 
 type PortalView = 'dashboard' | 'queue';
 
-export function DoctorPortal({ username, onLogout, onViewChange, onPatientSelected }: DoctorPortalProps) {
+export function DoctorPortal({
+    username,
+    onLogout,
+    onViewChange,
+    onPatientSelected,
+    activePatientData,
+    onClearPatient,
+    handleDoctorSave,
+    updateActivePatientData,
+    isPatientDischarged,
+    setIsPatientDischarged,
+    visitIndex = 0,
+    totalVisits = 1,
+    setVisitIndex,
+    handlePrevVisit,
+    handleNextVisit,
+}: DoctorPortalProps) {
     const [activeTab, setActiveTab] = useState<PortalView>('dashboard');
     const isLight = useIsLightTheme();
     const activeCol = isLight ? '#753d3e' : '#D4A574';
@@ -25,18 +53,10 @@ export function DoctorPortal({ username, onLogout, onViewChange, onPatientSelect
         { id: 'dashboard' as PortalView, label: 'Operations Hub', icon: Activity, desc: 'Patient Overview' },
     ];
 
-
-    const handleCheckIn = async (patient: any) => {
-        try {
-            if (onPatientSelected) {
-                onPatientSelected(patient);
-            }
-            setActiveTab('queue');
-        } catch (e) {
-            console.error('Check-in failed:', e);
-        }
+    const handleBackToDashboard = () => {
+        if (onClearPatient) onClearPatient();
+        setActiveTab('dashboard');
     };
-
 
     return (
         <div className="flex flex-col bg-[var(--theme-bg)] min-h-screen">
@@ -53,7 +73,6 @@ export function DoctorPortal({ username, onLogout, onViewChange, onPatientSelect
                         </h2>
                     </div>
                 </div>
-
 
                 <div className="flex items-center gap-10 ml-auto">
                     <nav className="flex items-center gap-4">
@@ -84,19 +103,55 @@ export function DoctorPortal({ username, onLogout, onViewChange, onPatientSelect
 
             {/* Main Content */}
             <div className="flex-1 flex flex-col bg-gradient-to-br from-[var(--theme-bg-gradient-from)] to-[var(--theme-bg-gradient-to)] overflow-hidden">
-                {activeTab === 'dashboard' && (
-                    <UnifiedOperationsHub
-                        username={username}
-                        userRole="doctor"
-                        onPatientSelected={onPatientSelected}
-                        onNavigate={(tab: string) => setActiveTab(tab as PortalView)}
-                    />
-                )}
+                {activePatientData ? (
+                    <div className="flex-1 p-8 overflow-y-auto scrollbar-hide">
+                        {/* Back button moved back to the content area as requested */}
+                        <div className="mb-6">
+                            <button
+                                onClick={handleBackToDashboard}
+                                className="flex items-center gap-2.5 px-6 py-3 bg-[var(--theme-accent)] text-[var(--theme-bg)] rounded-xl shadow-lg hover:opacity-90 transition-all font-bold text-sm group"
+                            >
+                                <ArrowLeft className="w-5 h-5 transition-transform duration-300 group-hover:-translate-x-1.5" />
+                                Back to Dashboard
+                            </button>
+                        </div>
 
-                {activeTab === 'queue' && (
-                    <div className="flex-1 p-8">
-                        <DoctorQueueView onPatientSelected={onPatientSelected} />
+                        <PatientDashboard
+                            activePatientData={activePatientData}
+                            userRole={'doctor' as UserRole}
+                            updateActivePatientData={updateActivePatientData || (() => { })}
+                            visitIndex={visitIndex}
+                            totalVisits={totalVisits}
+                            setVisitIndex={setVisitIndex || (() => { })}
+                            handlePrevVisit={handlePrevVisit || (() => { })}
+                            handleNextVisit={handleNextVisit || (() => { })}
+                            isPatientDischarged={isPatientDischarged || false}
+                            handleReceptionCompleteCheckIn={async () => { }}
+                            handleOPDSave={async () => { }}
+                            handleDoctorSave={handleDoctorSave || (async () => { })}
+                            setActivePatientData={() => { }}
+                            setIsPatientDischarged={setIsPatientDischarged || (() => { })}
+                            setCurrentView={onViewChange}
+                            newVisit={false}
+                        />
                     </div>
+                ) : (
+                    <>
+                        {activeTab === 'dashboard' && (
+                            <UnifiedOperationsHub
+                                username={username}
+                                userRole="doctor"
+                                onPatientSelected={onPatientSelected}
+                                onNavigate={(tab: string) => setActiveTab(tab as PortalView)}
+                            />
+                        )}
+
+                        {activeTab === 'queue' && (
+                            <div className="flex-1 p-8">
+                                <DoctorQueueView onPatientSelected={onPatientSelected} />
+                            </div>
+                        )}
+                    </>
                 )}
             </div>
         </div>

@@ -9,11 +9,13 @@ import {
 import { ArrowLeft, Calendar as CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 import API_ENDPOINTS from '../config/api';
 import { useIsLightTheme } from '../hooks/useTheme';
+import { showAlert } from './ui/AlertModal';
 
 interface DoctorProfileViewProps {
     username?: string;
     userRole?: string;
     onBack?: () => void;
+    onPatientSelected?: (patient: any) => void;
 }
 
 interface DoctorInfo {
@@ -36,7 +38,7 @@ interface Appointment {
     [key: string]: any;
 }
 
-export function DoctorProfileView({ username, userRole, onBack }: DoctorProfileViewProps) {
+export function DoctorProfileView({ username, userRole, onBack, onPatientSelected }: DoctorProfileViewProps) {
     const [doctorInfo, setDoctorInfo] = useState<DoctorInfo | null>(null);
     const [loadingDoctor, setLoadingDoctor] = useState(false);
     const [appointmentStats, setAppointmentStats] = useState({
@@ -120,12 +122,26 @@ export function DoctorProfileView({ username, userRole, onBack }: DoctorProfileV
                 // Normalize dates for filtering (local timezone safe)
                 const dateKey = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
 
-                // Filter appointments for the selected day
-                const selectedDayAppts = appointments.filter((apt: any) =>
-                    apt.appointmentDate === dateKey || apt.appointmentDate?.startsWith(dateKey)
-                );
+                // Filter appointments for the selected day AND for this specific doctor
+                const selectedDayAppts = appointments.filter((apt: any) => {
+                    const matchesDate = apt.appointmentDate === dateKey || apt.appointmentDate?.startsWith(dateKey);
 
-                setMyAppointments(selectedDayAppts.slice(0, 5));
+                    // Filter by doctor name (username prop passed from App.tsx)
+                    // The backend stores this as doctorName
+                    const doctorMatches = username && apt.doctorName &&
+                        apt.doctorName.toLowerCase().trim() === username.toLowerCase().trim();
+
+                    return matchesDate && doctorMatches;
+                });
+
+                // Sort by time (soonest first)
+                const sortedAppts = [...selectedDayAppts].sort((a, b) => {
+                    const timeA = a.appointmentTime || '00:00';
+                    const timeB = b.appointmentTime || '00:00';
+                    return timeA.localeCompare(timeB);
+                });
+
+                setMyAppointments(sortedAppts);
 
                 // Calculate stats for the selected day
                 const dayPatients = new Set(selectedDayAppts.map((apt: any) => apt.patientId || apt.patientName)).size;
@@ -374,9 +390,39 @@ export function DoctorProfileView({ username, userRole, onBack }: DoctorProfileV
                         <div className="divide-y divide-[var(--theme-accent)]/10">
                             {myAppointments.length > 0 ? (
                                 myAppointments.map((apt, idx) => (
-                                    <div key={apt._id || idx} className="py-4 flex items-center justify-between group hover:bg-[var(--theme-bg-tertiary)]/30 px-2 rounded-xl transition-colors">
-                                        <div>
-                                            <div className="font-bold text-[var(--theme-text)]">{apt.patientName || `Patient ${idx + 1}`}</div>
+                                    <div
+                                        key={apt._id || idx}
+                                        className={`py-4 flex items-center justify-between group hover:bg-[var(--theme-bg-tertiary)]/30 px-2 rounded-xl transition-all duration-300 ${onPatientSelected ? "cursor-pointer" : ""}`}
+                                        onClick={() => {
+                                            if (onPatientSelected) {
+                                                // Consolidated patient ID extraction
+                                                const idValue = apt.patientRegistrationId || apt.patientId || apt.registrationId || apt.registration_id;
+                                                const identifier = idValue || ((apt.id && !apt.id.toString().startsWith('APT-')) ? apt.id.toString() : null);
+
+                                                console.log('📍 [Profile] Navigation Triggered:', {
+                                                    clickedName: apt.patientName,
+                                                    resolvedId: identifier,
+                                                    originalApt: apt
+                                                });
+
+                                                if (identifier) {
+                                                    onPatientSelected({
+                                                        registrationId: identifier,
+                                                        patientId: identifier,
+                                                        id: identifier,
+                                                        name: apt.patientName
+                                                    });
+                                                } else {
+                                                    console.warn('❌ [Profile] No patient identifier found for selection.');
+                                                    showAlert(`Missing patient ID for ${apt.patientName || 'this record'}.`);
+                                                }
+                                            }
+                                        }}
+                                    >
+                                        <div className="flex-1">
+                                            <div className={`font-bold transition-colors duration-300 ${onPatientSelected ? "group-hover:text-[var(--theme-accent)]" : "text-[var(--theme-text)]"}`}>
+                                                {apt.patientName || `Patient ${idx + 1}`}
+                                            </div>
                                             <div className="text-xs text-[var(--theme-text-muted)] mt-1 flex items-center gap-2">
                                                 <span className="bg-[var(--theme-accent)]/10 text-[var(--theme-accent)] px-2 py-0.5 rounded-md font-bold">
                                                     {apt.appointmentTime || '--:-- '}

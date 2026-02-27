@@ -1352,20 +1352,6 @@ export default function App() {
         return;
       }
 
-      // If elsewhere and have an active patient, return to their documentation
-      if (isAuthenticated && activePatientData) {
-        if (userRole === ROLES.RECEPTIONIST) {
-          setCurrentView('reception-patient-view');
-          return;
-        } else if (userRole === 'opd') {
-          setCurrentView('opd-queue');
-          return;
-        } else if (userRole === 'doctor') {
-          setCurrentView('doctor-queue');
-          return;
-        }
-      }
-
       setCurrentView('dashboard');
       return;
     }
@@ -1507,12 +1493,8 @@ export default function App() {
                     setCurrentUsername(user.username);
                     // mark authenticated and open dashboard
                     setIsAuthenticated(true);
-                    // For receptionist and OPD, start with empty dashboard. Doctor gets default data
-                    if (roleStr === 'receptionist' || roleStr === 'opd') {
-                      setActivePatientData(null);
-                    } else {
-                      setActivePatientData(defaultPatientData);
-                    }
+                    // All users start with No active patient loaded so they see their primary dashboard/hub
+                    setActivePatientData(null);
 
                     // All users now start at the main dashboard
                     setCurrentView('dashboard');
@@ -1568,6 +1550,11 @@ export default function App() {
                   username={currentUsername || 'Doctor'}
                   onLogout={handleLogout}
                   onViewChange={setCurrentView}
+                  activePatientData={activePatientData}
+                  onClearPatient={() => {
+                    setActivePatientData(null);
+                    setIsPatientDischarged(false);
+                  }}
                   onPatientSelected={async (selected) => {
                     const regId = selected.patientRegistrationId || selected.registrationId;
                     const discharged = selected.isDischargedPatient || selected.level === 'Discharged';
@@ -1575,7 +1562,7 @@ export default function App() {
 
                     if (regId && regId !== 'Not Assigned') {
                       await loadPatientByRegistration(regId, true);
-                      setCurrentView('doctor-queue');
+                      // Stay on dashboard view - patient details shown inside DoctorPortal
                     } else {
                       setActivePatientData({
                         ...JSON.parse(JSON.stringify(defaultPatientData)),
@@ -1585,9 +1572,18 @@ export default function App() {
                           registrationId: 'Not Assigned'
                         }
                       });
-                      setCurrentView('doctor-queue');
+                      // Stay on dashboard view
                     }
                   }}
+                  handleDoctorSave={handleDoctorSave}
+                  updateActivePatientData={updateActivePatientData}
+                  isPatientDischarged={isPatientDischarged}
+                  setIsPatientDischarged={setIsPatientDischarged}
+                  visitIndex={visitIndex}
+                  totalVisits={totalVisits}
+                  setVisitIndex={setVisitIndex}
+                  handlePrevVisit={handlePrevVisit}
+                  handleNextVisit={handleNextVisit}
                 />
               ) : isAuthenticated && userRole === 'opd' ? (
                 <OpdPortal
@@ -1798,6 +1794,29 @@ export default function App() {
                 username={currentUsername || undefined}
                 userRole={userRole || undefined}
                 onBack={() => setCurrentView('dashboard')}
+                onPatientSelected={async (patient) => {
+                  const idToLoad = patient.registrationId || patient.patientId || patient.id;
+                  console.log('📍 [App] Patient selected from profile:', patient.name, 'ID:', idToLoad);
+
+                  if (!idToLoad) {
+                    showAlert('Cannot open patient: Missing ID');
+                    return;
+                  }
+
+                  try {
+                    // Clear current patient and immediately switch view to show loading state if needed
+                    setActivePatientData(null);
+
+                    // Load data with navigation prevented so we can handle it here exactly as requested
+                    await loadPatientByRegistration(idToLoad, true, true);
+
+                    console.log('📍 [App] Successfully loaded patient data for:', patient.name);
+                    setCurrentView('dashboard');
+                  } catch (error) {
+                    console.error('Failed to load patient from profile:', error);
+                    showAlert(`Failed to load details for ${patient.name}. Please try again.`);
+                  }
+                }}
               />
             ) : (
               <NotificationsView />

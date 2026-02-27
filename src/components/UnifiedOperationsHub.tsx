@@ -160,9 +160,7 @@ export function UnifiedOperationsHub({ username, userRole, onPatientSelected, on
             if (onPatientSelected) {
                 onPatientSelected(patient);
             }
-            if (onNavigate) {
-                onNavigate('queue'); // Default to queue/ops-center navigation
-            }
+            // Don't navigate away - DoctorPortal handles showing patient inline
         } catch (e) {
             console.error('Check-in failed:', e);
         }
