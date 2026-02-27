@@ -305,7 +305,7 @@ export function OpdDashboardView({ appSettings, setAppSettings, username, userRo
       <div 
         className="sticky top-0 flex-shrink-0 border-b px-8 py-4 relative overflow-hidden z-20"
         style={{
-          background: isDark ? 'var(--theme-bg-secondary)' : '#f3f3f3',
+          background: isDark ? 'var(--theme-bg-secondary)' : '#ffffff',
           borderColor: 'var(--theme-accent)'
         }}
       >
@@ -331,7 +331,7 @@ export function OpdDashboardView({ appSettings, setAppSettings, username, userRo
       {/* Content Area: Left Sidebar + Right Content */}
       <div className="flex flex-1 overflow-hidden">
         {/* LEFT SIDEBAR: 1/4 Width */}
-        <div className="w-1/4 border-r overflow-y-auto" style={{scrollbarWidth: 'none', msOverflowStyle: 'none', backgroundColor: 'var(--theme-bg)', borderColor: 'var(--theme-border)'}}>
+        <div className="w-1/4 border-r overflow-y-auto" style={{scrollbarWidth: 'none', msOverflowStyle: 'none', backgroundColor: isDark ? 'var(--theme-bg)' : '#ffffff', borderColor: 'var(--theme-border)'}}>
           <style>{`
             div[style*="scrollbarWidth"] {
               -ms-overflow-style: none;
@@ -352,14 +352,14 @@ export function OpdDashboardView({ appSettings, setAppSettings, username, userRo
               style={{
                 backgroundColor: 'var(--theme-bg-secondary)',
                 color: 'var(--theme-text)',
-                borderColor: '#E8D4B8',
+                borderColor: isDark ? '#D4A574' : '#A0522D',
                 borderWidth: '1.5px',
                 outlineColor: 'var(--theme-accent)'
               }}
             />
 
             {/* Calendar Card */}
-            <div className="sticky top-0 p-4 rounded-lg border stat-box" style={{ backgroundColor: 'var(--theme-bg-tertiary)', borderColor: '#E8D4B8', borderWidth: '1.5px' }}>
+            <div className="sticky top-0 p-4 rounded-lg border stat-box" style={{ backgroundColor: 'var(--theme-bg-tertiary)', borderColor: isDark ? '#D4A574' : '#A0522D', borderWidth: '1.5px' }}>
               <div className="text-sm mb-4 font-semibold" style={{ color: 'var(--theme-text-secondary)' }}>Calendar</div>
               
               <div className="flex flex-col gap-3">
@@ -409,7 +409,7 @@ export function OpdDashboardView({ appSettings, setAppSettings, username, userRo
         </div>
 
         {/* RIGHT CONTENT: 3/4 Width */}
-        <div className="flex-1 overflow-y-auto" style={{scrollbarWidth: 'none', msOverflowStyle: 'none', backgroundColor: 'var(--theme-bg)'}}>
+        <div className="flex-1 overflow-y-auto" style={{scrollbarWidth: 'none', msOverflowStyle: 'none', backgroundColor: isDark ? 'var(--theme-bg)' : '#ffffff'}}>
           <style>{`
             div[style*="scrollbarWidth"] {
               -ms-overflow-style: none;
@@ -424,11 +424,11 @@ export function OpdDashboardView({ appSettings, setAppSettings, username, userRo
             }
             .light-mode .stat-box:hover {
               border-color: #8B4513 !important;
-              box-shadow: 0 0 15px rgba(139, 69, 19, 0.3);
+              box-shadow: 0 0 15px rgba(139, 69, 19, 0.12);
             }
             .dark-mode .stat-box:hover {
-              border-color: #FF9500 !important;
-              box-shadow: 0 0 15px rgba(255, 149, 0, 0.3);
+              border-color: #D4A574 !important;
+              box-shadow: 0 0 15px rgba(212, 165, 116, 0.25);
             }
             .doctor-card {
               cursor: pointer;
@@ -436,32 +436,32 @@ export function OpdDashboardView({ appSettings, setAppSettings, username, userRo
             }
             .light-mode .doctor-card:hover {
               border-color: #D2B48C !important;
-              box-shadow: 0 0 12px rgba(210, 180, 140, 0.4);
-              background-color: rgba(210, 180, 140, 0.08) !important;
+              box-shadow: 0 0 12px rgba(210, 180, 140, 0.15);
+              background-color: rgba(210, 180, 140, 0.04) !important;
             }
             .dark-mode .doctor-card:hover {
-              border-color: #A1502A !important;
-              box-shadow: 0 0 12px rgba(161, 80, 42, 0.4);
-              background-color: rgba(161, 80, 42, 0.08) !important;
+              border-color: #D4A574 !important;
+              box-shadow: 0 0 12px rgba(212, 165, 116, 0.25);
+              background-color: rgba(212, 165, 116, 0.05) !important;
             }
           `}</style>
           <div className={`max-w-full p-12 space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700 ${isDark ? 'dark-mode' : 'light-mode'}`}>
         <div className="mb-4">
           <h2 className="text-lg font-semibold mb-3" style={{ color: 'var(--theme-text-secondary)' }}>Weekly Reports</h2>
           <div className="flex gap-2 flex-wrap">
-            <div className="flex-1 min-w-[110px] p-3 rounded-lg border flex flex-col items-center stat-box" style={{ backgroundColor: 'var(--theme-bg-secondary)', borderColor: '#E8D4B8', borderWidth: '1.5px' }}>
+            <div className="flex-1 min-w-[110px] p-3 rounded-lg border flex flex-col items-center stat-box" style={{ backgroundColor: 'var(--theme-bg-secondary)', borderColor: isDark ? '#D4A574' : '#A0522D', borderWidth: '1.5px' }}>
               <div className="text-xs mb-1" style={{ color: 'var(--theme-text)' }}>Total Patients</div>
               <div className="text-2xl font-bold mb-0.5" style={{ color: 'var(--theme-text-secondary)' }}>{appointmentStats.totalPatients}</div>
               <div className="text-xs" style={{ color: 'var(--theme-text-muted)' }}>Unique patients</div>
             </div>
 
-            <div className="flex-1 min-w-[110px] p-3 rounded-lg border flex flex-col items-center stat-box" style={{ backgroundColor: 'var(--theme-bg-secondary)', borderColor: '#E8D4B8', borderWidth: '1.5px' }}>
+            <div className="flex-1 min-w-[110px] p-3 rounded-lg border flex flex-col items-center stat-box" style={{ backgroundColor: 'var(--theme-bg-secondary)', borderColor: isDark ? '#D4A574' : '#A0522D', borderWidth: '1.5px' }}>
               <div className="text-xs mb-1" style={{ color: 'var(--theme-text)' }}>Appointments</div>
               <div className="text-2xl font-bold mb-0.5" style={{ color: 'var(--theme-text-secondary)' }}>{appointmentStats.appointments}</div>
               <div className="text-xs" style={{ color: 'var(--theme-text-muted)' }}>Total appointments</div>
             </div>
 
-            <div className="flex-1 min-w-[110px] p-3 rounded-lg border flex flex-col items-center stat-box" style={{ backgroundColor: 'var(--theme-bg-secondary)', borderColor: '#E8D4B8', borderWidth: '1.5px' }}>
+            <div className="flex-1 min-w-[110px] p-3 rounded-lg border flex flex-col items-center stat-box" style={{ backgroundColor: 'var(--theme-bg-secondary)', borderColor: isDark ? '#D4A574' : '#A0522D', borderWidth: '1.5px' }}>
               <div className="text-xs mb-1" style={{ color: 'var(--theme-text)' }}>Consultations</div>
               <div className="text-2xl font-bold mb-0.5" style={{ color: 'var(--theme-text-secondary)' }}>{appointmentStats.consultations}</div>
               <div className="text-xs" style={{ color: 'var(--theme-text-muted)' }}>Estimated from data</div>
@@ -470,7 +470,7 @@ export function OpdDashboardView({ appSettings, setAppSettings, username, userRo
         </div>
 
         {/* Custom OPD Cards Section - Larger Box */}
-        <div className="mb-6 p-6 rounded-2xl border min-h-[300px]" style={{ backgroundColor: 'var(--theme-bg-secondary)', borderColor: '#E8D4B8', borderWidth: '1.5px' }}>
+        <div className="mb-6 p-6 rounded-2xl border min-h-[300px]" style={{ backgroundColor: 'var(--theme-bg-secondary)', borderColor: isDark ? '#D4A574' : '#A0522D', borderWidth: '1.5px' }}>
           <div className="mb-6 flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold" style={{ color: 'var(--theme-text-secondary)' }}>OPD Operations</h2>
@@ -517,7 +517,7 @@ export function OpdDashboardView({ appSettings, setAppSettings, username, userRo
           {/* Cards Grid - 6 Cards (3 per row) */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {/* Card 1: Patient Wait List */}
-            <div className="p-4 rounded-lg border transition-all stat-box" style={{ backgroundColor: 'var(--theme-bg-tertiary)', borderColor: '#E8D4B8', borderWidth: '1.5px' }}>
+            <div className="p-4 rounded-lg border transition-all stat-box" style={{ backgroundColor: 'var(--theme-bg-tertiary)', borderColor: isDark ? '#D4A574' : '#A0522D', borderWidth: '1.5px' }}>
               <div className="text-xs mb-2" style={{ color: 'var(--theme-text)' }}>Patient Wait List</div>
               <div className="text-2xl font-bold" style={{ color: 'var(--theme-text-secondary)' }}>{todayAppointmentsCount}</div>
               <div className="mt-3 space-y-1 max-h-16 overflow-y-auto">
@@ -534,7 +534,7 @@ export function OpdDashboardView({ appSettings, setAppSettings, username, userRo
             </div>
 
             {/* Card 2: Doctor Availability */}
-            <div className="p-4 rounded-lg border transition-all stat-box" style={{ backgroundColor: 'var(--theme-bg-tertiary)', borderColor: '#E8D4B8', borderWidth: '1.5px' }}>
+            <div className="p-4 rounded-lg border transition-all stat-box" style={{ backgroundColor: 'var(--theme-bg-tertiary)', borderColor: isDark ? '#D4A574' : '#A0522D', borderWidth: '1.5px' }}>
               <div className="text-xs mb-3" style={{ color: 'var(--theme-text)' }}>Doctor Availability</div>
               
               <div className="space-y-2">
@@ -559,7 +559,7 @@ export function OpdDashboardView({ appSettings, setAppSettings, username, userRo
             </div>
 
             {/* Card 3: Total Patients */}
-            <div className="p-4 rounded-lg border transition-all stat-box" style={{ backgroundColor: 'var(--theme-bg-tertiary)', borderColor: '#E8D4B8', borderWidth: '1.5px' }}>
+            <div className="p-4 rounded-lg border transition-all stat-box" style={{ backgroundColor: 'var(--theme-bg-tertiary)', borderColor: isDark ? '#D4A574' : '#A0522D', borderWidth: '1.5px' }}>
               <div className="text-xs mb-2" style={{ color: 'var(--theme-text)' }}>Total Patients</div>
               <div className="text-2xl font-bold" style={{ color: 'var(--theme-text-secondary)' }}>
                 {operationsFilter === 'daily' && todayAppointmentsCount}
@@ -577,7 +577,7 @@ export function OpdDashboardView({ appSettings, setAppSettings, username, userRo
           {/* Cards 4 and 5 - Half Width Each */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4 mt-4">
             {/* Card 4 Expanded: Patient Details - Half Width */}
-            <div className="p-4 rounded-lg border transition-all stat-box" style={{ backgroundColor: 'var(--theme-bg-tertiary)', borderColor: '#E8D4B8', borderWidth: '1.5px', minHeight: '400px', display: 'flex', flexDirection: 'column' }}>
+            <div className="p-4 rounded-lg border transition-all stat-box" style={{ backgroundColor: 'var(--theme-bg-tertiary)', borderColor: isDark ? '#D4A574' : '#A0522D', borderWidth: '1.5px', minHeight: '400px', display: 'flex', flexDirection: 'column' }}>
               <div className="text-xs mb-3" style={{ color: 'var(--theme-text)' }}>Patient Details</div>
               
               {/* Search Filter */}
@@ -641,7 +641,7 @@ export function OpdDashboardView({ appSettings, setAppSettings, username, userRo
             </div>
 
             {/* Card 5 Expanded: To Do List - Half Width */}
-            <div className="p-4 rounded-lg border transition-all flex flex-col stat-box" style={{ backgroundColor: 'var(--theme-bg-tertiary)', borderColor: '#E8D4B8', borderWidth: '1.5px', minHeight: '400px' }}>
+            <div className="p-4 rounded-lg border transition-all flex flex-col stat-box" style={{ backgroundColor: 'var(--theme-bg-tertiary)', borderColor: isDark ? '#D4A574' : '#A0522D', borderWidth: '1.5px', minHeight: '400px' }}>
               <div className="text-xs mb-3 font-semibold" style={{ color: 'var(--theme-text)' }}>To Do List</div>
               
               {/* Add To-Do Input */}
@@ -727,7 +727,7 @@ export function OpdDashboardView({ appSettings, setAppSettings, username, userRo
         </div>
 
         {/* Chart + filters */}
-        <div className="p-4 rounded-2xl border mb-6 stat-box" style={{ backgroundColor: 'var(--theme-bg-secondary)', borderColor: '#E8D4B8', borderWidth: '1.5px' }}>
+        <div className="p-4 rounded-2xl border mb-6 stat-box" style={{ backgroundColor: 'var(--theme-bg-secondary)', borderColor: isDark ? '#D4A574' : '#A0522D', borderWidth: '1.5px' }}>
           <div className="flex items-center justify-between mb-4">
             <div>
               <div className="text-lg font-semibold" style={{ color: 'var(--theme-text-secondary)' }}>Activity Overview</div>
