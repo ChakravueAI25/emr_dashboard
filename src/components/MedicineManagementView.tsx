@@ -228,23 +228,27 @@ export function MedicineManagementView() {
   };
 
   const handleDeleteMedicine = async (medicineId: string) => {
-    if (!window.confirm('Are you sure you want to delete this medicine?')) return;
-
-    try {
-      const response = await fetch(API_ENDPOINTS.PHARMACY.UPDATE_MEDICINE(medicineId), {
-        method: 'DELETE'
-      });
-
-      if (!response.ok) throw new Error('Failed to delete medicine');
-
-      setSuccess('Medicine deleted successfully!');
-      await fetchMedicines();
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (err) {
-      console.error('Error deleting medicine:', err);
-      setError('Failed to delete medicine');
-      setTimeout(() => setError(null), 3000);
-    }
+    setConfirmDialog({
+      open: true,
+      title: 'Delete Medicine',
+      description: 'Are you sure you want to delete this medicine?',
+      onConfirm: async () => {
+        try {
+          const response = await fetch(API_ENDPOINTS.PHARMACY.UPDATE_MEDICINE(medicineId), {
+            method: 'DELETE'
+          });
+          if (!response.ok) throw new Error('Failed to delete medicine');
+          setSuccess('Medicine deleted successfully!');
+          await fetchMedicines();
+          setTimeout(() => setSuccess(null), 3000);
+        } catch (err) {
+          console.error('Error deleting medicine:', err);
+          setError('Failed to delete medicine');
+          setTimeout(() => setError(null), 3000);
+        }
+      }
+    });
+    return;
   };
 
   const filteredMedicines = medicines.filter(med =>

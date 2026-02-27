@@ -9,6 +9,8 @@ import { Sidebar } from './components/Sidebar';
 import { EditableText } from './components/EditableText';
 import Navbar from './components/Navbar';
 
+import { ReceptionistDashboardView } from './components/ReceptionistDashboardView';
+
 import { AnalyticsView } from './components/AnalyticsView';
 import { BillingView } from './components/BillingView';
 import { AlertModal, showAlert } from './components/ui/AlertModal';
@@ -132,16 +134,33 @@ const existingPatientData: PatientData = {
 export default function App() {
   const [dashboardTitle, setDashboardTitle] = useState('Chakravue AI');
   const [dashboardSubtitle, setDashboardSubtitle] = useState('');
-  // Default to the login view so users must sign in first
-  const [currentView, setCurrentView] = useState<'dashboard' | 'analytics' | 'billing' | 'billing-dashboard' | 'individual-billing' | 'login' | 'documents' | 'notifications' | 'settings' | 'profile-settings' | 'patients' | 'appointments' | 'appointment-queue' | 'reception-queue' | 'opd-queue' | 'doctor-queue' | 'patient-history' | 'data-repair' | 'pharmacy-billing' | 'medicine-management' | 'payment-setup' | 'organization-login' | 'admin-dashboard' | 'admin-data-management' | 'telemedicine' | 'reception-patient-view'>('login');
+  
+  // Persisted State Initialization
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => localStorage.getItem('is_authenticated') === 'true');
+  const [userRole, setUserRole] = useState<UserRole | null>(() => (localStorage.getItem('user_role') as UserRole) || null);
+  const [currentUsername, setCurrentUsername] = useState<string | null>(() => localStorage.getItem('current_username'));
 
-  // --- Auth & State Management ---
-  // Start unauthenticated. After login `isAuthenticated` becomes true and `userRole` is set.
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [userRole, setUserRole] = useState<UserRole | null>(null);
+  // Default to the login view, or restore from storage
+  const [currentView, setCurrentView] = useState<'dashboard' | 'analytics' | 'billing' | 'billing-dashboard' | 'individual-billing' | 'login' | 'documents' | 'notifications' | 'settings' | 'profile-settings' | 'patients' | 'appointments' | 'appointment-queue' | 'reception-queue' | 'opd-queue' | 'doctor-queue' | 'patient-history' | 'data-repair' | 'pharmacy-billing' | 'medicine-management' | 'payment-setup' | 'organization-login' | 'admin-dashboard' | 'admin-data-management' | 'telemedicine' | 'reception-patient-view'>(
+    () => (localStorage.getItem('current_view') as any) || 'login'
+  );
+
+  // Persistence Effect
+  useEffect(() => {
+    localStorage.setItem('is_authenticated', String(isAuthenticated));
+    if (userRole) localStorage.setItem('user_role', userRole);
+    if (currentUsername) localStorage.setItem('current_username', currentUsername);
+    localStorage.setItem('current_view', currentView);
+  }, [isAuthenticated, userRole, currentUsername, currentView]);
+
+  
+  // Debug: log view changes to trace why receptionist profile nav isn't showing
+  useEffect(() => {
+    console.log('[DEBUG] currentView:', currentView, 'userRole:', userRole);
+  }, [currentView, userRole]);
 
   const isFullScreen = (currentView === 'login' && !isAuthenticated) || currentView === 'organization-login' || currentView === 'payment-setup';
-  const [currentUsername, setCurrentUsername] = useState<string | null>(null);
+
   const [isNewPatientMode, setIsNewPatientMode] = useState(false);
   // Do not preload a patient before authentication
   const [activePatientData, setActivePatientData] = useState<PatientData | null>(null);
@@ -875,12 +894,19 @@ export default function App() {
   const handleLogout = () => {
     setIsAuthenticated(false);
     setUserRole(null);
+    setCurrentUsername(null);
     setActivePatientData(null);
     setIsNewPatientMode(false);
     setLastSavedRegistrationId(null);
     setCurrentView('login');
-    // Optionally: clear persisted storage if implemented in future
-    try { localStorage.removeItem('auth_token'); localStorage.removeItem('user_role'); } catch { }
+    
+    try { 
+      localStorage.removeItem('auth_token'); 
+      localStorage.removeItem('user_role'); 
+      localStorage.removeItem('is_authenticated');
+      localStorage.removeItem('current_username');
+      localStorage.removeItem('current_view');
+    } catch { }
   };
 
 
@@ -1340,6 +1366,13 @@ export default function App() {
       return;
     }
 
+    // NEW: Support profile-settings view for receptionists
+    if (view === 'profile-settings') {
+      console.log('[DEBUG] handleViewChange profile-settings - userRole:', userRole);
+      setCurrentView('profile-settings');
+      return;
+    }
+
     if (view === 'dashboard') {
       const isCurrentlyInPatientDocumentation = currentView === 'reception-patient-view' || currentView === 'opd-queue' || currentView === 'doctor-queue';
 
@@ -1405,7 +1438,7 @@ export default function App() {
 
   // Listen for global navigation events from ReceptionistPortal
   useEffect(() => {
-    function handleNavigateToBilling(e) {
+    function handleNavigateToBilling(e: any) {
       const { registrationId, patientData } = e.detail || {};
       console.log('📍 [App] Received global navigate-to-billing event:', { registrationId, patientData });
       setLastSavedRegistrationId(registrationId);
@@ -1430,20 +1463,6 @@ export default function App() {
 
       {/* Main Content */}
       <div className={`${!isFullScreen ? 'pl-16 pt-20' : ''} min-h-screen transition-all duration-300`}>
-
-        {/* Back Button - In-flow at top of content (prevents overlap) */}
-        {currentView !== 'dashboard' && isAuthenticated && (
-          <div className="px-6 py-4 mb-4">
-            <button
-              onClick={() => handleViewChange('dashboard')}
-              className="flex items-center gap-2 px-4 py-2 bg-[var(--theme-bg)] border border-[var(--theme-accent)] text-[var(--theme-accent)] rounded-lg shadow-md hover:bg-[var(--theme-accent)] hover:text-[var(--theme-bg)] transition-all duration-300 font-bold text-sm group"
-              title="Back to Dashboard"
-            >
-              <ArrowLeft className="w-5 h-5 transition-transform duration-300 group-hover:-translate-x-1" />
-              <span className="font-bold">Back to Dashboard</span>
-            </button>
-          </div>
-        )}
 
         {/* Navbar */}
         {!isFullScreen && (
@@ -1538,30 +1557,29 @@ export default function App() {
                 patientName={activePatientData?.patientDetails.name}
                 doctorName={currentUsername || 'Doctor'}
               />
-            ) : currentView === 'dashboard' ? (
-              isAuthenticated && (userRole === ROLES.RECEPTIONIST) ? (
-                <ReceptionistPortal
-                  username={currentUsername || 'Receptionist'}
-                  onLogout={handleLogout}
-                  onViewChange={setCurrentView}
-                  onPatientSelected={(selected) => {
-                    const regId = selected.patientRegistrationId || selected.registrationId;
-                    if (regId && regId !== 'Not Assigned') {
-                      loadPatientByRegistration(regId, true, true);
-                      setCurrentView('reception-patient-view');
-                    } else {
-                      setActivePatientData({
-                        ...JSON.parse(JSON.stringify(defaultPatientData)),
-                        patientDetails: {
-                          ...defaultPatientData.patientDetails,
-                          name: selected.patientName || selected.name || 'New Patient',
-                          registrationId: 'Not Assigned'
-                        }
-                      });
-                      setCurrentView('reception-patient-view');
-                    }
-                  }}
-                />
+            )  : currentView === 'dashboard' ? (
+  isAuthenticated && (userRole === ROLES.RECEPTIONIST) ? (
+    <ReceptionistDashboardView
+      username={currentUsername || 'Receptionist'}
+      onLogout={handleLogout}
+      onPatientSelected={(selected) => {
+        const regId = selected.patientRegistrationId || selected.registrationId;
+        if (regId && regId !== 'Not Assigned') {
+          loadPatientByRegistration(regId, true, true);
+          setCurrentView('reception-patient-view');
+        } else {
+          setActivePatientData({
+            ...JSON.parse(JSON.stringify(defaultPatientData)),
+            patientDetails: {
+              ...defaultPatientData.patientDetails,
+              name: selected.patientName || selected.name || 'New Patient',
+              registrationId: 'Not Assigned'
+            }
+          });
+          setCurrentView('reception-patient-view');
+        }
+      }}
+    />
               ) : isAuthenticated && userRole === 'doctor' ? (
                 <DoctorPortal
                   username={currentUsername || 'Doctor'}
@@ -1732,7 +1750,7 @@ export default function App() {
               <AppointmentBookingView 
                 onNavigateToBilling={(registrationId, patientData) => {
                   console.log('📍 [App] AppointmentBooking callback invoked with:', { registrationId, patientData });
-                  window._debugBillingNav = {
+                  (window as any)._debugBillingNav = {
                     registrationId,
                     patientData,
                     stack: new Error().stack
@@ -1741,6 +1759,7 @@ export default function App() {
                   setLastAppointmentPatientData(patientData);
                   setCurrentView('individual-billing');
                   setTimeout(() => {
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
                     console.log('📍 [App] After setCurrentView, state:', {
                       lastSavedRegistrationId,
                       lastAppointmentPatientData,
@@ -1789,9 +1808,47 @@ export default function App() {
             ) : currentView === 'data-repair' ? (
               <DataRepairView />
             ) : currentView === 'settings' ? (
-              <ProfileSettings username={currentUsername || undefined} role={userRole || undefined} />
+              <ProfileSettings 
+                username={currentUsername || undefined} 
+                role={userRole || undefined}
+                onPatientSelected={(patient) => {
+                  const regId = patient.patientRegistrationId || patient.registrationId;
+                  if (regId && regId !== 'Not Assigned') {
+                    loadPatientByRegistration(regId, true);
+                  }
+                }}
+              />
             ) : currentView === 'profile-settings' ? (
-              <ProfileSettings username={currentUsername || undefined} role={userRole || undefined} />
+              (() => {
+                console.log('[DEBUG] profile-settings view - userRole:', userRole, 'currentUsername:', currentUsername);
+                // ReceptionistProfileView removed since file was deleted
+                // if (userRole === ROLES.RECEPTIONIST) {
+                //   return (
+                //     <ReceptionistProfileView 
+                //       username={currentUsername || ''}
+                //       onLogout={handleLogout}
+                //       onPatientSelected={(patient) => {
+                //         const regId = patient.patientRegistrationId || patient.registrationId;
+                //         if (regId && regId !== 'Not Assigned') {
+                //           loadPatientByRegistration(regId, true);
+                //         }
+                //       }}
+                //     />
+                //   );
+                // }
+                return (
+                  <ProfileSettings 
+                    username={currentUsername || undefined} 
+                    role={userRole || undefined}
+                    onPatientSelected={(patient) => {
+                      const regId = patient.patientRegistrationId || patient.registrationId;
+                      if (regId && regId !== 'Not Assigned') {
+                        loadPatientByRegistration(regId, true);
+                      }
+                    }}
+                  />
+                );
+              })()
             ) : (
               <NotificationsView />
             )}

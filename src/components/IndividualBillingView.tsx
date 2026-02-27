@@ -410,41 +410,38 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
       setCurrentRegId(initialPatientData.registrationId);
       setHasInitialPatientData(true);
       
-      // Pre-fill patient object immediately
+      // Pre-fill patient object immediately to match the expected structure
       const prefilledPatient = {
-        patientDetails: {
-          name: initialPatientData.name || '',
-          registrationId: initialPatientData.registrationId || '',
+        name: initialPatientData.name || '',
+        registrationId: initialPatientData.registrationId || '',
+        demographics: {
+          age: initialPatientData.demographics?.age || '',
+          sex: initialPatientData.demographics?.sex || '',
+        },
+        contactInfo: {
           phone: initialPatientData.contactInfo?.phone || '',
           email: initialPatientData.contactInfo?.email || '',
-          age: '',
-          sex: '',
-          address: '',
-          bloodType: '',
-          allergies: '',
-          emergencyContact: ''
         }
       };
       
       setPatient(prefilledPatient);
       setLoading(false);
       console.log('✅ Patient data pre-filled successfully');
+      
+      // Scroll to top when pre-filling data
+      setTimeout(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }, 100);
     }
   }, [initialPatientData]);
 
   useEffect(() => {
     if (currentRegId && currentRegId !== 'Not Assigned') {
-      // Skip fetching if we already have pre-filled data from appointment booking
-      if (hasInitialPatientData) {
-        console.log('⏭️ Skipping fetch - using pre-filled patient data');
-        fetchWorkerQuota();
-        fetchSurgeryBills();
-      } else {
-        console.log('🔄 Fetching patient details for registration:', currentRegId);
-        fetchPatientDetails();
-        fetchWorkerQuota();
-        fetchSurgeryBills();
-      }
+      // Even if we have pre-filled data, fetch the full details to get all fields (like age/sex for existing patients)
+      console.log('🔄 Fetching patient details for registration:', currentRegId);
+      fetchPatientDetails();
+      fetchWorkerQuota();
+      fetchSurgeryBills();
     } else {
       setLoading(false);
     }
@@ -2476,13 +2473,13 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
                 <div className="flex-1 flex gap-2 items-start">
                   <div className="flex-1 min-w-0">
                     <h2 className="text-xl font-bold text-white truncate leading-tight">
-                      {patient?.name || 'Ram'}
+                      {patient?.name || 'Select Patient'}
                     </h2>
                     <p className="text-[10px] text-[#8B8B8B] font-mono tracking-wider mt-0.5 uppercase">
-                      REG: {patient?.registrationId || '-2026-116120'}
+                      REG: {patient?.registrationId || 'N/A'}
                     </p>
                     <p className="text-[11px] text-[#D4A574] font-medium mt-1">
-                      {patient ? `${patient.demographics?.age || '24'} / ${patient.demographics?.sex || 'M'}` : '24 / M'} / {patient?.contactInfo?.phone || '789654'}
+                      {patient ? `${patient.demographics?.age || 'N/A'} / ${patient.demographics?.sex || 'N/A'}` : 'N/A / N/A'} / {patient?.contactInfo?.phone || 'N/A'}
                     </p>
                   </div>
                   <div className="w-[50px] flex-shrink-0 text-[10px] font-black text-[#5a5a5a] uppercase tracking-widest text-center mt-2.5">Qty</div>

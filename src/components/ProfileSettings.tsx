@@ -1,13 +1,23 @@
 ﻿import React, { useState } from 'react';
-import { Camera, Save, User, Mail, Phone, Shield } from 'lucide-react';
+import { Camera, Save, User, Mail, Phone, Shield, Zap, CalendarPlus } from 'lucide-react';
 import { Button } from './ui/button';
+import { useIsLightTheme } from '../hooks/useTheme';
+import { UnifiedOperationsHub } from './UnifiedOperationsHub';
+import { AppointmentBookingView } from './AppointmentBookingView';
 
 interface ProfileSettingsProps {
    username?: string;
    role?: string;
+   onNavigateToDashboard?: () => void;
+   onNavigateToBooking?: () => void;
+   onPatientSelected?: (patient: any) => void;
 }
 
-export function ProfileSettings({ username, role }: ProfileSettingsProps) {
+type PortalView = 'dashboard' | 'booking';
+
+export function ProfileSettings({ username, role, onNavigateToDashboard, onNavigateToBooking, onPatientSelected }: ProfileSettingsProps) {
+      // Action bar toggle state
+      const [activeBar, setActiveBar] = useState<'operations' | 'appointment'>('operations');
    const [profile, setProfile] = useState({
       fullName: username || 'Dr. Meeraa',
       email: username ? `${username.toLowerCase().replace(/\s+/g, '.')}@chakravue.ai` : 'meeraa@chakravue.ai',
@@ -15,6 +25,11 @@ export function ProfileSettings({ username, role }: ProfileSettingsProps) {
       role: role || 'Clinical Lead',
       department: role === 'doctor' ? 'Cardiology' : 'Operations'
    });
+
+   const [activeTab, setActiveTab] = useState<PortalView>('dashboard');
+   const isLight = useIsLightTheme();
+   const activeCol = isLight ? '#753d3e' : 'var(--theme-accent)';
+   const inactiveCol = isLight ? '#6c757d' : 'var(--theme-text-muted)';
 
    // Update profile when props change
    React.useEffect(() => {
@@ -33,6 +48,98 @@ export function ProfileSettings({ username, role }: ProfileSettingsProps) {
       setProfile(prev => ({ ...prev, [field]: value }));
    };
 
+   const navItems = [
+      { id: 'dashboard' as PortalView, label: 'Operations Hub', icon: Zap, desc: 'Overview & Status' },
+      { id: 'booking' as PortalView, label: 'Fix Appointment', icon: CalendarPlus, desc: 'New Patient Booking' },
+   ];
+
+   // DEBUG: Log role for troubleshooting
+   console.log('ProfileSettings - Current role:', role, 'Username:', username);
+
+   // Receptionist Portal - Show navigation header with dashboard/booking content
+   if (role === 'receptionist') {
+      return (
+         <div className="flex flex-col bg-[#1a1a1a] min-h-screen">
+            {/* Welcome/Action Bar - pixel perfect */}
+            <div className="w-full flex items-center justify-between px-8 py-4 bg-[#1a1a1a] border-b border-[#D4A574]" style={{minHeight:'72px'}}>
+                {/* Left Section */}
+                <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-[#232323] flex items-center justify-center border border-[#D4A574]/30">
+                        <User className="w-6 h-6 text-[#D4A574]" />
+                    </div>
+                    <div className="flex flex-col">
+                        <span className="text-[10px] font-black uppercase tracking-[0.25em] text-[#D4A574] mb-1">RECEPTIONIST VIEW</span>
+                        <span className="text-lg font-bold text-white leading-none">Welcome, {username}</span>
+                    </div>
+                </div>
+                {/* Right Section */}
+                <div className="flex items-center gap-3">
+                    {/* Operations Hub Button */}
+                    <button
+                        className={`flex flex-col items-start px-6 py-3 rounded-2xl border ${activeBar === 'operations' ? 'border-[#D4A574]' : 'border-transparent'} bg-[#232323] transition-all duration-300 min-w-[180px]`}
+                        style={{boxShadow:activeBar==='operations'?'0 0 0 2px #D4A574':''}}
+                        onClick={()=>setActiveBar('operations')}
+                    >
+                        <div className="flex items-center gap-3 mb-1">
+                            <div className="w-8 h-8 rounded-xl bg-[#1a1a1a] flex items-center justify-center border border-[#D4A574]/30">
+                                {/* Lightning bolt icon */}
+                                <svg width="22" height="22" fill="none" stroke="#D4A574" strokeWidth="2.2" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 9-12h-9l2-8z"/></svg>
+                            </div>
+                            <span className="text-base font-bold text-white">Operations Hub</span>
+                        </div>
+                        <span className="text-[11px] font-medium text-[#C2BAB1]">Overview & Status</span>
+                    </button>
+                    {/* Fix Appointment Button */}
+                    <button
+                        className={`flex flex-col items-start px-6 py-3 rounded-2xl border ${activeBar === 'appointment' ? 'border-[#D4A574]' : 'border-transparent'} bg-[#232323] transition-all duration-300 min-w-[180px]`}
+                        style={{boxShadow:activeBar==='appointment'?'0 0 0 2px #D4A574':''}}
+                        onClick={()=>setActiveBar('appointment')}
+                    >
+                        <div className="flex items-center gap-3 mb-1">
+                            <div className="w-8 h-8 rounded-xl bg-[#1a1a1a] flex items-center justify-center border border-[#D4A574]/30">
+                                {/* Calendar icon */}
+                                <svg width="22" height="22" fill="none" stroke="#D4A574" strokeWidth="2.2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                            </div>
+                            <span className="text-base font-bold text-white">Fix Appointment</span>
+                        </div>
+                        <span className="text-[11px] font-medium text-[#C2BAB1]">New Patient Booking</span>
+                    </button>
+                </div>
+            </div>
+
+            {/* Main Content Workspace */}
+            <div className="flex-1 flex flex-col bg-gradient-to-br from-[var(--theme-bg-gradient-from)] to-[var(--theme-bg-gradient-to)] overflow-hidden">
+               {/* Dynamic Content Area */}
+               <div className={`flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-[#222] px-8 pb-8 pt-0 ${activeTab === 'dashboard' ? 'p-4' : ''}`}>
+                  {activeTab === 'dashboard' && (
+                     <UnifiedOperationsHub
+                        username={username || ''}
+                        userRole="receptionist"
+                        onPatientSelected={onPatientSelected}
+                        onNavigate={(tab: string) => { console.log('Navigation to', tab); }}
+                     />
+                  )}
+                  {activeTab === 'booking' && (
+                     <div className="h-full pt-6">
+                        <AppointmentBookingView 
+                           onNavigateToBilling={(registrationId, patientData) => {
+                              console.log('📍 [ProfileSettings] AppointmentBooking callback invoked with:', { registrationId, patientData });
+                              if (window && typeof window.dispatchEvent === 'function') {
+                                 window.dispatchEvent(new CustomEvent('navigate-to-billing', {
+                                    detail: { registrationId, patientData }
+                                 }));
+                              }
+                           }}
+                        />
+                     </div>
+                  )}
+               </div>
+            </div>
+         </div>
+      );
+   }
+
+   // Default Profile Settings for non-receptionist roles
    return (
       <div className="max-w-5xl mx-auto p-12 space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
          {/* Header */}

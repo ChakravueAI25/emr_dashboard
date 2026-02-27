@@ -379,6 +379,10 @@ export function AppointmentBookingView(props: AppointmentBookingViewProps) {
 
       // Redirect to billing page after brief delay to show success message
       setTimeout(() => {
+        if (onNavigateToBilling) {
+          onNavigateToBilling(selectedPatient.registrationId, selectedPatient);
+        }
+        
         setSelectedPatient(null);
         setSelectedDoctor(null);
         setAppointmentDate('');

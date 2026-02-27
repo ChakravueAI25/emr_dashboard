@@ -101,27 +101,32 @@ export const AdminDataManagementView: React.FC = () => {
   // Delete patient
   const deletePatient = async (patientId: string) => {
     if (!selectedHospital) return;
-    if (!window.confirm(`Are you sure you want to delete patient ${patientId}?`)) return;
-
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch(
-        API_ENDPOINTS.ADMIN.DELETE_PATIENT(selectedHospital.organization_id, patientId),
-        { method: 'DELETE' }
-      );
-      const data = await response.json();
-      if (data.status === 'success') {
-        // Reload patients
-        await loadPatients(selectedHospital.organization_id);
-        showAlert('Patient deleted successfully');
-      } else {
-        setError(data.detail || 'Failed to delete patient');
+    setConfirmDialog({
+      open: true,
+      title: 'Delete Patient',
+      description: `Are you sure you want to delete patient ${patientId}?`,
+      onConfirm: async () => {
+        setLoading(true);
+        setError(null);
+        try {
+          const response = await fetch(
+            API_ENDPOINTS.ADMIN.DELETE_PATIENT(selectedHospital.organization_id, patientId),
+            { method: 'DELETE' }
+          );
+          const data = await response.json();
+          if (data.status === 'success') {
+            await loadPatients(selectedHospital.organization_id);
+            showAlert('Patient deleted successfully');
+          } else {
+            setError(data.detail || 'Failed to delete patient');
+          }
+        } catch (err) {
+          setError(`Error deleting patient: ${err}`);
+        }
+        setLoading(false);
       }
-    } catch (err) {
-      setError(`Error deleting patient: ${err}`);
-    }
-    setLoading(false);
+    });
+    return;
   };
 
   // Handle hospital selection
