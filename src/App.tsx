@@ -24,7 +24,7 @@ import { ReceptionQueueView } from './components/ReceptionQueueView';
 import { ReceptionistPortal } from './components/ReceptionistPortal';
 import { OpdPortal } from './components/OpdPortal';
 import { DoctorPortal } from './components/DoctorPortal';
-import { OperationsCenter } from './components/OperationsCenter';
+import { UnifiedOperationsHub } from './components/UnifiedOperationsHub';
 import { PharmacyBillingView } from './components/PharmacyBillingView';
 import { MedicineManagementView } from './components/MedicineManagementView';
 import { PatientHistoryView } from './components/PatientHistoryView';
@@ -773,6 +773,38 @@ export default function App() {
     } catch (err: any) {
       console.error('Error saving OPD data:', err);
       showAlert(`Error saving OPD data: ${err.message || err}`);
+    }
+  };
+
+  const handleAdminSave = async () => {
+    if (!activePatientData) return;
+    const regId = (activePatientData.patientDetails && activePatientData.patientDetails.registrationId && activePatientData.patientDetails.registrationId !== 'Not Assigned')
+      ? activePatientData.patientDetails.registrationId
+      : lastSavedRegistrationId;
+
+    if (!regId) {
+      showAlert('No registration ID available.');
+      return;
+    }
+
+    try {
+      console.log('Saving patient data as Admin:', regId);
+
+      const patientResp = await fetch(API_ENDPOINTS.PATIENT(regId), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...activePatientData, name: activePatientData.patientDetails.name, registrationId: regId }),
+      });
+
+      if (!patientResp.ok) {
+        const errorText = await patientResp.text();
+        throw new Error(`Failed to save patient: ${patientResp.status} - ${errorText}`);
+      }
+      
+      showAlert('Patient data saved successfully.');
+    } catch (error: any) {
+      console.error('Error saving patient data:', error);
+      showAlert(`Error: ${error.message}`);
     }
   };
 
@@ -1616,15 +1648,26 @@ export default function App() {
                 />
               ) : (
                 <div className="h-screen overflow-hidden bg-[#050505]">
-                  <OperationsCenter
-                    compact={false}
-                    userRole={userRole}
-                    onNavigateToPatient={(patient) => {
-                      const regId = patient.patientRegistrationId || patient.registrationId;
+                  <UnifiedOperationsHub
+                    username={currentUsername || 'Admin'}
+                    userRole={userRole || undefined}
+                    onPatientSelected={async (patient) => {
+                      const regId = patient.patientRegistrationId || patient.registrationId || patient.patientId;
                       const discharged = patient.isDischargedPatient || patient.level === 'Discharged';
                       setIsPatientDischarged(discharged);
                       if (regId && regId !== 'Not Assigned') {
-                        loadPatientByRegistration(regId, true);
+                        await loadPatientByRegistration(regId, true);
+                        setCurrentView('reception-patient-view');
+                      } else {
+                        setActivePatientData({
+                          ...JSON.parse(JSON.stringify(defaultPatientData)),
+                          patientDetails: {
+                            ...defaultPatientData.patientDetails,
+                            name: patient.patientName || patient.name || 'New Patient',
+                            registrationId: 'Not Assigned'
+                          }
+                        });
+                        setCurrentView('reception-patient-view');
                       }
                     }}
                   />
@@ -1633,56 +1676,6 @@ export default function App() {
 
             ) : (currentView === 'opd-queue' || currentView === 'doctor-queue' || currentView === 'reception-patient-view') ? (
               <div className="flex overflow-hidden" style={{ height: 'calc(100vh - 5rem)' }}>
-                {/* Unified Sidebar Queue for Dashboard - Ensures patients are "Visible" once pushed */}
-                {!activePatientData && (
-                  <div
-                    className="border-r border-[#1a1a1a] bg-[#050505] flex flex-col shrink-0"
-                    style={{ width: sidebarWidth }}
-                  >
-                    {isAuthenticated && (userRole === 'opd' || userRole === 'doctor' || userRole === ROLES.RECEPTIONIST) ? (
-                      <div className="flex-1 flex flex-col overflow-y-auto p-4 custom-scrollbar">
-                        <OperationsCenter
-                          compact={true}
-                          userRole={userRole}
-                          onPatientSelected={(selected) => {
-                            const regId = selected.patientRegistrationId || selected.registrationId;
-                            // Check if patient is discharged
-                            const discharged = selected.isDischargedPatient || selected.level === 'Discharged';
-                            setIsPatientDischarged(discharged);
-                            if (regId && regId !== 'Not Assigned') {
-                              loadPatientByRegistration(regId, true);
-                            }
-                          }}
-                          onNavigateToPatient={(patient) => {
-                            const regId = patient.patientRegistrationId || patient.registrationId;
-                            // Check if patient is discharged
-                            const discharged = patient.isDischargedPatient || patient.level === 'Discharged';
-                            setIsPatientDischarged(discharged);
-                            if (regId && regId !== 'Not Assigned') {
-                              loadPatientByRegistration(regId, true);
-                            }
-                          }}
-                        />
-                      </div>
-                    ) : (
-                      <div className="p-8 text-center text-[#444]">
-                        <ClipboardList className="w-10 h-10 mx-auto mb-4 opacity-20" />
-                        <p className="text-xs uppercase tracking-widest font-bold">Standard Dashboard</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Resizer Handle */}
-                {!activePatientData && (
-                  <div
-                    className="w-1 bg-[#2a2a2a] hover:bg-[#D4A574] cursor-col-resize transition-colors z-50 flex items-center justify-center group shrink-0 select-none"
-                    onMouseDown={startResizing}
-                  >
-                    <div className="h-8 w-0.5 bg-[#444] rounded-full group-hover:bg-white transition-colors opacity-0 group-hover:opacity-100" />
-                  </div>
-                )}
-
                 {/* Main Content Area */}
                 <div className="flex-1 flex flex-col overflow-hidden">
                   <div className="flex-1 p-8 overflow-y-auto scrollbar-hide">
@@ -1699,6 +1692,7 @@ export default function App() {
                       handleReceptionCompleteCheckIn={handleReceptionCompleteCheckIn}
                       handleOPDSave={handleOPDSave}
                       handleDoctorSave={handleDoctorSave}
+                      handleAdminSave={handleAdminSave}
                       setActivePatientData={setActivePatientData}
                       setIsPatientDischarged={setIsPatientDischarged}
                       setCurrentView={setCurrentView}

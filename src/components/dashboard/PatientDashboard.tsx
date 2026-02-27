@@ -30,6 +30,7 @@ interface PatientDashboardProps {
     handleReceptionCompleteCheckIn: () => Promise<void>;
     handleOPDSave: () => Promise<void>;
     handleDoctorSave: () => Promise<void>;
+    handleAdminSave?: () => Promise<void>;
     setActivePatientData: (data: PatientData | null) => void;
     setIsPatientDischarged: (discharged: boolean) => void;
     setCurrentView: (view: any) => void;
@@ -49,6 +50,7 @@ export const PatientDashboard = ({
     handleReceptionCompleteCheckIn,
     handleOPDSave,
     handleDoctorSave,
+    handleAdminSave,
     setActivePatientData,
     setIsPatientDischarged,
     setCurrentView,
@@ -98,6 +100,12 @@ export const PatientDashboard = ({
         // - Row 3: unlocked and editable for doctor
         if (userRole === ROLES.DOCTOR) {
             // Doctor can edit everything in active documentation
+            isEditableForRole = true;
+        }
+
+        // PATIENT (Admin) specific behavior:
+        // - Can edit everything
+        if (userRole === ROLES.PATIENT) {
             isEditableForRole = true;
         }
 
@@ -195,6 +203,14 @@ export const PatientDashboard = ({
                             <CheckCircle className="w-4 h-4" /> Finalize & Discharge
                         </button>
                     )}
+                    {userRole === ROLES.PATIENT && handleAdminSave && (
+                        <button
+                            onClick={handleAdminSave}
+                            className="flex items-center gap-2 px-6 py-3 bg-[#D4A574] text-[#0a0a0a] rounded-2xl hover:bg-[#C9955E] transition-all text-sm font-bold shadow-xl"
+                        >
+                            <CheckCircle className="w-4 h-4" /> Save Changes
+                        </button>
+                    )}
 
                     {/* Close button to clear active record */}
                     <button
@@ -219,7 +235,7 @@ export const PatientDashboard = ({
             {/* When new visit: ONLY show Personal Details Card */}
             {newVisit ? (
                 <div className="grid grid-cols-4 gap-6 mb-6">
-                    {renderCard('PatientDetailsCard', PatientDetailsCard, { data: activePatientData.patientDetails, updateData: updateActivePatientData, isEditable: userRole === ROLES.RECEPTIONIST || userRole === ROLES.DOCTOR || userRole === ROLES.OPD })}
+                    {renderCard('PatientDetailsCard', PatientDetailsCard, { data: activePatientData.patientDetails, updateData: updateActivePatientData, isEditable: userRole === ROLES.RECEPTIONIST || userRole === ROLES.DOCTOR || userRole === ROLES.OPD || userRole === ROLES.PATIENT })}
                 </div>
             ) : (
                 <>
@@ -237,11 +253,11 @@ export const PatientDashboard = ({
                     )}
 
                     <div className="grid gap-6 mb-6" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
-                        {renderCard('PatientDetailsCard', PatientDetailsCard, { data: activePatientData.patientDetails, updateData: updateActivePatientData, isEditable: !isPatientDischarged && (userRole === ROLES.RECEPTIONIST || userRole === ROLES.DOCTOR || userRole === ROLES.OPD) })}
+                        {renderCard('PatientDetailsCard', PatientDetailsCard, { data: activePatientData.patientDetails, updateData: updateActivePatientData, isEditable: userRole === ROLES.PATIENT || (!isPatientDischarged && (userRole === ROLES.RECEPTIONIST || userRole === ROLES.DOCTOR || userRole === ROLES.OPD)) })}
                         {renderCard('VitalSignsCard', VitalSignsCard, {
                             data: activePatientData.presentingComplaints,
                             updateData: updateActivePatientData,
-                            isEditable: !isPatientDischarged && (userRole === ROLES.OPD || userRole === ROLES.RECEPTIONIST || userRole === ROLES.DOCTOR),
+                            isEditable: userRole === ROLES.PATIENT || (!isPatientDischarged && (userRole === ROLES.OPD || userRole === ROLES.RECEPTIONIST || userRole === ROLES.DOCTOR)),
                             // Task 2: Visit Navigation (Doctor only)
                             showVisitNav: userRole === 'doctor',
                             visitIndex: visitIndex,
@@ -251,15 +267,15 @@ export const PatientDashboard = ({
                             isViewingPastVisit: visitIndex > 0,
                             fullScreen: true
                         })}
-                        {renderCard('AppointmentsCard', AppointmentsCard, { data: activePatientData.medicalHistory, updateData: updateActivePatientData, isEditable: !isPatientDischarged && (userRole === ROLES.OPD || userRole === ROLES.RECEPTIONIST || userRole === ROLES.DOCTOR) })}
-                        {renderCard('MedicationsCard', MedicationsCard, { data: activePatientData.drugHistory, updateData: updateActivePatientData, isEditable: !isPatientDischarged && (userRole === ROLES.OPD || userRole === ROLES.RECEPTIONIST || userRole === ROLES.DOCTOR) })}
+                        {renderCard('AppointmentsCard', AppointmentsCard, { data: activePatientData.medicalHistory, updateData: updateActivePatientData, isEditable: userRole === ROLES.PATIENT || (!isPatientDischarged && (userRole === ROLES.OPD || userRole === ROLES.RECEPTIONIST || userRole === ROLES.DOCTOR)) })}
+                        {renderCard('MedicationsCard', MedicationsCard, { data: activePatientData.drugHistory, updateData: updateActivePatientData, isEditable: userRole === ROLES.PATIENT || (!isPatientDischarged && (userRole === ROLES.OPD || userRole === ROLES.RECEPTIONIST || userRole === ROLES.DOCTOR)) })}
                     </div>
 
                     <div className="grid gap-6 mb-6" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
                         {renderCard('OptometryCard', OptometryCard, {
                             data: activePatientData.optometry,
                             updateData: updateActivePatientData,
-                            isEditable: !isPatientDischarged && (userRole === ROLES.OPD || userRole === ROLES.DOCTOR),
+                            isEditable: userRole === ROLES.PATIENT || (!isPatientDischarged && (userRole === ROLES.OPD || userRole === ROLES.DOCTOR)),
                             // Task 2: Visit Navigation (Doctor only)
                             showVisitNav: userRole === 'doctor',
                             visitIndex: visitIndex,
@@ -268,16 +284,16 @@ export const PatientDashboard = ({
                             onNextVisit: () => setVisitIndex(prev => Math.max(prev - 1, 0)),
                             isViewingPastVisit: visitIndex > 0
                         })}
-                        {renderCard('IOPCard', IOPCard, { data: activePatientData.iop, updateData: updateActivePatientData, isEditable: !isPatientDischarged && (userRole === ROLES.OPD || userRole === ROLES.DOCTOR) })}
-                        {renderCard('OphthalmicInvestigationsCard', OphthalmicInvestigationsCard, { data: activePatientData.ophthalmicInvestigations, updateData: updateActivePatientData, isEditable: !isPatientDischarged && (userRole === ROLES.OPD || userRole === ROLES.DOCTOR) })}
-                        {renderCard('SystemicInvestigationsCard', SystemicInvestigationsCard, { data: activePatientData.systemicInvestigations, updateData: updateActivePatientData, isEditable: !isPatientDischarged && (userRole === ROLES.OPD || userRole === ROLES.DOCTOR) })}
+                        {renderCard('IOPCard', IOPCard, { data: activePatientData.iop, updateData: updateActivePatientData, isEditable: userRole === ROLES.PATIENT || (!isPatientDischarged && (userRole === ROLES.OPD || userRole === ROLES.DOCTOR)) })}
+                        {renderCard('OphthalmicInvestigationsCard', OphthalmicInvestigationsCard, { data: activePatientData.ophthalmicInvestigations, updateData: updateActivePatientData, isEditable: userRole === ROLES.PATIENT || (!isPatientDischarged && (userRole === ROLES.OPD || userRole === ROLES.DOCTOR)) })}
+                        {renderCard('SystemicInvestigationsCard', SystemicInvestigationsCard, { data: activePatientData.systemicInvestigations, updateData: updateActivePatientData, isEditable: userRole === ROLES.PATIENT || (!isPatientDischarged && (userRole === ROLES.OPD || userRole === ROLES.DOCTOR)) })}
                     </div>
 
                     <div className="grid gap-6 mb-6" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
-                        {renderCard('OphthalmologistExaminationCard', OphthalmologistExaminationCard, { data: activePatientData.ophthalmologistExamination, updateData: updateActivePatientData, isEditable: !isPatientDischarged && userRole === ROLES.DOCTOR })}
-                        {renderCard('SpecialExaminationCard', SpecialExaminationCard, { data: activePatientData.specialExamination, updateData: updateActivePatientData, isEditable: !isPatientDischarged && userRole === ROLES.DOCTOR })}
-                        {renderCard('MedicationPrescribedCard', MedicationPrescribedCard, { data: activePatientData.medicationPrescribed, updateData: updateActivePatientData, isEditable: !isPatientDischarged && userRole === ROLES.DOCTOR })}
-                        {renderCard('InvestigationsSurgeriesCard', InvestigationsSurgeriesCard, { data: activePatientData.investigationsSurgeries, updateData: updateActivePatientData, isEditable: !isPatientDischarged && userRole === ROLES.DOCTOR })}
+                        {renderCard('OphthalmologistExaminationCard', OphthalmologistExaminationCard, { data: activePatientData.ophthalmologistExamination, updateData: updateActivePatientData, isEditable: userRole === ROLES.PATIENT || (!isPatientDischarged && (userRole === ROLES.DOCTOR)) })}
+                        {renderCard('SpecialExaminationCard', SpecialExaminationCard, { data: activePatientData.specialExamination, updateData: updateActivePatientData, isEditable: userRole === ROLES.PATIENT || (!isPatientDischarged && (userRole === ROLES.DOCTOR)) })}
+                        {renderCard('MedicationPrescribedCard', MedicationPrescribedCard, { data: activePatientData.medicationPrescribed, updateData: updateActivePatientData, isEditable: userRole === ROLES.PATIENT || (!isPatientDischarged && (userRole === ROLES.DOCTOR)) })}
+                        {renderCard('InvestigationsSurgeriesCard', InvestigationsSurgeriesCard, { data: activePatientData.investigationsSurgeries, updateData: updateActivePatientData, isEditable: userRole === ROLES.PATIENT || (!isPatientDischarged && (userRole === ROLES.DOCTOR)) })}
                     </div>
                 </>
             )}
