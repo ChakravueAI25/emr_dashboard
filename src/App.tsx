@@ -1820,7 +1820,7 @@ export default function App() {
                 console.log('[DEBUG] profile view - userRole:', userRole, 'currentUsername:', currentUsername);
                 if (userRole === ROLES.RECEPTIONIST) {
                   return (
-                    <ReceptionistProfileView 
+                    <ReceptionistProfileView
                       username={currentUsername || ''}
                       onPatientSelected={(patient) => {
                         const regId = patient.patientRegistrationId || patient.registrationId;
