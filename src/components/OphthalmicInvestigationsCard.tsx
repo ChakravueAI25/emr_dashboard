@@ -559,60 +559,6 @@ export function OphthalmicInvestigationsCard({ data, updateData, isEditable = fa
                 </td>
               </tr>
               <tr className="bg-[#121212]">
-                <td className="p-3 text-white border-r border-[#D4A574]">K2 (D)</td>
-                <td
-                  className="p-3 text-center border-r border-[#D4A574] cursor-pointer hover:bg-[#2a2a2a] transition-colors"
-                  onClick={() => fieldRefs.current['biometry-od-k2']?.startEditing()}
-                >
-                  <EditableText
-                    ref={(el) => { fieldRefs.current['biometry-od-k2'] = el; }}
-                    value={(data?.biometry?.od?.k2 as string) || ''}
-                    onSave={(val) => setField(['biometry', 'od', 'k2'], val)}
-                    className="text-white text-center text-sm"
-                    isEditable={isEditable}
-                  />
-                </td>
-                <td
-                  className="p-3 text-center cursor-pointer hover:bg-[#2a2a2a] transition-colors"
-                  onClick={() => fieldRefs.current['biometry-os-k2']?.startEditing()}
-                >
-                  <EditableText
-                    ref={(el) => { fieldRefs.current['biometry-os-k2'] = el; }}
-                    value={(data?.biometry?.os?.k2 as string) || ''}
-                    onSave={(val) => setField(['biometry', 'os', 'k2'], val)}
-                    className="text-white text-center text-sm"
-                    isEditable={isEditable}
-                  />
-                </td>
-              </tr>
-              <tr className="bg-[#1a1a1a]">
-                <td className="p-3 text-white border-r border-[#D4A574]">W2W (mm)</td>
-                <td
-                  className="p-3 text-center border-r border-[#D4A574] cursor-pointer hover:bg-[#2a2a2a] transition-colors"
-                  onClick={() => fieldRefs.current['biometry-od-w2w']?.startEditing()}
-                >
-                  <EditableText
-                    ref={(el) => { fieldRefs.current['biometry-od-w2w'] = el; }}
-                    value={(data?.biometry?.od?.w2w as string) || ''}
-                    onSave={(val) => setField(['biometry', 'od', 'w2w'], val)}
-                    className="text-white text-center text-sm"
-                    isEditable={isEditable}
-                  />
-                </td>
-                <td
-                  className="p-3 text-center cursor-pointer hover:bg-[#2a2a2a] transition-colors"
-                  onClick={() => fieldRefs.current['biometry-os-w2w']?.startEditing()}
-                >
-                  <EditableText
-                    ref={(el) => { fieldRefs.current['biometry-os-w2w'] = el; }}
-                    value={(data?.biometry?.os?.w2w as string) || ''}
-                    onSave={(val) => setField(['biometry', 'os', 'w2w'], val)}
-                    className="text-white text-center text-sm"
-                    isEditable={isEditable}
-                  />
-                </td>
-              </tr>
-              <tr className="bg-[#121212]">
                 <td className="p-3 text-white border-r border-[#D4A574]">K1 Axis (Â°)</td>
                 <td
                   className="p-3 text-center border-r border-[#D4A574] cursor-pointer hover:bg-[#2a2a2a] transition-colors"
@@ -634,6 +580,60 @@ export function OphthalmicInvestigationsCard({ data, updateData, isEditable = fa
                     ref={(el) => { fieldRefs.current['biometry-os-k1Axis'] = el; }}
                     value={(data?.biometry?.os?.k1Axis as string) || ''}
                     onSave={(val) => setField(['biometry', 'os', 'k1Axis'], val)}
+                    className="text-white text-center text-sm"
+                    isEditable={isEditable}
+                  />
+                </td>
+              </tr>
+              <tr className="bg-[#1a1a1a]">
+                <td className="p-3 text-white border-r border-[#D4A574]">A-constant</td>
+                <td
+                  className="p-3 text-center border-r border-[#D4A574] cursor-pointer hover:bg-[#2a2a2a] transition-colors"
+                  onClick={() => fieldRefs.current['biometry-od-aConstant']?.startEditing()}
+                >
+                  <EditableText
+                    ref={(el) => { fieldRefs.current['biometry-od-aConstant'] = el; }}
+                    value={(data?.biometry?.od?.aConstant as string) || ''}
+                    onSave={(val) => setField(['biometry', 'od', 'aConstant'], val)}
+                    className="text-white text-center text-sm"
+                    isEditable={isEditable}
+                  />
+                </td>
+                <td
+                  className="p-3 text-center cursor-pointer hover:bg-[#2a2a2a] transition-colors"
+                  onClick={() => fieldRefs.current['biometry-os-aConstant']?.startEditing()}
+                >
+                  <EditableText
+                    ref={(el) => { fieldRefs.current['biometry-os-aConstant'] = el; }}
+                    value={(data?.biometry?.os?.aConstant as string) || ''}
+                    onSave={(val) => setField(['biometry', 'os', 'aConstant'], val)}
+                    className="text-white text-center text-sm"
+                    isEditable={isEditable}
+                  />
+                </td>
+              </tr>
+              <tr className="bg-[#121212]">
+                <td className="p-3 text-white border-r border-[#D4A574]">K2 (D)</td>
+                <td
+                  className="p-3 text-center border-r border-[#D4A574] cursor-pointer hover:bg-[#2a2a2a] transition-colors"
+                  onClick={() => fieldRefs.current['biometry-od-k2']?.startEditing()}
+                >
+                  <EditableText
+                    ref={(el) => { fieldRefs.current['biometry-od-k2'] = el; }}
+                    value={(data?.biometry?.od?.k2 as string) || ''}
+                    onSave={(val) => setField(['biometry', 'od', 'k2'], val)}
+                    className="text-white text-center text-sm"
+                    isEditable={isEditable}
+                  />
+                </td>
+                <td
+                  className="p-3 text-center cursor-pointer hover:bg-[#2a2a2a] transition-colors"
+                  onClick={() => fieldRefs.current['biometry-os-k2']?.startEditing()}
+                >
+                  <EditableText
+                    ref={(el) => { fieldRefs.current['biometry-os-k2'] = el; }}
+                    value={(data?.biometry?.os?.k2 as string) || ''}
+                    onSave={(val) => setField(['biometry', 'os', 'k2'], val)}
                     className="text-white text-center text-sm"
                     isEditable={isEditable}
                   />
@@ -667,6 +667,33 @@ export function OphthalmicInvestigationsCard({ data, updateData, isEditable = fa
                 </td>
               </tr>
               <tr className="bg-[#121212]">
+                <td className="p-3 text-white border-r border-[#D4A574]">A-constant</td>
+                <td
+                  className="p-3 text-center border-r border-[#D4A574] cursor-pointer hover:bg-[#2a2a2a] transition-colors"
+                  onClick={() => fieldRefs.current['biometry-od-aConstant2']?.startEditing()}
+                >
+                  <EditableText
+                    ref={(el) => { fieldRefs.current['biometry-od-aConstant2'] = el; }}
+                    value={(data?.biometry?.od?.aConstant2 as string) || ''}
+                    onSave={(val) => setField(['biometry', 'od', 'aConstant2'], val)}
+                    className="text-white text-center text-sm"
+                    isEditable={isEditable}
+                  />
+                </td>
+                <td
+                  className="p-3 text-center cursor-pointer hover:bg-[#2a2a2a] transition-colors"
+                  onClick={() => fieldRefs.current['biometry-os-aConstant2']?.startEditing()}
+                >
+                  <EditableText
+                    ref={(el) => { fieldRefs.current['biometry-os-aConstant2'] = el; }}
+                    value={(data?.biometry?.os?.aConstant2 as string) || ''}
+                    onSave={(val) => setField(['biometry', 'os', 'aConstant2'], val)}
+                    className="text-white text-center text-sm"
+                    isEditable={isEditable}
+                  />
+                </td>
+              </tr>
+              <tr className="bg-[#1a1a1a]">
                 <td className="p-3 text-white border-r border-[#D4A574]">A1 Length (mm)</td>
                 <td
                   className="p-3 text-center border-r border-[#D4A574] cursor-pointer hover:bg-[#2a2a2a] transition-colors"
@@ -688,33 +715,6 @@ export function OphthalmicInvestigationsCard({ data, updateData, isEditable = fa
                     ref={(el) => { fieldRefs.current['biometry-os-a1Length'] = el; }}
                     value={(data?.biometry?.os?.a1Length as string) || ''}
                     onSave={(val) => setField(['biometry', 'os', 'a1Length'], val)}
-                    className="text-white text-center text-sm"
-                    isEditable={isEditable}
-                  />
-                </td>
-              </tr>
-              <tr className="bg-[#1a1a1a]">
-                <td className="p-3 text-white border-r border-[#D4A574]">A-constant</td>
-                <td
-                  className="p-3 text-center border-r border-[#D4A574] cursor-pointer hover:bg-[#2a2a2a] transition-colors"
-                  onClick={() => fieldRefs.current['biometry-od-aConstant']?.startEditing()}
-                >
-                  <EditableText
-                    ref={(el) => { fieldRefs.current['biometry-od-aConstant'] = el; }}
-                    value={(data?.biometry?.od?.aConstant as string) || ''}
-                    onSave={(val) => setField(['biometry', 'od', 'aConstant'], val)}
-                    className="text-white text-center text-sm"
-                    isEditable={isEditable}
-                  />
-                </td>
-                <td
-                  className="p-3 text-center cursor-pointer hover:bg-[#2a2a2a] transition-colors"
-                  onClick={() => fieldRefs.current['biometry-os-aConstant']?.startEditing()}
-                >
-                  <EditableText
-                    ref={(el) => { fieldRefs.current['biometry-os-aConstant'] = el; }}
-                    value={(data?.biometry?.os?.aConstant as string) || ''}
-                    onSave={(val) => setField(['biometry', 'os', 'aConstant'], val)}
                     className="text-white text-center text-sm"
                     isEditable={isEditable}
                   />
@@ -775,33 +775,6 @@ export function OphthalmicInvestigationsCard({ data, updateData, isEditable = fa
                 </td>
               </tr>
               <tr className="bg-[#121212]">
-                <td className="p-3 text-white border-r border-[#D4A574]">ACD (mm)</td>
-                <td
-                  className="p-3 text-center border-r border-[#D4A574] cursor-pointer hover:bg-[#2a2a2a] transition-colors"
-                  onClick={() => fieldRefs.current['biometry-od-acd']?.startEditing()}
-                >
-                  <EditableText
-                    ref={(el) => { fieldRefs.current['biometry-od-acd'] = el; }}
-                    value={(data?.biometry?.od?.acd as string) || ''}
-                    onSave={(val) => setField(['biometry', 'od', 'acd'], val)}
-                    className="text-white text-center text-sm"
-                    isEditable={isEditable}
-                  />
-                </td>
-                <td
-                  className="p-3 text-center cursor-pointer hover:bg-[#2a2a2a] transition-colors"
-                  onClick={() => fieldRefs.current['biometry-os-acd']?.startEditing()}
-                >
-                  <EditableText
-                    ref={(el) => { fieldRefs.current['biometry-os-acd'] = el; }}
-                    value={(data?.biometry?.os?.acd as string) || ''}
-                    onSave={(val) => setField(['biometry', 'os', 'acd'], val)}
-                    className="text-white text-center text-sm"
-                    isEditable={isEditable}
-                  />
-                </td>
-              </tr>
-              <tr className="bg-[#1a1a1a]">
                 <td className="p-3 text-white border-r border-[#D4A574]">Lens Thickness (mm)</td>
                 <td
                   className="p-3 text-center border-r border-[#D4A574] cursor-pointer hover:bg-[#2a2a2a] transition-colors"
@@ -823,6 +796,33 @@ export function OphthalmicInvestigationsCard({ data, updateData, isEditable = fa
                     ref={(el) => { fieldRefs.current['biometry-os-lensThickness'] = el; }}
                     value={(data?.biometry?.os?.lensThickness as string) || ''}
                     onSave={(val) => setField(['biometry', 'os', 'lensThickness'], val)}
+                    className="text-white text-center text-sm"
+                    isEditable={isEditable}
+                  />
+                </td>
+              </tr>
+              <tr className="bg-[#1a1a1a]">
+                <td className="p-3 text-white border-r border-[#D4A574]">W2W (mm)</td>
+                <td
+                  className="p-3 text-center border-r border-[#D4A574] cursor-pointer hover:bg-[#2a2a2a] transition-colors"
+                  onClick={() => fieldRefs.current['biometry-od-w2w']?.startEditing()}
+                >
+                  <EditableText
+                    ref={(el) => { fieldRefs.current['biometry-od-w2w'] = el; }}
+                    value={(data?.biometry?.od?.w2w as string) || ''}
+                    onSave={(val) => setField(['biometry', 'od', 'w2w'], val)}
+                    className="text-white text-center text-sm"
+                    isEditable={isEditable}
+                  />
+                </td>
+                <td
+                  className="p-3 text-center cursor-pointer hover:bg-[#2a2a2a] transition-colors"
+                  onClick={() => fieldRefs.current['biometry-os-w2w']?.startEditing()}
+                >
+                  <EditableText
+                    ref={(el) => { fieldRefs.current['biometry-os-w2w'] = el; }}
+                    value={(data?.biometry?.os?.w2w as string) || ''}
+                    onSave={(val) => setField(['biometry', 'os', 'w2w'], val)}
                     className="text-white text-center text-sm"
                     isEditable={isEditable}
                   />

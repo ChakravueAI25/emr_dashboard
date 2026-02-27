@@ -216,6 +216,26 @@ export function AppointmentBookingView(props: AppointmentBookingViewProps) {
       console.warn('Could not check for duplicates:', err);
       // Continue anyway if search fails
     }
+    // Validate phone number
+    if (!newPatientPhone.trim()) {
+      newErrors.phone = 'Contact number is required';
+    } else {
+      // Phone validation: 10 digits excluding +91, starting digits must be 6, 7, 8, or 9
+      const phoneRegex = /^(\+91[-\s]?)?[6789]\d{9}$/;
+      const cleanPhone = newPatientPhone.replace(/[\s-]/g, '');
+      if (!phoneRegex.test(cleanPhone)) {
+        newErrors.phone = 'Valid 10-digit number required (e.g., 9876543210 or +919876543210)';
+      }
+    }
+
+    // If there are field errors, set them and return
+    if (Object.keys(newErrors).length > 0) {
+      setFieldErrors(newErrors);
+      return;
+    }
+
+    // Clear field errors
+    setFieldErrors({});
 
     const regId = generateNewRegistrationId();
     setNewRegistrationId(regId);
