@@ -187,73 +187,75 @@ export function AnalyticsView({ registrationId }: AnalyticsViewProps) {
       {/* Charts Row 1 */}
       <div className="grid grid-cols-2 gap-6">
         {/* IOP Trend Chart */}
-        {iopData.length > 0 ? (
-          <div className="bg-[#121212] border border-[#D4A574] rounded-lg p-6 shadow-lg shadow-[#D4A574]/10">
-            <div className="flex items-center gap-2 mb-4">
-              <Activity className="w-5 h-5 text-[#D4A574]" />
-              <h3 className="text-white">Intraocular Pressure (IOP) Trend</h3>
+        <div className="bg-[#121212] border border-[#D4A574] rounded-lg p-6 shadow-lg shadow-[#D4A574]/10">
+          <div className="flex items-center gap-2 mb-4">
+            <Activity className="w-5 h-5 text-[#D4A574]" />
+            <h3 className="text-white">Intraocular Pressure (IOP) Trend</h3>
+          </div>
+          {iopData.length > 0 ? (
+            <>
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={iopData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#2a2a2a" />
+                  <XAxis
+                    dataKey="date"
+                    stroke="#8B8B8B"
+                    style={{ fontSize: '11px' }}
+                  />
+                  <YAxis
+                    stroke="#8B8B8B"
+                    style={{ fontSize: '11px' }}
+                    domain={[0, 30]}
+                  />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Legend
+                    wrapperStyle={{ fontSize: '11px' }}
+                    iconType="circle"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="od"
+                    stroke="#D4A574"
+                    strokeWidth={2}
+                    name="OD (Right Eye)"
+                    dot={{ fill: '#D4A574', r: 4 }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="os"
+                    stroke="#EF4444"
+                    strokeWidth={2}
+                    name="OS (Left Eye)"
+                    dot={{ fill: '#EF4444', r: 4 }}
+                  />
+                  {/* Reference line for high IOP */}
+                  <Line
+                    type="monotone"
+                    dataKey={() => 21}
+                    stroke="#FFA726"
+                    strokeWidth={1}
+                    strokeDasharray="5 5"
+                    name="Upper Normal (21)"
+                    dot={false}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+              <p className="text-[#8B8B8B] text-xs mt-2">Note: Values above 21 mmHg (orange line) require attention</p>
+            </>
+          ) : (
+            <div className="flex items-center justify-center h-[300px]">
+              <p className="text-[#8B8B8B]">No IOP data available</p>
             </div>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={iopData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#2a2a2a" />
-                <XAxis
-                  dataKey="date"
-                  stroke="#8B8B8B"
-                  style={{ fontSize: '11px' }}
-                />
-                <YAxis
-                  stroke="#8B8B8B"
-                  style={{ fontSize: '11px' }}
-                  domain={[0, 30]}
-                />
-                <Tooltip content={<CustomTooltip />} />
-                <Legend
-                  wrapperStyle={{ fontSize: '11px' }}
-                  iconType="circle"
-                />
-                <Line
-                  type="monotone"
-                  dataKey="od"
-                  stroke="#D4A574"
-                  strokeWidth={2}
-                  name="OD (Right Eye)"
-                  dot={{ fill: '#D4A574', r: 4 }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="os"
-                  stroke="#EF4444"
-                  strokeWidth={2}
-                  name="OS (Left Eye)"
-                  dot={{ fill: '#EF4444', r: 4 }}
-                />
-                {/* Reference line for high IOP */}
-                <Line
-                  type="monotone"
-                  dataKey={() => 21}
-                  stroke="#FFA726"
-                  strokeWidth={1}
-                  strokeDasharray="5 5"
-                  name="Upper Normal (21)"
-                  dot={false}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-            <p className="text-[#8B8B8B] text-xs mt-2">Note: Values above 21 mmHg (orange line) require attention</p>
-          </div>
-        ) : (
-          <div className="bg-[#121212] border border-[#D4A574] rounded-lg p-6 shadow-lg shadow-[#D4A574]/10 flex items-center justify-center">
-            <p className="text-[#8B8B8B]">No IOP data available</p>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Patient Visits Chart - Enhanced Styling */}
-        {visitsData.length > 0 ? (
-          <div className="bg-[#121212] border border-[#D4A574] rounded-lg p-6 shadow-lg shadow-[#D4A574]/10">
-            <div className="flex items-center gap-2 mb-4">
-              <Calendar className="w-5 h-5 text-[#D4A574]" />
-              <h3 className="text-white">Patient Visits by Month</h3>
-            </div>
+        <div className="bg-[#121212] border border-[#D4A574] rounded-lg p-6 shadow-lg shadow-[#D4A574]/10">
+          <div className="flex items-center gap-2 mb-4">
+            <Calendar className="w-5 h-5 text-[#D4A574]" />
+            <h3 className="text-white">Patient Visits by Month</h3>
+          </div>
+          {visitsData.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
               <ComposedChart data={visitsData} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
                 <defs>
@@ -292,149 +294,161 @@ export function AnalyticsView({ registrationId }: AnalyticsViewProps) {
                 />
               </ComposedChart>
             </ResponsiveContainer>
-          </div>
-        ) : (
-          <div className="bg-[#121212] border border-[#D4A574] rounded-lg p-6 shadow-lg shadow-[#D4A574]/10 flex items-center justify-center">
-            <p className="text-[#8B8B8B]">No visit data available</p>
-          </div>
-        )}
+          ) : (
+            <div className="flex items-center justify-center h-[300px]">
+              <p className="text-[#8B8B8B]">No visit data available</p>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Charts Row 2 - Clinical Metrics */}
       <div className="grid grid-cols-2 gap-6">
         {/* Procedures Timeline Chart (Patient-Specific) */}
-        {isPatientView && proceduresData.length > 0 && (
+        {isPatientView && (
           <div className="bg-[#121212] border border-[#D4A574] rounded-lg p-6 shadow-lg shadow-[#D4A574]/10">
             <div className="flex items-center gap-2 mb-4">
               <Activity className="w-5 h-5 text-[#D4A574]" />
               <h3 className="text-white">Procedures Timeline</h3>
             </div>
-            <ResponsiveContainer width="100%" height={300}>
-              <ComposedChart data={proceduresData.map((p, i) => ({ ...p, procCount: p.procedures?.length || 0, index: i }))}
-                margin={{ top: 20, right: 30, left: 0, bottom: 20 }}>
-                <defs>
-                  <linearGradient id="procGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#8B5CF6" stopOpacity={0.6} />
-                    <stop offset="100%" stopColor="#8B5CF6" stopOpacity={0.1} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#2a2a2a" vertical={false} />
-                <XAxis
-                  dataKey="date"
-                  stroke="#8B8B8B"
-                  style={{ fontSize: '10px' }}
-                  tick={{ fill: '#8B8B8B' }}
-                />
-                <YAxis
-                  stroke="#8B8B8B"
-                  style={{ fontSize: '11px' }}
-                  tick={{ fill: '#8B8B8B' }}
-                />
-                <Tooltip
-                  content={({ active, payload }: any) => {
-                    if (active && payload && payload.length) {
-                      const data = payload[0].payload;
-                      return (
-                        <div className="bg-[#1a1a1a] border border-[#D4A574] rounded-lg p-3 shadow-lg shadow-[#D4A574]/20">
-                          <p className="text-[#D4A574] text-xs font-semibold">{data.date}</p>
-                          <p className="text-white text-xs mt-1">
-                            {data.procedures && data.procedures.length > 0
-                              ? data.procedures.join(', ')
-                              : 'No procedures'}
-                          </p>
-                          <p className="text-[#8B8B8B] text-xs mt-1">Count: {data.procCount}</p>
-                        </div>
-                      );
-                    }
-                    return null;
-                  }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="procCount"
-                  fill="url(#procGradient)"
-                  stroke="#8B5CF6"
-                  strokeWidth={2}
-                  name="Procedures"
-                  isAnimationActive={true}
-                />
-              </ComposedChart>
-            </ResponsiveContainer>
+            {proceduresData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <ComposedChart data={proceduresData.map((p, i) => ({ ...p, procCount: p.procedures?.length || 0, index: i }))}
+                  margin={{ top: 20, right: 30, left: 0, bottom: 20 }}>
+                  <defs>
+                    <linearGradient id="procGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#8B5CF6" stopOpacity={0.6} />
+                      <stop offset="100%" stopColor="#8B5CF6" stopOpacity={0.1} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#2a2a2a" vertical={false} />
+                  <XAxis
+                    dataKey="date"
+                    stroke="#8B8B8B"
+                    style={{ fontSize: '10px' }}
+                    tick={{ fill: '#8B8B8B' }}
+                  />
+                  <YAxis
+                    stroke="#8B8B8B"
+                    style={{ fontSize: '11px' }}
+                    tick={{ fill: '#8B8B8B' }}
+                  />
+                  <Tooltip
+                    content={({ active, payload }: any) => {
+                      if (active && payload && payload.length) {
+                        const data = payload[0].payload;
+                        return (
+                          <div className="bg-[#1a1a1a] border border-[#D4A574] rounded-lg p-3 shadow-lg shadow-[#D4A574]/20">
+                            <p className="text-[#D4A574] text-xs font-semibold">{data.date}</p>
+                            <p className="text-white text-xs mt-1">
+                              {data.procedures && data.procedures.length > 0
+                                ? data.procedures.join(', ')
+                                : 'No procedures'}
+                            </p>
+                            <p className="text-[#8B8B8B] text-xs mt-1">Count: {data.procCount}</p>
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="procCount"
+                    fill="url(#procGradient)"
+                    stroke="#8B5CF6"
+                    strokeWidth={2}
+                    name="Procedures"
+                    isAnimationActive={true}
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-[300px]">
+                <p className="text-[#8B8B8B]">No procedure data available</p>
+              </div>
+            )}
             <p className="text-[#8B8B8B] text-xs mt-3">Procedure count by visit date</p>
           </div>
         )}
 
         {/* Visual Acuity History Chart */}
-        {isPatientView && visualAcuityData.length > 0 && (
+        {isPatientView && (
           <div className="bg-[#121212] border border-[#D4A574] rounded-lg p-6 shadow-lg shadow-[#D4A574]/10">
             <div className="flex items-center gap-2 mb-4">
               <Eye className="w-5 h-5 text-[#D4A574]" />
               <h3 className="text-white">Visual Acuity History</h3>
             </div>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={visualAcuityData} margin={{ top: 20, right: 30, left: 0, bottom: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#2a2a2a" />
-                <XAxis
-                  dataKey="date"
-                  stroke="#8B8B8B"
-                  style={{ fontSize: '11px' }}
-                  tick={{ fill: '#8B8B8B' }}
-                />
-                <YAxis
-                  stroke="#8B8B8B"
-                  style={{ fontSize: '11px' }}
-                  tick={{ fill: '#8B8B8B' }}
-                  domain={[0, 1]}
-                />
-                <Tooltip
-                  content={({ active, payload }: any) => {
-                    if (active && payload && payload.length) {
-                      const data = payload[0].payload;
-                      return (
-                        <div className="bg-[#1a1a1a] border border-[#D4A574] rounded-lg p-3 shadow-lg shadow-[#D4A574]/20">
-                          <p className="text-[#D4A574] text-xs font-semibold">{data.date}</p>
-                          {payload.map((entry: any, index: number) => (
-                            <p key={index} className="text-white text-xs mt-1">
-                              {entry.name}: <span style={{ color: entry.color }}>{entry.value?.toFixed(2) || '--'}</span>
-                            </p>
-                          ))}
-                        </div>
-                      );
-                    }
-                    return null;
-                  }}
-                />
-                <Legend
-                  wrapperStyle={{ fontSize: '11px' }}
-                  iconType="circle"
-                />
-                <Line
-                  type="monotone"
-                  dataKey="od"
-                  stroke="#D4A574"
-                  strokeWidth={2}
-                  name="OD (Right Eye)"
-                  dot={{ fill: '#D4A574', r: 4 }}
-                  connectNulls
-                />
-                <Line
-                  type="monotone"
-                  dataKey="os"
-                  stroke="#4CAF50"
-                  strokeWidth={2}
-                  name="OS (Left Eye)"
-                  dot={{ fill: '#4CAF50', r: 4 }}
-                  connectNulls
-                />
-              </LineChart>
-            </ResponsiveContainer>
+            {visualAcuityData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={visualAcuityData} margin={{ top: 20, right: 30, left: 0, bottom: 20 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#2a2a2a" />
+                  <XAxis
+                    dataKey="date"
+                    stroke="#8B8B8B"
+                    style={{ fontSize: '11px' }}
+                    tick={{ fill: '#8B8B8B' }}
+                  />
+                  <YAxis
+                    stroke="#8B8B8B"
+                    style={{ fontSize: '11px' }}
+                    tick={{ fill: '#8B8B8B' }}
+                    domain={[0, 1]}
+                  />
+                  <Tooltip
+                    content={({ active, payload }: any) => {
+                      if (active && payload && payload.length) {
+                        const data = payload[0].payload;
+                        return (
+                          <div className="bg-[#1a1a1a] border border-[#D4A574] rounded-lg p-3 shadow-lg shadow-[#D4A574]/20">
+                            <p className="text-[#D4A574] text-xs font-semibold">{data.date}</p>
+                            {payload.map((entry: any, index: number) => (
+                              <p key={index} className="text-white text-xs mt-1">
+                                {entry.name}: <span style={{ color: entry.color }}>{entry.value?.toFixed(2) || '--'}</span>
+                              </p>
+                            ))}
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <Legend
+                    wrapperStyle={{ fontSize: '11px' }}
+                    iconType="circle"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="od"
+                    stroke="#D4A574"
+                    strokeWidth={2}
+                    name="OD (Right Eye)"
+                    dot={{ fill: '#D4A574', r: 4 }}
+                    connectNulls
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="os"
+                    stroke="#4CAF50"
+                    strokeWidth={2}
+                    name="OS (Left Eye)"
+                    dot={{ fill: '#4CAF50', r: 4 }}
+                    connectNulls
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-[300px]">
+                <p className="text-[#8B8B8B]">No visual acuity data available</p>
+              </div>
+            )}
             <p className="text-[#8B8B8B] text-xs mt-3">Visual acuity trend over time (1.0 = 20/20 vision)</p>
           </div>
         )}
       </div>
 
       {/* Row 3 - IOP Distribution Table */}
-      {isPatientView && iopDistribution.length > 0 && (
+      {isPatientView && (
         <div className="bg-[#121212] border border-[#D4A574] rounded-lg p-6 shadow-lg shadow-[#D4A574]/10">
           <div className="flex items-center gap-2 mb-4">
             <Activity className="w-5 h-5 text-[#D4A574]" />
@@ -444,22 +458,28 @@ export function AnalyticsView({ registrationId }: AnalyticsViewProps) {
             <table className="w-full text-xs">
               <thead>
                 <tr className="bg-[#D4A574] bg-opacity-20">
-                  <th className="text-left p-3 text-[#8B8B8B] border-r border-[#D4A574]">IOP Range (mmHg)</th>
-                  <th className="text-center p-3 text-[#8B8B8B]">Frequency</th>
+                  <th className="text-left p-3 text-white border-r border-[#D4A574]">IOP Range (mmHg)</th>
+                  <th className="text-center p-3 text-white">Frequency</th>
                 </tr>
               </thead>
               <tbody>
-                {iopDistribution.map((bin, index) => (
-                  <tr key={index} className={index % 2 === 0 ? 'bg-[#1a1a1a]' : 'bg-[#0a0a0a]'}>
-                    <td className="p-3 text-white border-r border-[#D4A574]">{bin.range}</td>
-                    <td className="p-3 text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <div className="w-24 h-6 bg-[#D4A574] bg-opacity-30 rounded" style={{ width: `${Math.min(bin.count * 20, 100)}px` }}></div>
-                        <span className="text-[#D4A574] font-semibold">{bin.count}</span>
-                      </div>
-                    </td>
+                {iopDistribution.length > 0 ? (
+                  iopDistribution.map((bin, index) => (
+                    <tr key={index} className={index % 2 === 0 ? 'bg-[#1a1a1a]' : 'bg-[#0a0a0a]'}>
+                      <td className="p-3 text-white border-r border-[#D4A574]">{bin.range}</td>
+                      <td className="p-3 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          <div className="w-24 h-6 bg-[#D4A574] bg-opacity-30 rounded" style={{ width: `${Math.min(bin.count * 20, 100)}px` }}></div>
+                          <span className="text-[#D4A574] font-semibold">{bin.count}</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={2} className="p-4 text-center text-[#8B8B8B]">No IOP data available</td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </div>

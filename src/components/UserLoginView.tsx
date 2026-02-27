@@ -402,7 +402,7 @@ export function UserLoginView({ onAuthSuccess, onNavigate }: { onAuthSuccess?: A
                       { role: 'receptionist', label: 'Receptionist' },
                       { role: 'opd', label: 'OPD' },
                       { role: 'doctor', label: 'Doctor' },
-                      { role: 'patient', label: 'Patient' }
+                      { role: 'patient', label: 'Admin' }
                     ].map(({ role, label }) => (
                       <button
                         key={role}

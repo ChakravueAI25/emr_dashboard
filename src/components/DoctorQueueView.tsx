@@ -1,6 +1,7 @@
 ﻿import { useState, useEffect } from 'react';
 import { CheckCircle2, Stethoscope, AlertCircle, Save, RotateCcw } from 'lucide-react';
 import { showAlert } from './ui/AlertModal';
+import { Alert, AlertTitle, AlertDescription } from './ui/Alert';
 import API_ENDPOINTS from '../config/api';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
@@ -435,12 +436,13 @@ export function DoctorQueueView({ userRole, onPatientSelected, hideDetailView }:
                 </>
               );
             })() : (
-              <div className="text-center py-12 px-4">
-                <div className="w-16 h-16 bg-[var(--theme-accent)]/10 rounded-full flex items-center justify-center mx-auto mb-6">
-                  <AlertCircle className="w-8 h-8 text-[var(--theme-accent)] opacity-40" />
-                </div>
-                <p className="text-[var(--theme-text-muted)] text-sm font-bold uppercase tracking-widest leading-relaxed">Select a patient to begin consultation</p>
-              </div>
+              <Alert variant="info" className="my-8 flex flex-col items-center justify-center">
+                <AlertCircle className="w-8 h-8 text-[var(--theme-accent)] mb-4" />
+                <AlertTitle>Select a patient to begin consultation</AlertTitle>
+                <AlertDescription>
+                  Please choose a patient from the queue to start the consultation process.
+                </AlertDescription>
+              </Alert>
             )}
           </div>
         </div>

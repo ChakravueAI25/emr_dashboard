@@ -196,6 +196,109 @@ export function MedicationsCard({ data, updateData, isEditable }: MedicationsCar
         </div>
       </section>
 
+      {/* ===================== ALLERGIES ===================== */}
+      <section>
+        <div className="flex items-center justify-between mb-4">
+          <h4 className="text-[#F44336] flex items-center gap-2 text-lg font-medium">
+            <AlertCircle className="w-5 h-5" />
+            Allergies
+          </h4>
+          {isEditable && (
+            <button
+              onClick={() => addItem('allergies')}
+              className="flex items-center gap-1 text-[#F44336] hover:text-[#e53935] text-xs transition-colors"
+            >
+              <Plus className="w-4 h-4" /> Add
+            </button>
+          )}
+        </div>
+
+        <div className="space-y-3">
+          {allergies.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr className="bg-[#1a1a1a] border-b border-[#F44336]">
+                    <th className="px-4 py-2 text-left text-[#F44336] font-medium text-xs">Drug / Allergen</th>
+                    <th className="px-4 py-2 text-left text-[#F44336] font-medium text-xs">Reaction</th>
+                    <th className="px-4 py-2 text-left text-[#F44336] font-medium text-xs">Severity</th>
+                    <th className="px-4 py-2 text-center text-[#F44336] font-medium text-xs w-12">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {allergies.map((allergy) => (
+                    <tr key={allergy.id} className="border-b border-[#F44336] border-opacity-30 hover:bg-[#0a0a0a] transition-colors">
+                      <td className="px-4 py-3">
+                        {isEditable ? (
+                          <input
+                            type="text"
+                            value={allergy.drug}
+                            onChange={(e) => updateItem('allergies', allergy.id, 'drug', e.target.value)}
+                            placeholder="e.g., Penicillin"
+                            className="w-full bg-[#0a0a0a] border border-[#F44336] border-opacity-60 text-white text-sm px-2 py-1 rounded focus:outline-none focus:border-[#F44336] transition-colors"
+                          />
+                        ) : (
+                          <span className="text-white font-medium">{allergy.drug || '-'}</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        {isEditable ? (
+                          <input
+                            type="text"
+                            value={allergy.reaction}
+                            onChange={(e) => updateItem('allergies', allergy.id, 'reaction', e.target.value)}
+                            placeholder="e.g., Rash, hives"
+                            className="w-full bg-[#0a0a0a] border border-[#F44336] border-opacity-60 text-white text-sm px-2 py-1 rounded focus:outline-none focus:border-[#D4A574] transition-colors"
+                          />
+                        ) : (
+                          <span className="text-[#ccc] text-sm">{allergy.reaction || '-'}</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        {isEditable ? (
+                          <select
+                            value={allergy.severity}
+                            onChange={(e) => updateItem('allergies', allergy.id, 'severity', e.target.value)}
+                            className="w-full bg-[#0a0a0a] border border-[#F44336] border-opacity-60 text-white text-sm px-2 py-1 rounded focus:outline-none focus:border-[#F44336] transition-colors cursor-pointer"
+                          >
+                            <option value="Mild">Mild</option>
+                            <option value="Moderate">Moderate</option>
+                            <option value="Severe">Severe</option>
+                          </select>
+                        ) : (
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${allergy.severity === 'Severe'
+                                ? 'bg-[#F44336] bg-opacity-20 text-[#F44336]'
+                                : allergy.severity === 'Moderate'
+                                  ? 'bg-[#FF9800] bg-opacity-20 text-[#FF9800]'
+                                  : 'bg-[#4CAF50] bg-opacity-20 text-[#4CAF50]'
+                              }`}
+                          >
+                            {allergy.severity}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {isEditable && (
+                          <button
+                            onClick={() => removeItem('allergies', allergy.id)}
+                            className="p-1 text-[#8B8B8B] hover:text-[#F44336] transition-colors inline-flex"
+                          >
+                            <X className="w-5 h-5" />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-center py-4 text-[#8B8B8B] text-sm">No known allergies</div>
+          )}
+        </div>
+      </section>
+
       {/* ===================== MEDICATION COMPLIANCE ===================== */}
       <section>
         <div className="flex items-center gap-2 mb-4">

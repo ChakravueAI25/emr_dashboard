@@ -148,9 +148,9 @@
   --sidebar-ring: #753d3e;
 
   /* Light theme colors */
-  --theme-accent: #753d3e;
-  --theme-accent-rgb: 117, 61, 62;
-  --theme-accent-hover: #5a2e2f;
+  --theme-accent: #8B2C2C;
+  --theme-accent-rgb: 139, 44, 44;
+  --theme-accent-hover: #702323;
   --theme-bg: #ffffff;
   --theme-bg-secondary: #f8f9fa;
   --theme-bg-tertiary: #e9ecef;
@@ -1687,6 +1687,15 @@ html {
 .light .text-\[\#8B8B8B\] svg,
 .light svg.text-\[\#8B8B8B\] {
   color: #666666 !important;
+}
+
+/* Force white text/icon utility */
+.force-white-text,
+.light .force-white-text,
+.light svg.force-white-text {
+  color: #ffffff !important;
+  stroke: #ffffff !important;
+  fill: none !important; /* Ensure icons like Lucide stay outline-based */
 }
 
 /* === SCROLLBAR STYLING === */
@@ -3443,9 +3452,24 @@ html.light h1.text-white {
 }
 
 /* === FORCE WHITE TEXT HELPER === */
-/* Use this class on any text that MUST stay white (e.g. on maroon backgrounds) */
-.force-text-white {
+/* Use this class on any element that MUST stay white (e.g. back buttons on maroon backgrounds).
+   The * rule also forces all children (span text, SVG icons) to stay white. */
+.force-text-white,
+.force-text-white * {
   color: #ffffff !important;
+}
+
+/* === OVERRIDE: Accent-background buttons always show white text ===
+   This beats the dropdown container rules above (higher specificity) */
+.light button[class*="bg-[var(--theme-accent)]"],
+.light [class*="bg-[var(--theme-bg-secondary)]"] button[class*="bg-[var(--theme-accent)]"],
+.light [class*="bg-[var(--theme-bg-tertiary)]"] button[class*="bg-[var(--theme-accent)]"],
+.light [class*="bg-[var(--theme-bg-input)]"] button[class*="bg-[var(--theme-accent)]"],
+.light .bg-\[var\(--theme-bg-secondary\)\] button.bg-\[var\(--theme-accent\)\],
+.light .bg-\[var\(--theme-bg-tertiary\)\] button.bg-\[var\(--theme-accent\)\],
+.light .bg-\[var\(--theme-bg-input\)\] button.bg-\[var\(--theme-accent\)\] {
+  color: #ffffff !important;
+  background-color: #753d3e !important;
 }
 
 /* === FIX: SVGs inside accent-bg elements within buttons must stay white === */

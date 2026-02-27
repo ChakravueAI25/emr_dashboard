@@ -705,6 +705,19 @@ async def get_all_users(role: str | None = None):
         raise HTTPException(status_code=500, detail=f"Failed to fetch users: {str(e)}")
 
 
+@app.get("/users/{username}")
+async def get_user_by_username(username: str):
+    """Get a single user by username."""
+    user = user_collection.find_one({"username": username}, {"hashed_password": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if "_id" in user:
+        user["_id"] = str(user["_id"])
+    
+    return user
+
+
 @app.post("/auth/login")
 async def login(credentials: dict = Body(...)):
     """Simple login endpoint: accepts { username, password, role? } and returns basic user info on success.

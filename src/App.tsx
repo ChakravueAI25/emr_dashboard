@@ -9,6 +9,9 @@ import { Sidebar } from './components/Sidebar';
 import { EditableText } from './components/EditableText';
 import Navbar from './components/Navbar';
 
+import { ReceptionistDashboardView } from './components/ReceptionistDashboardView';
+import { ReceptionistProfileView } from './components/ReceptionistProfileView';
+
 import { AnalyticsView } from './components/AnalyticsView';
 import { BillingView } from './components/BillingView';
 import { AlertModal, showAlert } from './components/ui/AlertModal';
@@ -24,12 +27,13 @@ import { ReceptionQueueView } from './components/ReceptionQueueView';
 import { ReceptionistPortal } from './components/ReceptionistPortal';
 import { OpdPortal } from './components/OpdPortal';
 import { DoctorPortal } from './components/DoctorPortal';
-import { OperationsCenter } from './components/OperationsCenter';
+import { UnifiedOperationsHub } from './components/UnifiedOperationsHub';
 import { PharmacyBillingView } from './components/PharmacyBillingView';
 import { MedicineManagementView } from './components/MedicineManagementView';
 import { PatientHistoryView } from './components/PatientHistoryView';
 import { DataRepairView } from './components/DataRepairView';
 import { ProfileSettings } from './components/ProfileSettings';
+import { DoctorProfileView } from './components/DoctorProfileView';
 import { DeviceInfoDisplay } from './components/DeviceInfoDisplay';
 import { PaymentSetupView } from './components/PaymentSetupView';
 import { OrganizationLoginView } from './components/OrganizationLoginView';
@@ -132,16 +136,33 @@ const existingPatientData: PatientData = {
 export default function App() {
   const [dashboardTitle, setDashboardTitle] = useState('Chakravue AI');
   const [dashboardSubtitle, setDashboardSubtitle] = useState('');
-  // Default to the login view so users must sign in first
-  const [currentView, setCurrentView] = useState<'dashboard' | 'analytics' | 'billing' | 'billing-dashboard' | 'individual-billing' | 'login' | 'documents' | 'notifications' | 'settings' | 'profile-settings' | 'patients' | 'appointments' | 'appointment-queue' | 'reception-queue' | 'opd-queue' | 'doctor-queue' | 'patient-history' | 'data-repair' | 'pharmacy-billing' | 'medicine-management' | 'payment-setup' | 'organization-login' | 'admin-dashboard' | 'admin-data-management' | 'telemedicine' | 'reception-patient-view'>('login');
+  
+  // Persisted State Initialization
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => localStorage.getItem('is_authenticated') === 'true');
+  const [userRole, setUserRole] = useState<UserRole | null>(() => (localStorage.getItem('user_role') as UserRole) || null);
+  const [currentUsername, setCurrentUsername] = useState<string | null>(() => localStorage.getItem('current_username'));
 
-  // --- Auth & State Management ---
-  // Start unauthenticated. After login `isAuthenticated` becomes true and `userRole` is set.
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [userRole, setUserRole] = useState<UserRole | null>(null);
+  // Default to the login view, or restore from storage
+  const [currentView, setCurrentView] = useState<'dashboard' | 'analytics' | 'billing' | 'billing-dashboard' | 'individual-billing' | 'login' | 'documents' | 'notifications' | 'settings' | 'profile-settings' | 'patients' | 'appointments' | 'appointment-queue' | 'reception-queue' | 'opd-queue' | 'doctor-queue' | 'patient-history' | 'data-repair' | 'pharmacy-billing' | 'medicine-management' | 'payment-setup' | 'organization-login' | 'admin-dashboard' | 'admin-data-management' | 'telemedicine' | 'reception-patient-view' | 'doctor-profile'>(
+    () => (localStorage.getItem('current_view') as any) || 'login'
+  );
+
+  // Persistence Effect
+  useEffect(() => {
+    localStorage.setItem('is_authenticated', String(isAuthenticated));
+    if (userRole) localStorage.setItem('user_role', userRole);
+    if (currentUsername) localStorage.setItem('current_username', currentUsername);
+    localStorage.setItem('current_view', currentView);
+  }, [isAuthenticated, userRole, currentUsername, currentView]);
+
+  
+  // Debug: log view changes to trace why receptionist profile nav isn't showing
+  useEffect(() => {
+    console.log('[DEBUG] currentView:', currentView, 'userRole:', userRole);
+  }, [currentView, userRole]);
 
   const isFullScreen = (currentView === 'login' && !isAuthenticated) || currentView === 'organization-login' || currentView === 'payment-setup';
-  const [currentUsername, setCurrentUsername] = useState<string | null>(null);
+
   const [isNewPatientMode, setIsNewPatientMode] = useState(false);
   // Do not preload a patient before authentication
   const [activePatientData, setActivePatientData] = useState<PatientData | null>(null);
@@ -698,6 +719,7 @@ export default function App() {
         iop: activePatientData.iop || {},
         ophthalmicInvestigations: activePatientData.ophthalmicInvestigations || {},
         systemicInvestigations: activePatientData.systemicInvestigations || {},
+        drugHistory: activePatientData.drugHistory || {},
         lastStage: 'opd',
         lastUpdated: new Date().toISOString()
       };
@@ -771,6 +793,38 @@ export default function App() {
     } catch (err: any) {
       console.error('Error saving OPD data:', err);
       showAlert(`Error saving OPD data: ${err.message || err}`);
+    }
+  };
+
+  const handleAdminSave = async () => {
+    if (!activePatientData) return;
+    const regId = (activePatientData.patientDetails && activePatientData.patientDetails.registrationId && activePatientData.patientDetails.registrationId !== 'Not Assigned')
+      ? activePatientData.patientDetails.registrationId
+      : lastSavedRegistrationId;
+
+    if (!regId) {
+      showAlert('No registration ID available.');
+      return;
+    }
+
+    try {
+      console.log('Saving patient data as Admin:', regId);
+
+      const patientResp = await fetch(API_ENDPOINTS.PATIENT(regId), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...activePatientData, name: activePatientData.patientDetails.name, registrationId: regId }),
+      });
+
+      if (!patientResp.ok) {
+        const errorText = await patientResp.text();
+        throw new Error(`Failed to save patient: ${patientResp.status} - ${errorText}`);
+      }
+      
+      showAlert('Patient data saved successfully.');
+    } catch (error: any) {
+      console.error('Error saving patient data:', error);
+      showAlert(`Error: ${error.message}`);
     }
   };
 
@@ -875,12 +929,19 @@ export default function App() {
   const handleLogout = () => {
     setIsAuthenticated(false);
     setUserRole(null);
+    setCurrentUsername(null);
     setActivePatientData(null);
     setIsNewPatientMode(false);
     setLastSavedRegistrationId(null);
     setCurrentView('login');
-    // Optionally: clear persisted storage if implemented in future
-    try { localStorage.removeItem('auth_token'); localStorage.removeItem('user_role'); } catch { }
+    
+    try { 
+      localStorage.removeItem('auth_token'); 
+      localStorage.removeItem('user_role'); 
+      localStorage.removeItem('is_authenticated');
+      localStorage.removeItem('current_username');
+      localStorage.removeItem('current_view');
+    } catch { }
   };
 
 
@@ -1340,6 +1401,13 @@ export default function App() {
       return;
     }
 
+    // NEW: Support profile-settings view for receptionists
+    if (view === 'profile-settings') {
+      console.log('[DEBUG] handleViewChange profile-settings - userRole:', userRole);
+      setCurrentView('profile-settings');
+      return;
+    }
+
     if (view === 'dashboard') {
       const isCurrentlyInPatientDocumentation = currentView === 'reception-patient-view' || currentView === 'opd-queue' || currentView === 'doctor-queue';
 
@@ -1349,20 +1417,6 @@ export default function App() {
         setIsPatientDischarged(false);
         setCurrentView('dashboard');
         return;
-      }
-
-      // If elsewhere and have an active patient, return to their documentation
-      if (isAuthenticated && activePatientData) {
-        if (userRole === ROLES.RECEPTIONIST) {
-          setCurrentView('reception-patient-view');
-          return;
-        } else if (userRole === 'opd') {
-          setCurrentView('opd-queue');
-          return;
-        } else if (userRole === 'doctor') {
-          setCurrentView('doctor-queue');
-          return;
-        }
       }
 
       setCurrentView('dashboard');
@@ -1405,15 +1459,15 @@ export default function App() {
 
   // Listen for global navigation events from ReceptionistPortal
   useEffect(() => {
-    function handleNavigateToBilling(e) {
+    function handleNavigateToBilling(e: any) {
       const { registrationId, patientData } = e.detail || {};
       console.log('📍 [App] Received global navigate-to-billing event:', { registrationId, patientData });
       setLastSavedRegistrationId(registrationId);
       setLastAppointmentPatientData(patientData);
       setCurrentView('individual-billing');
     }
-    window.addEventListener('navigate-to-billing', handleNavigateToBilling);
-    return () => window.removeEventListener('navigate-to-billing', handleNavigateToBilling);
+    window.addEventListener('navigate-to-billing' as any, handleNavigateToBilling);
+    return () => window.removeEventListener('navigate-to-billing' as any, handleNavigateToBilling);
   }, []);
 
   return (
@@ -1432,15 +1486,16 @@ export default function App() {
       <div className={`${!isFullScreen ? 'pl-16 pt-20' : ''} min-h-screen transition-all duration-300`}>
 
         {/* Back Button - In-flow at top of content (prevents overlap) */}
-        {currentView !== 'dashboard' && isAuthenticated && (
+        {currentView !== 'dashboard' && currentView !== 'doctor-profile' && isAuthenticated && (
           <div className="px-6 py-4 mb-4">
             <button
               onClick={() => handleViewChange('dashboard')}
-              className="flex items-center gap-2 px-4 py-2 bg-[var(--theme-bg)] border border-[var(--theme-accent)] text-[var(--theme-accent)] rounded-lg shadow-md hover:bg-[var(--theme-accent)] hover:text-[var(--theme-bg)] transition-all duration-300 font-bold text-sm group"
+              className="flex items-center gap-2.5 px-5 py-2.5 bg-[var(--theme-accent)] text-white force-text-white rounded-xl shadow-lg hover:opacity-90 transition-all font-bold text-sm group"
+              style={{ color: '#ffffff' }}
               title="Back to Dashboard"
             >
-              <ArrowLeft className="w-5 h-5 transition-transform duration-300 group-hover:-translate-x-1" />
-              <span className="font-bold">Back to Dashboard</span>
+              <ArrowLeft className="w-4 h-4 transition-transform duration-300 group-hover:-translate-x-1" style={{ color: '#ffffff' }} />
+              <span style={{ color: '#ffffff' }}>Back to Dashboard</span>
             </button>
           </div>
         )}
@@ -1506,12 +1561,8 @@ export default function App() {
                     setCurrentUsername(user.username);
                     // mark authenticated and open dashboard
                     setIsAuthenticated(true);
-                    // For receptionist and OPD, start with empty dashboard. Doctor gets default data
-                    if (roleStr === 'receptionist' || roleStr === 'opd') {
-                      setActivePatientData(null);
-                    } else {
-                      setActivePatientData(defaultPatientData);
-                    }
+                    // All users start with No active patient loaded so they see their primary dashboard/hub
+                    setActivePatientData(null);
 
                     // All users now start at the main dashboard
                     setCurrentView('dashboard');
@@ -1538,35 +1589,39 @@ export default function App() {
                 patientName={activePatientData?.patientDetails.name}
                 doctorName={currentUsername || 'Doctor'}
               />
-            ) : currentView === 'dashboard' ? (
-              isAuthenticated && (userRole === ROLES.RECEPTIONIST) ? (
-                <ReceptionistPortal
-                  username={currentUsername || 'Receptionist'}
-                  onLogout={handleLogout}
-                  onViewChange={setCurrentView}
-                  onPatientSelected={(selected) => {
-                    const regId = selected.patientRegistrationId || selected.registrationId;
-                    if (regId && regId !== 'Not Assigned') {
-                      loadPatientByRegistration(regId, true, true);
-                      setCurrentView('reception-patient-view');
-                    } else {
-                      setActivePatientData({
-                        ...JSON.parse(JSON.stringify(defaultPatientData)),
-                        patientDetails: {
-                          ...defaultPatientData.patientDetails,
-                          name: selected.patientName || selected.name || 'New Patient',
-                          registrationId: 'Not Assigned'
-                        }
-                      });
-                      setCurrentView('reception-patient-view');
-                    }
-                  }}
-                />
+            )  : currentView === 'dashboard' ? (
+  isAuthenticated && (userRole === ROLES.RECEPTIONIST) ? (
+    <ReceptionistDashboardView
+      username={currentUsername || 'Receptionist'}
+      onLogout={handleLogout}
+      onPatientSelected={(selected) => {
+        const regId = selected.patientRegistrationId || selected.registrationId;
+        if (regId && regId !== 'Not Assigned') {
+          loadPatientByRegistration(regId, true, true);
+          setCurrentView('reception-patient-view');
+        } else {
+          setActivePatientData({
+            ...JSON.parse(JSON.stringify(defaultPatientData)),
+            patientDetails: {
+              ...defaultPatientData.patientDetails,
+              name: selected.patientName || selected.name || 'New Patient',
+              registrationId: 'Not Assigned'
+            }
+          });
+          setCurrentView('reception-patient-view');
+        }
+      }}
+    />
               ) : isAuthenticated && userRole === 'doctor' ? (
                 <DoctorPortal
                   username={currentUsername || 'Doctor'}
                   onLogout={handleLogout}
                   onViewChange={setCurrentView}
+                  activePatientData={activePatientData}
+                  onClearPatient={() => {
+                    setActivePatientData(null);
+                    setIsPatientDischarged(false);
+                  }}
                   onPatientSelected={async (selected) => {
                     const regId = selected.patientRegistrationId || selected.registrationId;
                     const discharged = selected.isDischargedPatient || selected.level === 'Discharged';
@@ -1574,7 +1629,7 @@ export default function App() {
 
                     if (regId && regId !== 'Not Assigned') {
                       await loadPatientByRegistration(regId, true);
-                      setCurrentView('doctor-queue');
+                      // Stay on dashboard view - patient details shown inside DoctorPortal
                     } else {
                       setActivePatientData({
                         ...JSON.parse(JSON.stringify(defaultPatientData)),
@@ -1584,9 +1639,18 @@ export default function App() {
                           registrationId: 'Not Assigned'
                         }
                       });
-                      setCurrentView('doctor-queue');
+                      // Stay on dashboard view
                     }
                   }}
+                  handleDoctorSave={handleDoctorSave}
+                  updateActivePatientData={updateActivePatientData}
+                  isPatientDischarged={isPatientDischarged}
+                  setIsPatientDischarged={setIsPatientDischarged}
+                  visitIndex={visitIndex}
+                  totalVisits={totalVisits}
+                  setVisitIndex={setVisitIndex}
+                  handlePrevVisit={handlePrevVisit}
+                  handleNextVisit={handleNextVisit}
                 />
               ) : isAuthenticated && userRole === 'opd' ? (
                 <OpdPortal
@@ -1618,15 +1682,26 @@ export default function App() {
                 />
               ) : (
                 <div className="h-screen overflow-hidden bg-[#050505]">
-                  <OperationsCenter
-                    compact={false}
-                    userRole={userRole}
-                    onNavigateToPatient={(patient) => {
-                      const regId = patient.patientRegistrationId || patient.registrationId;
+                  <UnifiedOperationsHub
+                    username={currentUsername || 'Admin'}
+                    userRole={userRole || undefined}
+                    onPatientSelected={async (patient) => {
+                      const regId = patient.patientRegistrationId || patient.registrationId || patient.patientId;
                       const discharged = patient.isDischargedPatient || patient.level === 'Discharged';
                       setIsPatientDischarged(discharged);
                       if (regId && regId !== 'Not Assigned') {
-                        loadPatientByRegistration(regId, true);
+                        await loadPatientByRegistration(regId, true);
+                        setCurrentView('reception-patient-view');
+                      } else {
+                        setActivePatientData({
+                          ...JSON.parse(JSON.stringify(defaultPatientData)),
+                          patientDetails: {
+                            ...defaultPatientData.patientDetails,
+                            name: patient.patientName || patient.name || 'New Patient',
+                            registrationId: 'Not Assigned'
+                          }
+                        });
+                        setCurrentView('reception-patient-view');
                       }
                     }}
                   />
@@ -1635,56 +1710,6 @@ export default function App() {
 
             ) : (currentView === 'opd-queue' || currentView === 'doctor-queue' || currentView === 'reception-patient-view') ? (
               <div className="flex overflow-hidden" style={{ height: 'calc(100vh - 5rem)' }}>
-                {/* Unified Sidebar Queue for Dashboard - Ensures patients are "Visible" once pushed */}
-                {!activePatientData && (
-                  <div
-                    className="border-r border-[#1a1a1a] bg-[#050505] flex flex-col shrink-0"
-                    style={{ width: sidebarWidth }}
-                  >
-                    {isAuthenticated && (userRole === 'opd' || userRole === 'doctor' || userRole === ROLES.RECEPTIONIST) ? (
-                      <div className="flex-1 flex flex-col overflow-y-auto p-4 custom-scrollbar">
-                        <OperationsCenter
-                          compact={true}
-                          userRole={userRole}
-                          onPatientSelected={(selected) => {
-                            const regId = selected.patientRegistrationId || selected.registrationId;
-                            // Check if patient is discharged
-                            const discharged = selected.isDischargedPatient || selected.level === 'Discharged';
-                            setIsPatientDischarged(discharged);
-                            if (regId && regId !== 'Not Assigned') {
-                              loadPatientByRegistration(regId, true);
-                            }
-                          }}
-                          onNavigateToPatient={(patient) => {
-                            const regId = patient.patientRegistrationId || patient.registrationId;
-                            // Check if patient is discharged
-                            const discharged = patient.isDischargedPatient || patient.level === 'Discharged';
-                            setIsPatientDischarged(discharged);
-                            if (regId && regId !== 'Not Assigned') {
-                              loadPatientByRegistration(regId, true);
-                            }
-                          }}
-                        />
-                      </div>
-                    ) : (
-                      <div className="p-8 text-center text-[#444]">
-                        <ClipboardList className="w-10 h-10 mx-auto mb-4 opacity-20" />
-                        <p className="text-xs uppercase tracking-widest font-bold">Standard Dashboard</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Resizer Handle */}
-                {!activePatientData && (
-                  <div
-                    className="w-1 bg-[#2a2a2a] hover:bg-[#D4A574] cursor-col-resize transition-colors z-50 flex items-center justify-center group shrink-0 select-none"
-                    onMouseDown={startResizing}
-                  >
-                    <div className="h-8 w-0.5 bg-[#444] rounded-full group-hover:bg-white transition-colors opacity-0 group-hover:opacity-100" />
-                  </div>
-                )}
-
                 {/* Main Content Area */}
                 <div className="flex-1 flex flex-col overflow-hidden">
                   <div className="flex-1 p-8 overflow-y-auto scrollbar-hide">
@@ -1701,6 +1726,7 @@ export default function App() {
                       handleReceptionCompleteCheckIn={handleReceptionCompleteCheckIn}
                       handleOPDSave={handleOPDSave}
                       handleDoctorSave={handleDoctorSave}
+                      handleAdminSave={handleAdminSave}
                       setActivePatientData={setActivePatientData}
                       setIsPatientDischarged={setIsPatientDischarged}
                       setCurrentView={setCurrentView}
@@ -1729,10 +1755,10 @@ export default function App() {
                 patientData={lastAppointmentPatientData}
               />
             ) : currentView === 'appointments' ? (
-              <AppointmentBookingView 
+              <AppointmentBookingView
                 onNavigateToBilling={(registrationId, patientData) => {
                   console.log('📍 [App] AppointmentBooking callback invoked with:', { registrationId, patientData });
-                  window._debugBillingNav = {
+                  (window as any)._debugBillingNav = {
                     registrationId,
                     patientData,
                     stack: new Error().stack
@@ -1741,6 +1767,7 @@ export default function App() {
                   setLastAppointmentPatientData(patientData);
                   setCurrentView('individual-billing');
                   setTimeout(() => {
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
                     console.log('📍 [App] After setCurrentView, state:', {
                       lastSavedRegistrationId,
                       lastAppointmentPatientData,
@@ -1788,10 +1815,64 @@ export default function App() {
               <PatientHistoryView />
             ) : currentView === 'data-repair' ? (
               <DataRepairView />
-            ) : currentView === 'settings' ? (
-              <ProfileSettings username={currentUsername || undefined} role={userRole || undefined} />
-            ) : currentView === 'profile-settings' ? (
-              <ProfileSettings username={currentUsername || undefined} role={userRole || undefined} />
+            ) : currentView === 'settings' || currentView === 'profile-settings' ? (
+              (() => {
+                console.log('[DEBUG] profile view - userRole:', userRole, 'currentUsername:', currentUsername);
+                if (userRole === ROLES.RECEPTIONIST) {
+                  return (
+                    <ReceptionistProfileView 
+                      username={currentUsername || ''}
+                      onPatientSelected={(patient) => {
+                        const regId = patient.patientRegistrationId || patient.registrationId;
+                        if (regId && regId !== 'Not Assigned') {
+                          loadPatientByRegistration(regId, true);
+                        }
+                      }}
+                    />
+                  );
+                }
+                return (
+                  <ProfileSettings 
+                    username={currentUsername || undefined} 
+                    role={userRole || undefined}
+                    onPatientSelected={(patient) => {
+                      const regId = patient.patientRegistrationId || patient.registrationId;
+                      if (regId && regId !== 'Not Assigned') {
+                        loadPatientByRegistration(regId, true);
+                      }
+                    }}
+                  />
+                );
+              })()
+            ) : currentView === 'doctor-profile' ? (
+              <DoctorProfileView
+                username={currentUsername || undefined}
+                userRole={userRole || undefined}
+                onBack={() => setCurrentView('dashboard')}
+                onPatientSelected={async (patient) => {
+                  const idToLoad = patient.registrationId || patient.patientId || patient.id;
+                  console.log('📍 [App] Patient selected from profile:', patient.name, 'ID:', idToLoad);
+
+                  if (!idToLoad) {
+                    showAlert('Cannot open patient: Missing ID');
+                    return;
+                  }
+
+                  try {
+                    // Clear current patient and immediately switch view to show loading state if needed
+                    setActivePatientData(null);
+
+                    // Load data with navigation prevented so we can handle it here exactly as requested
+                    await loadPatientByRegistration(idToLoad, true, true);
+
+                    console.log('📍 [App] Successfully loaded patient data for:', patient.name);
+                    setCurrentView('dashboard');
+                  } catch (error) {
+                    console.error('Failed to load patient from profile:', error);
+                    showAlert(`Failed to load details for ${patient.name}. Please try again.`);
+                  }
+                }}
+              />
             ) : (
               <NotificationsView />
             )}

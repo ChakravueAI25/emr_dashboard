@@ -11,6 +11,8 @@ import {
 } from "recharts";
 import { Activity } from 'lucide-react';
 import API_ENDPOINTS from '../config/api';
+import { ReceptionistDashboardView } from './ReceptionistDashboardView';
+import { OpdDashboardView } from './OpdDashboardView';
 
 interface DashboardViewProps {
   appSettings: AppSettings;
@@ -64,23 +66,17 @@ export function DashboardView({ appSettings, setAppSettings, username, userRole 
 
       setLoadingDoctor(true);
       try {
-        // Fetch all users and find the current doctor
-        const res = await fetch(API_ENDPOINTS.USERS_ALL);
+        const res = await fetch(API_ENDPOINTS.USERS_ONE(username));
         if (res.ok) {
-          const data = await res.json();
-          const doctors = data.users || [];
-          const foundDoctor = doctors.find((u: any) => u.username === username);
-
-          if (foundDoctor) {
-            setDoctorInfo({
-              username: foundDoctor.username,
-              full_name: (foundDoctor.full_name && foundDoctor.full_name.startsWith('Dr.') ? foundDoctor.full_name : `Dr. ${foundDoctor.full_name || foundDoctor.username}`),
-              role: foundDoctor.role,
-              specialty: foundDoctor.specialty || 'Ophthalmologist',
-              location: foundDoctor.location || 'Hospital',
-              age: foundDoctor.age
-            });
-          }
+          const foundDoctor = await res.json();
+          setDoctorInfo({
+            username: foundDoctor.username,
+            full_name: (foundDoctor.full_name && foundDoctor.full_name.startsWith('Dr.') ? foundDoctor.full_name : `Dr. ${foundDoctor.full_name || foundDoctor.username}`),
+            role: foundDoctor.role,
+            specialty: foundDoctor.specialty || 'Ophthalmologist',
+            location: foundDoctor.location || 'Hospital',
+            age: foundDoctor.age
+          });
         }
       } catch (error) {
         console.error('Failed to fetch doctor info:', error);
@@ -238,90 +234,71 @@ export function DashboardView({ appSettings, setAppSettings, username, userRole 
     followups: "#7CFF6B",
   };
 
+  if (userRole === 'receptionist') {
+    return <ReceptionistDashboardView username={username || ''} userRole={userRole} />;
+  }
+
+  // OPD-specific dashboard layout
+  if (userRole === 'opd') {
+    return <OpdDashboardView appSettings={appSettings} setAppSettings={setAppSettings} username={username} userRole={userRole} />;
+  }
+
+  // Original universal dashboard layout for other roles
   return (
     <div className="max-w-[1600px] mx-auto p-12 space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700 bg-[#050406]">
       <div className="w-full">
         {/* Dashboard - Visible for all roles */}
 
-        {/* Greeting Island */}
-        <div className="mb-6 p-8 rounded-3xl bg-gradient-to-br from-[#1a1520] to-[#0f0c12] border border-[#D4A574] relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-[#FF9D00]/5 rounded-full blur-3xl"></div>
-          <div className="absolute bottom-0 left-0 w-48 h-48 bg-[#00A3FF]/5 rounded-full blur-3xl"></div>
+        {/* Greeting Island - Only show for non-receptionist roles */}
+        {userRole !== 'receptionist' && (
+          <div className="mb-6 p-8 rounded-3xl bg-gradient-to-br from-[#1a1520] to-[#0f0c12] border border-[#D4A574] relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-[#FF9D00]/5 rounded-full blur-3xl"></div>
+            <div className="absolute bottom-0 left-0 w-48 h-48 bg-[#00A3FF]/5 rounded-full blur-3xl"></div>
 
-          <div className="relative flex items-center justify-between">
-            <div className="flex-1">
-              <h1 className="text-3xl font-bold mb-2 tracking-tight">
-                {greeting}, <span className="text-[#FF9D00]">{doctor.name || doctor.full_name}</span>
-              </h1>
-              <p className="text-[#C2BAB1] text-sm tracking-wide">Have a nice day at work</p>
-            </div>
+            <div className="relative flex items-center justify-between">
+              <div className="flex-1">
+                <h1 className="text-3xl font-bold mb-2 tracking-tight">
+                  {greeting}, <span className="text-[#FF9D00]">{doctor.name || doctor.full_name}</span>
+                </h1>
+                <p className="text-[#C2BAB1] text-sm tracking-wide">Have a nice day at work</p>
+              </div>
 
-            <div className="hidden md:block">
-              <svg width="200" height="180" viewBox="0 0 200 180" fill="none" xmlns="http://www.w3.org/2000/svg">
-                {/* Doctor illustration */}
-                <ellipse cx="100" cy="160" rx="80" ry="15" fill="#00A3FF" opacity="0.2" />
+              <div className="hidden md:block">
+                <svg width="200" height="180" viewBox="0 0 200 180" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  {/* Doctor illustration */}
+                  <ellipse cx="100" cy="160" rx="80" ry="15" fill="#00A3FF" opacity="0.2" />
 
-                {/* Body */}
-                <path d="M70 100 Q100 90 130 100 L130 140 Q100 150 70 140 Z" fill="#5B7BFF" />
-                <rect x="85" y="135" width="30" height="25" rx="3" fill="#4A6AEF" />
+                  {/* Body */}
+                  <path d="M70 100 Q100 90 130 100 L130 140 Q100 150 70 140 Z" fill="#5B7BFF" />
+                  <rect x="85" y="135" width="30" height="25" rx="3" fill="#4A6AEF" />
 
-                {/* Head */}
-                <circle cx="100" cy="70" r="25" fill="#FFB89D" />
+                  {/* Head */}
+                  <circle cx="100" cy="70" r="25" fill="#FFB89D" />
 
-                {/* Hair */}
-                <path d="M75 65 Q75 45 100 40 Q125 45 125 65 Q125 50 115 48 Q105 55 100 50 Q95 55 85 48 Q75 50 75 65 Z" fill="#FF6B4A" />
+                  {/* Hair */}
+                  <path d="M75 65 Q75 45 100 40 Q125 45 125 65 Q125 50 115 48 Q105 55 100 50 Q95 55 85 48 Q75 50 75 65 Z" fill="#FF6B4A" />
 
-                {/* Arms */}
-                <rect x="60" y="100" width="10" height="35" rx="5" fill="#FFB89D" />
-                <rect x="130" y="100" width="10" height="35" rx="5" fill="#FFB89D" />
+                  {/* Arms */}
+                  <rect x="60" y="100" width="10" height="35" rx="5" fill="#FFB89D" />
+                  <rect x="130" y="100" width="10" height="35" rx="5" fill="#FFB89D" />
 
-                {/* Medical coat details */}
-                <line x1="100" y1="100" x2="100" y2="140" stroke="#3A5ADF" strokeWidth="2" />
+                  {/* Medical coat details */}
+                  <line x1="100" y1="100" x2="100" y2="140" stroke="#3A5ADF" strokeWidth="2" />
 
-                {/* Stethoscope */}
-                <path d="M95 85 Q90 95 85 105" stroke="#262028" strokeWidth="2" fill="none" />
-                <circle cx="83" cy="107" r="3" fill="#262028" />
+                  {/* Stethoscope */}
+                  <path d="M95 85 Q90 95 85 105" stroke="#262028" strokeWidth="2" fill="none" />
+                  <circle cx="83" cy="107" r="3" fill="#262028" />
 
-                {/* Clipboard */}
-                <rect x="140" y="105" width="20" height="28" rx="2" fill="#F5F3EF" opacity="0.9" />
-                <line x1="145" y1="112" x2="155" y2="112" stroke="#262028" strokeWidth="1" />
-                <line x1="145" y1="118" x2="155" y2="118" stroke="#262028" strokeWidth="1" />
-                <line x1="145" y1="124" x2="152" y2="124" stroke="#262028" strokeWidth="1" />
-              </svg>
-            </div>
-          </div>
-        </div>
-
-
-
-
-
-        {/* Weekly Reports - 3 Cards in Flex */}
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-[#F5F3EF]">Weekly Reports</h2>
-
-          </div>
-          <div className="flex gap-4 flex-wrap">
-            <div className="flex-1 min-w-[200px] p-6 rounded-2xl bg-[#121015] border border-[#D4A574] flex flex-col items-center">
-              <div className="text-sm text-[#C2BAB1] mb-2">Total Patients</div>
-              <div className="text-4xl font-bold text-[#FF9D00] mb-1">{appointmentStats.totalPatients}</div>
-              <div className="text-xs text-[#8C847B]">Unique patients</div>
-            </div>
-
-            <div className="flex-1 min-w-[200px] p-6 rounded-2xl bg-[#121015] border border-[#D4A574] flex flex-col items-center">
-              <div className="text-sm text-[#C2BAB1] mb-2">Appointments</div>
-              <div className="text-4xl font-bold text-[#00A3FF] mb-1">{appointmentStats.appointments}</div>
-              <div className="text-xs text-[#8C847B]">Total appointments</div>
-            </div>
-
-            <div className="flex-1 min-w-[200px] p-6 rounded-2xl bg-[#121015] border border-[#D4A574] flex flex-col items-center">
-              <div className="text-sm text-[#C2BAB1] mb-2">Consultations</div>
-              <div className="text-4xl font-bold text-[#7CFF6B] mb-1">{appointmentStats.consultations}</div>
-              <div className="text-xs text-[#8C847B]">Estimated from data</div>
+                  {/* Clipboard */}
+                  <rect x="140" y="105" width="20" height="28" rx="2" fill="#F5F3EF" opacity="0.9" />
+                  <line x1="145" y1="112" x2="155" y2="112" stroke="#262028" strokeWidth="1" />
+                  <line x1="145" y1="118" x2="155" y2="118" stroke="#262028" strokeWidth="1" />
+                  <line x1="145" y1="124" x2="152" y2="124" stroke="#262028" strokeWidth="1" />
+                </svg>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Chart + filters */}
         <div className="p-4 rounded-2xl bg-[#121015] border border-[#D4A574] mb-6">

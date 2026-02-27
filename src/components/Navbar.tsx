@@ -147,6 +147,7 @@ export default function Navbar(props: NavbarProps) {
                                 <div className="absolute right-0 top-full mt-2 w-48 bg-[var(--theme-bg-secondary)] border border-[var(--theme-accent)] rounded-xl shadow-2xl py-1 z-50 animate-in fade-in zoom-in-95 duration-200">
                                     <button
                                         onClick={() => {
+                                            console.log('[DEBUG] Profile Settings clicked');
                                             setIsProfileOpen(false);
                                             setCurrentView('profile-settings');
                                         }}

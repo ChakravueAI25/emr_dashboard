@@ -216,6 +216,26 @@ export function AppointmentBookingView(props: AppointmentBookingViewProps) {
       console.warn('Could not check for duplicates:', err);
       // Continue anyway if search fails
     }
+    // Validate phone number
+    if (!newPatientPhone.trim()) {
+      newErrors.phone = 'Contact number is required';
+    } else {
+      // Phone validation: 10 digits excluding +91, starting digits must be 6, 7, 8, or 9
+      const phoneRegex = /^(\+91[-\s]?)?[6789]\d{9}$/;
+      const cleanPhone = newPatientPhone.replace(/[\s-]/g, '');
+      if (!phoneRegex.test(cleanPhone)) {
+        newErrors.phone = 'Valid 10-digit number required (e.g., 9876543210 or +919876543210)';
+      }
+    }
+
+    // If there are field errors, set them and return
+    if (Object.keys(newErrors).length > 0) {
+      setFieldErrors(newErrors);
+      return;
+    }
+
+    // Clear field errors
+    setFieldErrors({});
 
     const regId = generateNewRegistrationId();
     setNewRegistrationId(regId);
@@ -316,6 +336,8 @@ export function AppointmentBookingView(props: AppointmentBookingViewProps) {
             const errorData = await patientResponse.json();
             console.error('âŒ Failed to save new patient:', errorData);
             setError(`Failed to save patient: ${JSON.stringify(errorData.detail || errorData)}`);
+            setLoading(false);
+            return;
           } else {
             const savedPatient = await patientResponse.json();
             console.log('âœ“ New patient saved to MongoDB with registrationId:', newRegistrationId, 'Response:', savedPatient);
@@ -325,7 +347,8 @@ export function AppointmentBookingView(props: AppointmentBookingViewProps) {
         } catch (err) {
           console.error('âŒ Could not save patient data:', err);
           setError(`Patient save error: ${err instanceof Error ? err.message : String(err)}`);
-          // Continue with appointment booking even if patient save fails
+          setLoading(false);
+          return;
         }
       }
 
@@ -351,34 +374,32 @@ export function AppointmentBookingView(props: AppointmentBookingViewProps) {
         email: selectedPatient.contactInfo?.email,
       };
 
-      // Try to save to MongoDB first
-      try {
-        const response = await fetch(API_ENDPOINTS.APPOINTMENTS, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(queuedAppointment)
-        });
+      // Try to save to MongoDB
+      const response = await fetch(API_ENDPOINTS.APPOINTMENTS, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(queuedAppointment)
+      });
 
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.detail || 'Failed to save appointment');
-        }
-
-        console.log('âœ“ Appointment saved to MongoDB');
-      } catch (mongoErr) {
-        console.error('Appointment book error:', mongoErr);
-        setError(mongoErr instanceof Error ? mongoErr.message : 'Failed to book appointment');
-        setLoading(false);
-        return;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to save appointment');
       }
 
+      console.log('✓ Appointment saved to MongoDB');
+
+      setLoading(false);
       setSuccess(`Appointment booked successfully for ${selectedPatient.name}`);
       console.log('✅ Appointment booked, preparing redirect with patient data:', selectedPatient);
 
       // Redirect to billing page after brief delay to show success message
       setTimeout(() => {
+        if (onNavigateToBilling) {
+          onNavigateToBilling(selectedPatient.registrationId, selectedPatient);
+        }
+        
         setSelectedPatient(null);
         setSelectedDoctor(null);
         setAppointmentDate('');
@@ -394,6 +415,9 @@ export function AppointmentBookingView(props: AppointmentBookingViewProps) {
     } catch (err) {
       console.error('❌ Error in handleBookAppointment:', err);
       setError(err instanceof Error ? err.message : 'Failed to book appointment');
+      setLoading(false);
+    } finally {
+      // Ensure loading is stopped if something unexpected happens
       setLoading(false);
     }
   };
@@ -547,14 +571,14 @@ export function AppointmentBookingView(props: AppointmentBookingViewProps) {
                     <div className="bg-[var(--theme-bg-secondary)] border border-[var(--theme-accent)]/20 rounded-3xl p-8 shadow-2xl animate-in fade-in zoom-in-95">
                       <div className="flex items-center justify-between mb-8">
                         <h3 className="text-lg font-bold text-[var(--theme-text)]">Create New Patient Record</h3>
-                        <button 
+                        <button
                           onClick={() => {
                             setIsNewPatient(false);
                             setFieldErrors({});
                             setNewPatientName('');
                             setNewPatientPhone('');
                             setNewPatientEmail('');
-                          }} 
+                          }}
                           className="text-[var(--theme-text-muted)] hover:text-[var(--theme-accent)]"
                         >
                           <X className="w-5 h-5" />
@@ -572,9 +596,8 @@ export function AppointmentBookingView(props: AppointmentBookingViewProps) {
                                 setNewPatientName(e.target.value);
                                 if (fieldErrors.name) setFieldErrors({ ...fieldErrors, name: undefined });
                               }}
-                              className={`bg-[var(--theme-bg-tertiary)] h-12 rounded-xl focus:border-[var(--theme-accent)]/50 text-[var(--theme-text)] placeholder:text-[var(--theme-text-muted)] ${
-                                fieldErrors.name ? 'border-red-500' : 'border-[var(--theme-accent)]'
-                              }`}
+                              className={`bg-[var(--theme-bg-tertiary)] h-12 rounded-xl focus:border-[var(--theme-accent)]/50 text-[var(--theme-text)] placeholder:text-[var(--theme-text-muted)] ${fieldErrors.name ? 'border-red-500' : 'border-[var(--theme-accent)]'
+                                }`}
                             />
                             {fieldErrors.name && (
                               <p className="text-red-500 text-xs mt-1 font-semibold">{fieldErrors.name}</p>
@@ -589,9 +612,8 @@ export function AppointmentBookingView(props: AppointmentBookingViewProps) {
                                 setNewPatientPhone(e.target.value);
                                 if (fieldErrors.phone) setFieldErrors({ ...fieldErrors, phone: undefined });
                               }}
-                              className={`bg-[var(--theme-bg-tertiary)] h-12 rounded-xl focus:border-[var(--theme-accent)]/50 text-[var(--theme-text)] placeholder:text-[var(--theme-text-muted)] ${
-                                fieldErrors.phone ? 'border-red-500' : 'border-[var(--theme-accent)]'
-                              }`}
+                              className={`bg-[var(--theme-bg-tertiary)] h-12 rounded-xl focus:border-[var(--theme-accent)]/50 text-[var(--theme-text)] placeholder:text-[var(--theme-text-muted)] ${fieldErrors.phone ? 'border-red-500' : 'border-[var(--theme-accent)]'
+                                }`}
                             />
                             {fieldErrors.phone && (
                               <p className="text-red-500 text-xs mt-1 font-semibold">{fieldErrors.phone}</p>
