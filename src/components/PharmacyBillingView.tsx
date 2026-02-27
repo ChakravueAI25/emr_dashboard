@@ -1,5 +1,6 @@
 ﻿import React, { useState, useEffect, useRef } from 'react';
 import { ShoppingCart, Plus, Minus, Trash2, Search, Eye, User, X, ChevronDown, CheckCircle } from 'lucide-react';
+import { showAlert } from './ui/AlertModal';
 import API_ENDPOINTS from '../config/api';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -364,7 +365,7 @@ export function PharmacyBillingView({
     if (printWindow) {
       printWindow.document.write(printContent);
       printWindow.document.close();
-      printWindow.onload = () => printWindow.print();
+      printWindow.onload = () => { printWindow.focus(); printWindow.print(); };
     }
   };
 
@@ -418,7 +419,7 @@ export function PharmacyBillingView({
       // Auto-print bill
       handlePrintPharmacyBill(result.billId, cart, cartTotal);
 
-      alert(`Pharmacy billing completed!\nBill ID: ${result.billId}\nTotal: ₹${cartTotal}`);
+      showAlert(`Pharmacy billing completed! Bill ID: ${result.billId}. Total: ₹${cartTotal}`);
       
       setWaveOffReason('');
       setCustomReason('');
@@ -438,19 +439,19 @@ export function PharmacyBillingView({
       setCart([]);
       if (onBillingComplete) onBillingComplete(cartTotal);
     } catch (err) {
-      alert(`Error: ${err instanceof Error ? err.message : 'Failed to complete checkout'}`);
+      showAlert(`Error: ${err instanceof Error ? err.message : 'Failed to complete checkout'}`, 'error');
     }
   };
 
   const handleCheckout = async () => {
     if (cart.length === 0) {
-      alert('Please add items to cart');
+      showAlert('Please add items to cart', 'error');
       return;
     }
 
     if (isWaveOffMode) {
       if (!waveOffReason) {
-        alert('Please select a mandatory reason for Wave Off');
+        showAlert('Please select a mandatory reason for Wave Off', 'error');
         return;
       }
       setShowPinModal(true);
@@ -458,7 +459,7 @@ export function PharmacyBillingView({
     }
     
     if (!currentRegId) {
-      alert('Please select a patient');
+      showAlert('Please select a patient', 'error');
       return;
     }
     

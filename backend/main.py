@@ -875,31 +875,30 @@ async def download_patient_document(registration_id: str, file_id: str, inline: 
 
 
 @app.get("/patients/recent")
-async def get_most_recent_patient():
-    """Return the most recently created patient record."""
-    doc = patient_collection.find_one(sort=[('created_at', -1)])
-    if not doc:
-        raise HTTPException(status_code=404, detail="No patients found")
-
-    def sanitize(obj):
-        if isinstance(obj, dict):
-            out = {}
-            for k, v in obj.items():
-                if k == '_id' and isinstance(v, ObjectId):
-                    out['id'] = str(v)
-                elif isinstance(v, ObjectId):
-                    out[k] = str(v)
-                elif isinstance(v, datetime):
-                    out[k] = v.isoformat()
-                else:
-                    out[k] = sanitize(v)
-            return out
-        elif isinstance(obj, list):
-            return [sanitize(x) for x in obj]
-        else:
-            return obj
-
-    return sanitize(doc)
+async def get_recent_patients(limit: int = 5):
+    """Return the most recently created patient records."""
+    try:
+        cursor = patient_collection.find(
+            {},
+            {"name": 1, "registrationId": 1, "created_at": 1, "demographics": 1, "contactInfo": 1}
+        ).sort("created_at", -1).limit(limit)
+        
+        patients = []
+        for doc in cursor:
+            # Convert ObjectId to string for JSON serialization
+            doc_copy = {
+                "_id": str(doc.get("_id")),
+                "name": doc.get("name"),
+                "registrationId": doc.get("registrationId"),
+                "created_at": doc.get("created_at"),
+                "demographics": doc.get("demographics", {}),
+                "contactInfo": doc.get("contactInfo", {}),
+            }
+            patients.append(doc_copy)
+        
+        return {"patients": patients}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving recent patients: {str(e)}")
 
 # Search patients by name, email, phone, or registration ID (case-insensitive). Returns a list of lightweight
 # documents suitable for showing search results in the UI.
@@ -974,13 +973,17 @@ async def search_patients(q: str | None = None, limit: int = 20):
 
 
 @app.get("/patients/all")
-async def get_all_patients():
-    """Retrieve all patients with their basic information."""
+async def get_all_patients(skip: int = 0, limit: int = 100):
+    """Retrieve patients with pagination. Defaults to 100 records."""
     try:
+        # Check if caller wants "all" (no limit) - could be risky with 8000+ docs
+        # So we default to 100 to prevent crashing. 
+        # If frontend needs ALL, it should be refactored to use pagination or search.
+        
         cursor = patient_collection.find(
             {},
             {"name": 1, "registrationId": 1, "demographics": 1, "contactInfo": 1, "created_at": 1}
-        ).sort("created_at", -1)
+        ).sort("created_at", -1).skip(skip).limit(limit)
         
         patients = []
         for doc in cursor:
@@ -995,7 +998,10 @@ async def get_all_patients():
             }
             patients.append(doc_copy)
         
-        return {"patients": patients}
+        # Get total count for pagination metadata
+        total_count = patient_collection.count_documents({})
+        
+        return {"patients": patients, "total": total_count, "skip": skip, "limit": limit}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error retrieving patients: {str(e)}")
 

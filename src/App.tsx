@@ -33,6 +33,7 @@ import { MedicineManagementView } from './components/MedicineManagementView';
 import { PatientHistoryView } from './components/PatientHistoryView';
 import { DataRepairView } from './components/DataRepairView';
 import { ProfileSettings } from './components/ProfileSettings';
+import { SettingsView } from './components/SettingsView';
 import { DoctorProfileView } from './components/DoctorProfileView';
 import { DeviceInfoDisplay } from './components/DeviceInfoDisplay';
 import { PaymentSetupView } from './components/PaymentSetupView';
@@ -152,7 +153,11 @@ export default function App() {
     localStorage.setItem('is_authenticated', String(isAuthenticated));
     if (userRole) localStorage.setItem('user_role', userRole);
     if (currentUsername) localStorage.setItem('current_username', currentUsername);
-    localStorage.setItem('current_view', currentView);
+    // Never persist patient-detail views — on reload there's no patient loaded,
+    // which would show the blank "Ready for Arrivals" screen.
+    const patientDetailViews = ['opd-queue', 'doctor-queue', 'reception-patient-view'];
+    const viewToSave = patientDetailViews.includes(currentView) ? 'dashboard' : currentView;
+    localStorage.setItem('current_view', viewToSave);
   }, [isAuthenticated, userRole, currentUsername, currentView]);
 
   
@@ -253,6 +258,14 @@ export default function App() {
     }
   }, [visitIndex]); // patientHistory dependency omitted to avoid loops, purely index based logic
 
+  // Auto-redirect: if we land on a patient-detail view with no patient loaded
+  // (e.g. after page reload with stale localStorage), go back to the right portal
+  useEffect(() => {
+    const patientDetailViews = ['opd-queue', 'doctor-queue', 'reception-patient-view'];
+    if (patientDetailViews.includes(currentView) && !activePatientData) {
+      setCurrentView('dashboard');
+    }
+  }, [currentView, activePatientData]);
 
   // Monitor notifications globally for the sidebar badge
   useEffect(() => {
@@ -715,6 +728,7 @@ export default function App() {
     try {
       // Step 1: Save OPD data to patient document
       const opdPayload = {
+        presentingComplaints: activePatientData.presentingComplaints || {},
         optometry: activePatientData.optometry || {},
         iop: activePatientData.iop || {},
         ophthalmicInvestigations: activePatientData.ophthalmicInvestigations || {},
@@ -1035,6 +1049,16 @@ export default function App() {
         emergencyContact: (doc?.emergencyContact && (doc.emergencyContact.name || '')) || ''
       },
       presentingComplaints: (() => {
+        // PRIMARY: reception saves presentingComplaints directly to the doc (top-level)
+        const topLevel = doc?.presentingComplaints;
+        if (topLevel && Array.isArray(topLevel.complaints) && topLevel.complaints.length > 0) {
+          return {
+            complaints: topLevel.complaints,
+            history: topLevel.history || { severity: '', onset: '', aggravating: '', relieving: '', associated: '' },
+            timeline: topLevel.timeline || []
+          };
+        }
+        // FALLBACK: older schema stores them inside encounters[]
         const encounters = Array.isArray(doc?.encounters) ? doc.encounters : [];
         let complaints = [{ id: '1', complaint: '', duration: '' }];
         for (const enc of encounters) {
@@ -1059,7 +1083,7 @@ export default function App() {
       optometry: (doc.optometry || { vision: { unaided: { rightEye: '', leftEye: '' }, withGlass: { rightEye: '', leftEye: '' }, withPinhole: { rightEye: '', leftEye: '' }, bestCorrected: { rightEye: '', leftEye: '' } }, autoRefraction: { ur: { sph: '', cyl: '', axis: '' }, dr: { sph: '', cyl: '', axis: '' } }, finalGlasses: { rightEye: { sph: '', cyl: '', axis: '', prism: '', va: '', nv: '' }, leftEye: { sph: '', cyl: '', axis: '', prism: '', va: '', nv: '' }, add: '', mDist: '' }, oldGlass: { rightEye: { sph: '', cyl: '', axis: '', va: '', add: '' }, leftEye: { sph: '', cyl: '', axis: '', va: '', add: '' } }, additional: { gpAdvisedFor: '', gpAdvisedBy: '', useOfGlass: '', product: '' } }) as any,
       iop: doc.iop || {} as any,
       ophthalmicInvestigations: doc.ophthalmicInvestigations || {} as any,
-      systemicInvestigations: doc.systemic || {} as any,
+      systemicInvestigations: doc.systemicInvestigations || doc.systemic || {} as any,
       ophthalmologistExamination: doc.doctor || {} as any,
       specialExamination: {} as any,
       medicationPrescribed: { items: [] },
@@ -1591,14 +1615,16 @@ export default function App() {
               />
             )  : currentView === 'dashboard' ? (
   isAuthenticated && (userRole === ROLES.RECEPTIONIST) ? (
-    <ReceptionistDashboardView
+    <ReceptionistPortal
       username={currentUsername || 'Receptionist'}
       onLogout={handleLogout}
-      onPatientSelected={(selected) => {
-        const regId = selected.patientRegistrationId || selected.registrationId;
+      onViewChange={setCurrentView}
+      activePatientData={activePatientData}
+      onClearPatient={() => { setActivePatientData(null); setIsPatientDischarged(false); }}
+      onPatientSelected={async (selected) => {
+        const regId = selected.patientRegistrationId || selected.registrationId || selected.patientId;
         if (regId && regId !== 'Not Assigned') {
-          loadPatientByRegistration(regId, true, true);
-          setCurrentView('reception-patient-view');
+          await loadPatientByRegistration(regId, true, true);
         } else {
           setActivePatientData({
             ...JSON.parse(JSON.stringify(defaultPatientData)),
@@ -1608,9 +1634,20 @@ export default function App() {
               registrationId: 'Not Assigned'
             }
           });
-          setCurrentView('reception-patient-view');
         }
       }}
+      handleReceptionCompleteCheckIn={handleReceptionCompleteCheckIn}
+      handleOPDSave={handleOPDSave}
+      updateActivePatientData={updateActivePatientData}
+      setActivePatientData={setActivePatientData}
+      isPatientDischarged={isPatientDischarged}
+      setIsPatientDischarged={setIsPatientDischarged}
+      visitIndex={visitIndex}
+      totalVisits={totalVisits}
+      setVisitIndex={setVisitIndex}
+      handlePrevVisit={handlePrevVisit}
+      handleNextVisit={handleNextVisit}
+      newVisit={newVisit}
     />
               ) : isAuthenticated && userRole === 'doctor' ? (
                 <DoctorPortal
@@ -1623,23 +1660,74 @@ export default function App() {
                     setIsPatientDischarged(false);
                   }}
                   onPatientSelected={async (selected) => {
-                    const regId = selected.patientRegistrationId || selected.registrationId;
                     const discharged = selected.isDischargedPatient || selected.level === 'Discharged';
                     setIsPatientDischarged(discharged);
 
+                    // Clean Python 'None' artifact from name (e.g. "Abhinaya None" → "Abhinaya")
+                    const rawName = selected.patientName || selected.name || 'New Patient';
+                    const cleanName = rawName.replace(/\bNone\b/g, '').trim() || 'New Patient';
+
+                    // Helper: show patient dashboard after loading or fallback to empty stub
+                    const showPatientOrStub = (regId?: string) => {
+                      if (!regId || regId === 'Not Assigned') {
+                        setActivePatientData({
+                          ...JSON.parse(JSON.stringify(defaultPatientData)),
+                          patientDetails: { ...defaultPatientData.patientDetails, name: cleanName, registrationId: 'Not Assigned' }
+                        });
+                        setCurrentView('dashboard');
+                      }
+                    };
+
+                    const regId = selected.patientRegistrationId || selected.registrationId;
+
                     if (regId && regId !== 'Not Assigned') {
-                      await loadPatientByRegistration(regId, true);
-                      // Stay on dashboard view - patient details shown inside DoctorPortal
+                      // Happy path: known registration id → load full record
+                      try {
+                        await loadPatientByRegistration(regId, true, true);
+                        setCurrentView('dashboard');
+                      } catch (_) {
+                        showPatientOrStub();
+                      }
                     } else {
-                      setActivePatientData({
-                        ...JSON.parse(JSON.stringify(defaultPatientData)),
-                        patientDetails: {
-                          ...defaultPatientData.patientDetails,
-                          name: selected.patientName || selected.name || 'New Patient',
-                          registrationId: 'Not Assigned'
+                      // 1) Try doctor queue lookup by appointmentId
+                      const apptId = selected.appointmentId || selected._id || selected.id;
+                      let resolvedId: string | undefined;
+                      if (apptId) {
+                        try {
+                          const qResp = await fetch(API_ENDPOINTS.QUEUE_DOCTOR);
+                          if (qResp.ok) {
+                            const qData = await qResp.json();
+                            const qItem = (qData.items || []).find((item: any) =>
+                              item.appointmentId === apptId && item.registrationId
+                            );
+                            resolvedId = qItem?.registrationId;
+                          }
+                        } catch (_) { /* ignore */ }
+                      }
+
+                      // 2) Try name-based patient search as final fallback
+                      if (!resolvedId && cleanName && cleanName !== 'New Patient') {
+                        try {
+                          const sResp = await fetch(`${API_ENDPOINTS.PATIENTS_SEARCH}?q=${encodeURIComponent(cleanName)}&limit=3`);
+                          if (sResp.ok) {
+                            const sData = await sResp.json();
+                            const found = (sData.patients || sData)?.[0];
+                            if (found?.registrationId) resolvedId = found.registrationId;
+                          }
+                        } catch (_) { /* ignore */ }
+                      }
+
+                      if (resolvedId) {
+                        try {
+                          await loadPatientByRegistration(resolvedId, true, true);
+                          setCurrentView('dashboard');
+                        } catch (_) {
+                          showPatientOrStub();
                         }
-                      });
-                      // Stay on dashboard view
+                      } else {
+                        // No patient found at all — open empty record so doctor can still fill data
+                        showPatientOrStub();
+                      }
                     }
                   }}
                   handleDoctorSave={handleDoctorSave}
@@ -1658,15 +1746,14 @@ export default function App() {
                   userRole={userRole}
                   onLogout={handleLogout}
                   onViewChange={setCurrentView}
-
+                  activePatientData={activePatientData}
+                  onClearPatient={() => { setActivePatientData(null); setIsPatientDischarged(false); }}
                   onPatientSelected={async (selected) => {
                     const regId = selected.patientRegistrationId || selected.registrationId;
                     const discharged = selected.isDischargedPatient || selected.level === 'Discharged';
                     setIsPatientDischarged(discharged);
-
                     if (regId && regId !== 'Not Assigned') {
-                      await loadPatientByRegistration(regId, true);
-                      setCurrentView('opd-queue');
+                      await loadPatientByRegistration(regId, true, true);
                     } else {
                       setActivePatientData({
                         ...JSON.parse(JSON.stringify(defaultPatientData)),
@@ -1676,9 +1763,20 @@ export default function App() {
                           registrationId: 'Not Assigned'
                         }
                       });
-                      setCurrentView('opd-queue');
                     }
                   }}
+                  handleOPDSave={handleOPDSave}
+                  handleReceptionCompleteCheckIn={handleReceptionCompleteCheckIn}
+                  updateActivePatientData={updateActivePatientData}
+                  setActivePatientData={setActivePatientData}
+                  isPatientDischarged={isPatientDischarged}
+                  setIsPatientDischarged={setIsPatientDischarged}
+                  visitIndex={visitIndex}
+                  totalVisits={totalVisits}
+                  setVisitIndex={setVisitIndex}
+                  handlePrevVisit={handlePrevVisit}
+                  handleNextVisit={handleNextVisit}
+                  newVisit={newVisit}
                 />
               ) : (
                 <div className="h-screen overflow-hidden bg-[#050505]">
@@ -1815,35 +1913,34 @@ export default function App() {
               <PatientHistoryView />
             ) : currentView === 'data-repair' ? (
               <DataRepairView />
-            ) : currentView === 'settings' || currentView === 'profile-settings' ? (
-              (() => {
-                console.log('[DEBUG] profile view - userRole:', userRole, 'currentUsername:', currentUsername);
-                if (userRole === ROLES.RECEPTIONIST) {
-                  return (
-                    <ReceptionistProfileView
-                      username={currentUsername || ''}
-                      onPatientSelected={(patient) => {
-                        const regId = patient.patientRegistrationId || patient.registrationId;
-                        if (regId && regId !== 'Not Assigned') {
-                          loadPatientByRegistration(regId, true);
-                        }
-                      }}
-                    />
-                  );
-                }
-                return (
-                  <ProfileSettings 
-                    username={currentUsername || undefined} 
-                    role={userRole || undefined}
-                    onPatientSelected={(patient) => {
-                      const regId = patient.patientRegistrationId || patient.registrationId;
-                      if (regId && regId !== 'Not Assigned') {
-                        loadPatientByRegistration(regId, true);
-                      }
-                    }}
-                  />
-                );
-              })()
+            ) : currentView === 'settings' ? (
+              <SettingsView 
+                username={currentUsername || undefined} 
+                role={userRole || undefined}
+              />
+            ) : currentView === 'profile-settings' ? (
+              userRole === 'receptionist' ? (
+                <ReceptionistProfileView 
+                  username={currentUsername || undefined}
+                  onPatientSelected={(patient) => {
+                    const regId = patient.patientRegistrationId || patient.registrationId;
+                    if (regId && regId !== 'Not Assigned') {
+                      loadPatientByRegistration(regId, true);
+                    }
+                  }}
+                />
+              ) : (
+                <ProfileSettings 
+                  username={currentUsername || undefined} 
+                  role={userRole || undefined}
+                  onPatientSelected={(patient) => {
+                    const regId = patient.patientRegistrationId || patient.registrationId;
+                    if (regId && regId !== 'Not Assigned') {
+                      loadPatientByRegistration(regId, true);
+                    }
+                  }}
+                />
+              )
             ) : currentView === 'doctor-profile' ? (
               <DoctorProfileView
                 username={currentUsername || undefined}

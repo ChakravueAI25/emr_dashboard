@@ -1,8 +1,10 @@
 ﻿import { useState, useEffect } from 'react';
-import { CalendarPlus, User, Zap, Activity } from 'lucide-react';
+import { CalendarPlus, User, Zap, ArrowLeft } from 'lucide-react';
 import API_ENDPOINTS from '../config/api';
 import { AppointmentBookingView } from './AppointmentBookingView';
 import { UnifiedOperationsHub } from './UnifiedOperationsHub';
+import { PatientDashboard } from './dashboard/PatientDashboard';
+import { PatientData, UserRole, ROLES } from './patient';
 import { useIsLightTheme } from '../hooks/useTheme';
 
 interface ReceptionistPortalProps {
@@ -10,12 +12,36 @@ interface ReceptionistPortalProps {
     onLogout: () => void;
     onViewChange: (view: any) => void;
     onPatientSelected?: (patient: any) => void;
+    activePatientData?: PatientData | null;
+    onClearPatient?: () => void;
+    handleReceptionCompleteCheckIn?: () => Promise<void>;
+    handleOPDSave?: () => Promise<void>;
+    updateActivePatientData?: (path: (string | number)[], value: any) => void;
+    setActivePatientData?: (data: PatientData | null) => void;
+    isPatientDischarged?: boolean;
+    setIsPatientDischarged?: (v: boolean) => void;
+    visitIndex?: number;
+    totalVisits?: number;
+    setVisitIndex?: React.Dispatch<React.SetStateAction<number>>;
+    handlePrevVisit?: () => void;
+    handleNextVisit?: () => void;
+    newVisit?: boolean;
 }
 
 type PortalView = 'dashboard' | 'booking' | 'ops-center';
 
-export function ReceptionistPortal({ username, onLogout, onViewChange, onPatientSelected }: ReceptionistPortalProps) {
+export function ReceptionistPortal({
+    username, onLogout, onViewChange, onPatientSelected,
+    activePatientData, onClearPatient, handleReceptionCompleteCheckIn, handleOPDSave,
+    updateActivePatientData, setActivePatientData, isPatientDischarged, setIsPatientDischarged,
+    visitIndex = 0, totalVisits = 1, setVisitIndex, handlePrevVisit, handleNextVisit, newVisit = false
+}: ReceptionistPortalProps) {
     const [activeTab, setActiveTab] = useState<PortalView>('dashboard');
+
+    const handleBackToDashboard = () => {
+        if (onClearPatient) onClearPatient();
+        setActiveTab('dashboard');
+    };
     const [stats, setStats] = useState({ bookings: 0, waiting: 0, active: 'Active' });
     const isLight = useIsLightTheme();
     const activeCol = isLight ? '#753d3e' : 'var(--theme-accent)';
@@ -107,33 +133,61 @@ export function ReceptionistPortal({ username, onLogout, onViewChange, onPatient
 
             {/* Main Content Workspace */}
             <div className="flex-1 flex flex-col bg-gradient-to-br from-[var(--theme-bg-gradient-from)] to-[var(--theme-bg-gradient-to)] overflow-hidden">
-                {/* Dynamic Content Area */}
-                <div className={`flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-[#222] px-8 pb-8 pt-0 ${activeTab === 'ops-center' ? 'p-4' : ''}`}>
-                    {activeTab === 'dashboard' && (
-                        <UnifiedOperationsHub
-                            username={username}
-                            userRole="receptionist"
-                            onPatientSelected={onPatientSelected}
-                            onNavigate={(tab: string) => { console.log('Navigation to', tab); /* No-op or handle future nav */ }}
-                        />
-                    )}
-                    {activeTab === 'booking' && (
-                        <div className="h-full pt-6">
-                            <AppointmentBookingView
-                                onNavigateToBilling={(registrationId, patientData) => {
-                                    // Use window.location.hash or a global event, or ideally lift state up if possible
-                                    // For now, use a global event as a workaround
-                                    console.log('📍 [ReceptionistPortal] AppointmentBooking callback invoked with:', { registrationId, patientData });
-                                    if (window && typeof window.dispatchEvent === 'function') {
-                                        window.dispatchEvent(new CustomEvent('navigate-to-billing', {
-                                            detail: { registrationId, patientData }
-                                        }));
-                                    }
-                                }}
-                            />
+                {activePatientData ? (
+                    <div className="flex-1 p-8 overflow-y-auto scrollbar-hide">
+                        <div className="mb-6">
+                            <button
+                                onClick={handleBackToDashboard}
+                                className="flex items-center gap-2.5 px-6 py-3 bg-[var(--theme-accent)] text-white force-text-white rounded-xl shadow-lg hover:opacity-90 transition-all font-bold text-sm group"
+                            >
+                                <ArrowLeft className="w-5 h-5 transition-transform duration-300 group-hover:-translate-x-1.5" />
+                                Back to Dashboard
+                            </button>
                         </div>
-                    )}
-                </div>
+                        <PatientDashboard
+                            activePatientData={activePatientData}
+                            userRole={'receptionist' as UserRole}
+                            updateActivePatientData={updateActivePatientData || (() => {})}
+                            visitIndex={visitIndex}
+                            totalVisits={totalVisits}
+                            setVisitIndex={setVisitIndex || (() => {})}
+                            handlePrevVisit={handlePrevVisit || (() => {})}
+                            handleNextVisit={handleNextVisit || (() => {})}
+                            isPatientDischarged={isPatientDischarged || false}
+                            handleReceptionCompleteCheckIn={handleReceptionCompleteCheckIn || (async () => {})}
+                            handleOPDSave={handleOPDSave || (async () => {})}
+                            handleDoctorSave={async () => {}}
+                            setActivePatientData={setActivePatientData || (() => {})}
+                            setIsPatientDischarged={setIsPatientDischarged || (() => {})}
+                            setCurrentView={onViewChange}
+                            newVisit={newVisit}
+                        />
+                    </div>
+                ) : (
+                    <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-[#222] px-8 pb-8 pt-0">
+                        {activeTab === 'dashboard' && (
+                            <UnifiedOperationsHub
+                                username={username}
+                                userRole="receptionist"
+                                onPatientSelected={onPatientSelected}
+                                onNavigate={(tab: string) => setActiveTab(tab as PortalView)}
+                            />
+                        )}
+                        {activeTab === 'booking' && (
+                            <div className="h-full pt-6">
+                                <AppointmentBookingView
+                                    onNavigateToBilling={(registrationId, patientData) => {
+                                        if (window && typeof window.dispatchEvent === 'function') {
+                                            window.dispatchEvent(new CustomEvent('navigate-to-billing', {
+                                                detail: { registrationId, patientData }
+                                            }));
+                                        }
+                                    }}
+                                />
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
         </div>
     );

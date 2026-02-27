@@ -334,7 +334,6 @@
 import React, { useState, useEffect, Fragment } from 'react';
 import {
   Search,
-  Filter,
   MoreVertical,
   Eye,
   Edit,
@@ -348,9 +347,6 @@ import {
   AlertCircle,
   ChevronRight,
   ArrowRight,
-  Printer,
-  Download,
-  Plus,
   TrendingUp,
 } from 'lucide-react';
 import { Card } from './ui/card';
@@ -517,14 +513,6 @@ export function BillingDashboardView({ onBillingClick }: BillingDashboardViewPro
             </svg>
             Refresh
           </Button>
-          <Button className="bg-[#D4A574] text-[#0a0a0a] hover:bg-[#C9955E] font-bold">
-            <Printer className="w-4 h-4 mr-2" />
-            Print Report
-          </Button>
-          <Button className="bg-[#D4A574] text-[#0a0a0a] hover:bg-[#C9955E]">
-            <Plus className="w-4 h-4 mr-2" />
-            New Transaction
-          </Button>
         </div>
       </div>
 
@@ -636,10 +624,6 @@ export function BillingDashboardView({ onBillingClick }: BillingDashboardViewPro
             <option>Completed</option>
             <option>Cancelled</option>
           </select>
-          <Button className="bg-[#D4A574] text-[#0a0a0a] hover:bg-[#C9955E] font-bold">
-            <Filter className="w-4 h-4 mr-2" />
-            More Filters
-          </Button>
         </div>
       </div>
 

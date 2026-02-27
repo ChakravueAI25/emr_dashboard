@@ -152,19 +152,16 @@ export function DashboardView({ appSettings, setAppSettings, username, userRole 
       if (!username) return;
 
       try {
-        const res = await fetch(API_ENDPOINTS.PATIENTS_ALL);
+        // Use the optimized recent patients endpoint (limit 5) instead of fetching all 8000+
+        const res = await fetch(API_ENDPOINTS.PATIENTS_RECENT(5));
         if (!res.ok) throw new Error('Failed to fetch patients');
 
         const data = await res.json();
+        // The endpoint returns { patients: [...] }
         const patients = data.patients || [];
 
-        // Sort by registration date (newest first) and get top 3
+        // No need to sort client-side, the backend already returns sorted by created_at desc
         const sortedPatients = patients
-          .sort((a: any, b: any) => {
-            const dateA = new Date(a.created_at || a.registrationDate || 0).getTime();
-            const dateB = new Date(b.created_at || b.registrationDate || 0).getTime();
-            return dateB - dateA;
-          })
           .slice(0, 3)
           .map((patient: any, idx: number) => ({
             label: idx === 0 ? 'New Patients' : idx === 1 ? 'Existing Patients' : 'Patient On Hold',

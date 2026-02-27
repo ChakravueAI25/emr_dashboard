@@ -193,6 +193,7 @@ export function AppointmentBookingView(props: AppointmentBookingViewProps) {
   };
 
   const handleCreateNewPatient = async () => {
+    setError(null); // clear any stale error from previous attempts
     const newErrors: { name?: string; phone?: string } = {};
 
     // Validate name
@@ -200,22 +201,6 @@ export function AppointmentBookingView(props: AppointmentBookingViewProps) {
       newErrors.name = 'Patient name is required';
     }
 
-    // Check if a patient with this name already exists
-    try {
-      const response = await fetch(`${API_ENDPOINTS.PATIENTS_SEARCH}?q=${encodeURIComponent(newPatientName)}`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data.results && data.results.length > 0) {
-          // Patient with this name already exists
-          const existingPatient = data.results[0];
-          setError(`A patient named "${newPatientName}" already exists with ID ${existingPatient.registrationId}. Please select from search results instead.`);
-          return;
-        }
-      }
-    } catch (err) {
-      console.warn('Could not check for duplicates:', err);
-      // Continue anyway if search fails
-    }
     // Validate phone number
     if (!newPatientPhone.trim()) {
       newErrors.phone = 'Contact number is required';
@@ -559,7 +544,7 @@ export function AppointmentBookingView(props: AppointmentBookingViewProps) {
                 <div className={`transition-all duration-500 ${isNewPatient ? 'md:col-span-2' : ''}`}>
                   {!isNewPatient ? (
                     <button
-                      onClick={() => setIsNewPatient(true)}
+                      onClick={() => { setIsNewPatient(true); setError(null); }}
                       className="w-full h-full min-h-[140px] bg-[var(--theme-bg-secondary)] border border-[var(--theme-accent)] border-dashed rounded-3xl flex flex-col items-center justify-center gap-3 hover:bg-[var(--theme-bg-tertiary)] hover:border-[var(--theme-accent)] transition-all text-[var(--theme-text-muted)] hover:text-[var(--theme-accent)] group shadow-lg"
                     >
                       <div className="p-3 bg-[var(--theme-bg-tertiary)] rounded-2xl group-hover:bg-[var(--theme-accent)] group-hover:force-text-white transition-all">
@@ -595,6 +580,7 @@ export function AppointmentBookingView(props: AppointmentBookingViewProps) {
                               onChange={(e) => {
                                 setNewPatientName(e.target.value);
                                 if (fieldErrors.name) setFieldErrors({ ...fieldErrors, name: undefined });
+                                if (error) setError(null);
                               }}
                               className={`bg-[var(--theme-bg-tertiary)] h-12 rounded-xl focus:border-[var(--theme-accent)]/50 text-[var(--theme-text)] placeholder:text-[var(--theme-text-muted)] ${fieldErrors.name ? 'border-red-500' : 'border-[var(--theme-accent)]'
                                 }`}

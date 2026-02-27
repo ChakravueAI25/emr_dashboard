@@ -1,9 +1,5 @@
 ﻿import React, { useState } from 'react';
-import { Camera, Save, User, Mail, Phone, Shield, CheckCircle2, Circle, Plus, TrendingUp, Users, Activity, IndianRupee, Pill, Zap, CalendarPlus } from 'lucide-react';
-import { Button } from './ui/button';
-import { useIsLightTheme } from '../hooks/useTheme';
-import { UnifiedOperationsHub } from './UnifiedOperationsHub';
-import { AppointmentBookingView } from './AppointmentBookingView';
+import { User, CheckCircle2, Circle, Plus, TrendingUp, Users, Activity, IndianRupee, Pill } from 'lucide-react';
 
 interface ProfileSettingsProps {
    username?: string;
@@ -13,11 +9,7 @@ interface ProfileSettingsProps {
    onPatientSelected?: (patient: any) => void;
 }
 
-type PortalView = 'dashboard' | 'booking';
-
-export function ProfileSettings({ username, role, onNavigateToDashboard, onNavigateToBooking, onPatientSelected }: ProfileSettingsProps) {
-      // Action bar toggle state
-      const [activeBar, setActiveBar] = useState<'operations' | 'appointment'>('operations');
+export function ProfileSettings({ username, role }: ProfileSettingsProps) {
    const [profile, setProfile] = useState({
       fullName: username || 'Dr. Meeraa',
       email: username ? `${username.toLowerCase().replace(/\s+/g, '.')}@chakravue.ai` : 'meeraa@chakravue.ai',
@@ -25,11 +17,7 @@ export function ProfileSettings({ username, role, onNavigateToDashboard, onNavig
       role: role || 'Clinical Lead',
       department: role === 'doctor' ? 'Cardiology' : 'Operations'
    });
-
-   const [activeTab, setActiveTab] = useState<PortalView>('dashboard');
-   const isLight = useIsLightTheme();
-   const activeCol = isLight ? '#753d3e' : 'var(--theme-accent)';
-   const inactiveCol = isLight ? '#6c757d' : 'var(--theme-text-muted)';
+   
    // Calendar state
    const [selectedDate, setSelectedDate] = useState(new Date());
    const [selectedCalendarDate, setSelectedCalendarDate] = useState<number | null>(new Date().getDate());
@@ -57,19 +45,6 @@ export function ProfileSettings({ username, role, onNavigateToDashboard, onNavig
       }
    }, [username, role]);
 
-   const handleChange = (field: string, value: string) => {
-      setProfile(prev => ({ ...prev, [field]: value }));
-   };
-
-   const navItems = [
-      { id: 'dashboard' as PortalView, label: 'Operations Hub', icon: Zap, desc: 'Overview & Status' },
-      { id: 'booking' as PortalView, label: 'Fix Appointment', icon: CalendarPlus, desc: 'New Patient Booking' },
-   ];
-
-   // DEBUG: Log role for troubleshooting
-   console.log('ProfileSettings - Current role:', role, 'Username:', username);
-
-   // Default Profile Settings for non-receptionist roles
    const generateCalendar = () => {
       const year = selectedDate.getFullYear();
       const month = selectedDate.getMonth();
@@ -111,10 +86,10 @@ export function ProfileSettings({ username, role, onNavigateToDashboard, onNavig
          {/* Header */}
          <div className="flex flex-col gap-2 mb-8 flex-shrink-0">
             <h1 className="text-4xl font-light text-[var(--theme-text)] tracking-tight">
-               Profile <span className="font-bold text-[var(--theme-accent)]">Settings</span>
+               Profile <span className="font-bold text-[var(--theme-accent)]">Overview</span>
             </h1>
             <p className="text-[var(--theme-text-muted)] text-sm font-medium uppercase tracking-[0.2em] opacity-60">
-               Personal Information & Contact Details
+               Your Professional Dashboard
             </p>
          </div>
 

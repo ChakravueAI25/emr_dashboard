@@ -24,6 +24,7 @@ export const API_ENDPOINTS = {
   // Patient endpoints
   PATIENTS_NEW: `${API_BASE_URL}/patients/new`,
   PATIENTS_ALL: `${API_BASE_URL}/patients/all`,
+  PATIENTS_RECENT: (limit: number = 5) => `${API_BASE_URL}/patients/recent?limit=${limit}`,
   PATIENTS_SEARCH: `${API_BASE_URL}/patients/search`,
   PATIENT: (registrationId: string) => `${API_BASE_URL}/patients/${encodeURIComponent(registrationId)}`,
   PATIENT_VISITS: (registrationId: string) => `${API_BASE_URL}/patients/${encodeURIComponent(registrationId)}/visits`,

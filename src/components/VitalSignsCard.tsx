@@ -1,7 +1,7 @@
 ﻿import { useRef } from 'react';
 import { EditableText, EditableTextHandle } from './EditableText';
 import { ExpandableCard } from './ExpandableCard';
-import { FileText, Clock, AlertCircle, Plus, X, Eye, ChevronDown } from 'lucide-react';
+import { FileText, Clock, AlertCircle, Plus, X, Eye, ChevronDown, CheckCircle } from 'lucide-react';
 import { CardHeader } from './CardHeader';
 import { PresentingComplaints, Complaint } from './patient';
 
@@ -99,7 +99,22 @@ export function VitalSignsCard({
     updateComplaint(complaintId, factorType, newFactors);
   };
 
+  const isComplaintSelected = (complaintName: string) =>
+    complaints.some(c => c.complaint === complaintName);
+
   const addComplaintFromButton = (complaintName: string) => {
+    // Toggle: if already selected → remove it; otherwise → add it
+    if (isComplaintSelected(complaintName)) {
+      const updated = complaints.filter(c => c.complaint !== complaintName);
+      // Always keep at least one empty complaint slot
+      updateData(
+        ['presentingComplaints', 'complaints'],
+        updated.length > 0
+          ? updated
+          : [{ id: Date.now().toString(), complaint: '', duration: '', durationUnit: 'days', eye: 'both' }]
+      );
+      return;
+    }
     const newComplaint: Complaint = {
       id: Date.now().toString(),
       complaint: complaintName,
@@ -161,15 +176,24 @@ export function VitalSignsCard({
         <h4 className="text-[var(--theme-accent)] font-bold mb-3 text-lg">Select Complaints</h4>
         <div className="bg-[var(--theme-bg-tertiary)] border border-[var(--theme-border)] rounded-lg p-3 max-h-56 overflow-y-auto shadow-inner">
           <div className="grid grid-cols-4 gap-2">
-            {EYE_COMPLAINTS.map((complaint) => (
-              <button
-                key={complaint}
-                onClick={() => addComplaintFromButton(complaint)}
-                className="bg-[var(--theme-bg)] border border-[var(--theme-border)] hover:bg-[var(--theme-accent)] hover:text-white text-[var(--theme-text)] text-xs p-2 rounded transition-all duration-200 font-bold shadow-sm"
-              >
-                {complaint}
-              </button>
-            ))}
+            {EYE_COMPLAINTS.map((complaint) => {
+              const selected = isComplaintSelected(complaint);
+              return (
+                <button
+                  key={complaint}
+                  onClick={() => isEditable && addComplaintFromButton(complaint)}
+                  disabled={!isEditable}
+                  className={`relative flex items-center justify-center gap-1.5 text-xs p-2 rounded transition-all duration-200 font-bold shadow-sm border ${
+                    selected
+                      ? 'bg-green-500/15 border-green-500/60 text-green-400 ring-1 ring-green-500/40'
+                      : 'bg-[var(--theme-bg)] border-[var(--theme-border)] text-[var(--theme-text)] hover:bg-[var(--theme-accent)] hover:text-white hover:border-[var(--theme-accent)]'
+                  } ${!isEditable ? 'cursor-default' : 'cursor-pointer'}`}
+                >
+                  {selected && <CheckCircle className="w-3.5 h-3.5 text-green-400 flex-shrink-0" />}
+                  <span>{complaint}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>

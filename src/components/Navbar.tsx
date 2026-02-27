@@ -145,18 +145,22 @@ export default function Navbar(props: NavbarProps) {
 
                             {isProfileOpen && (
                                 <div className="absolute right-0 top-full mt-2 w-48 bg-[var(--theme-bg-secondary)] border border-[var(--theme-accent)] rounded-xl shadow-2xl py-1 z-50 animate-in fade-in zoom-in-95 duration-200">
-                                    <button
-                                        onClick={() => {
-                                            console.log('[DEBUG] Profile Settings clicked');
-                                            setIsProfileOpen(false);
-                                            setCurrentView('profile-settings');
-                                        }}
-                                        className="w-full text-left px-4 py-2 text-sm text-[var(--theme-text-secondary)] hover:bg-[var(--theme-bg-tertiary)] hover:text-[var(--theme-text)] flex items-center gap-2 transition-colors"
-                                    >
-                                        <Settings className="w-4 h-4" />
-                                        Settings
-                                    </button>
-                                    <div className="h-px bg-[var(--theme-bg-tertiary)] my-1" />
+                                    {userRole !== ROLES.RECEPTIONIST && (
+                                        <>
+                                            <button
+                                                onClick={() => {
+                                                    console.log('[DEBUG] Profile Settings clicked');
+                                                    setIsProfileOpen(false);
+                                                    setCurrentView('profile-settings');
+                                                }}
+                                                className="w-full text-left px-4 py-2 text-sm text-[var(--theme-text-secondary)] hover:bg-[var(--theme-bg-tertiary)] hover:text-[var(--theme-text)] flex items-center gap-2 transition-colors"
+                                            >
+                                                <Settings className="w-4 h-4" />
+                                                Settings
+                                            </button>
+                                            <div className="h-px bg-[var(--theme-bg-tertiary)] my-1" />
+                                        </>
+                                    )}
                                     <button
                                         onClick={() => {
                                             setIsProfileOpen(false);

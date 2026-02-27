@@ -1136,6 +1136,7 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
       printWindow.document.write(printContent);
       printWindow.document.close();
       printWindow.onload = () => {
+        printWindow.focus();
         printWindow.print();
       };
     }
@@ -1342,6 +1343,7 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
       printWindow.document.write(printContent);
       printWindow.document.close();
       printWindow.onload = () => {
+        printWindow.focus();
         printWindow.print();
       };
     }
