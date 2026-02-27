@@ -1,6 +1,7 @@
 ﻿import React, { useEffect, useState } from 'react';
 import { Upload, FileText, Video, Image as ImageIcon, Download, Trash2, Eye, Search, Filter, User } from 'lucide-react';
 import API_ENDPOINTS from '../config/api';
+import { useIsLightTheme } from '../hooks/useTheme';
 
 interface Document {
   id: string;
@@ -242,6 +243,7 @@ function Uploader({ patientRegistrationId, onUploaded }: { patientRegistrationId
 }
 
 export function DocumentsView({ patientRegistrationId, patientName: initialPatientName }: { patientRegistrationId?: string | null, patientName?: string }) {
+  const isLight = useIsLightTheme();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'pdf' | 'video' | 'image'>('all');
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -367,27 +369,23 @@ export function DocumentsView({ patientRegistrationId, patientName: initialPatie
 
         {/* Current Patient Info */}
         {patientRegistrationId && patientRegistrationId !== 'Not Assigned' ? (
-          <div className="mt-6 flex items-center gap-4 bg-[var(--theme-bg-secondary)] border border-[var(--theme-accent)]/30 rounded-2xl p-5 shadow-inner">
-            <div className="w-14 h-14 rounded-2xl bg-[var(--theme-accent)]/10 flex items-center justify-center border border-[var(--theme-accent)]/20 shadow-md">
-              <User className="w-7 h-7 text-[var(--theme-accent)]" />
+          <div className={`flex items-center gap-4 p-4 rounded-xl border transition-colors duration-300 ${isLight ? 'bg-[#f5f5f5] border-[#eee]' : 'bg-[#181818] border-[#333]'}`} style={{boxShadow: isLight ? undefined : '0 2px 16px 0 #0008'}}>
+            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-colors duration-300 ${isLight ? 'bg-[#fff]' : 'bg-[#232323]'}`}>
+              <User className={`w-7 h-7 transition-colors duration-300 ${isLight ? 'text-[#222]' : 'text-[#D4A574]'}`} />
             </div>
             <div>
-              <p className="text-[var(--theme-text)] font-bold text-lg">{patientName || 'Loading...'}</p>
-              <div className="flex items-center gap-2">
-                <p className="text-[var(--theme-accent)] text-sm font-mono font-bold">{patientRegistrationId}</p>
-                <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
-                <span className="text-[10px] font-black uppercase tracking-widest text-green-500/80">Active Session</span>
-              </div>
+              <span className={`block text-lg font-bold transition-colors duration-300 ${isLight ? 'text-[#753d3e]' : 'text-[#D4A574]'}`}>Selection Required</span>
+              <span className={`block text-sm font-medium transition-colors duration-300 ${isLight ? 'text-[#666]' : 'text-[#aaa]'}`}>SELECT A PATIENT FROM ANY QUEUE TO START UPLOADING</span>
             </div>
           </div>
         ) : (
-          <div className="mt-6 flex items-center gap-4 bg-[var(--theme-bg-secondary)] border border-yellow-500/20 rounded-2xl p-5 shadow-inner">
-            <div className="w-14 h-14 rounded-2xl bg-yellow-500/10 flex items-center justify-center border border-yellow-500/20 shadow-md">
-              <User className="w-7 h-7 text-yellow-500" />
+          <div className={`mt-6 flex items-center gap-4 p-4 rounded-xl border transition-colors duration-300 ${isLight ? 'bg-[#f5f5f5] border-[#eee]' : 'bg-[#181818] border-[#333]'}`} style={{boxShadow: isLight ? undefined : '0 2px 16px 0 #0008'}}>
+            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-colors duration-300 ${isLight ? 'bg-[#fff]' : 'bg-[#232323]'}`}>
+              <User className={`w-7 h-7 transition-colors duration-300 ${isLight ? 'text-[#222]' : 'text-[#D4A574]'}`} />
             </div>
             <div>
-              <p className="text-yellow-500 font-bold text-lg">Selection Required</p>
-              <p className="text-[var(--theme-text-muted)] text-xs font-bold uppercase tracking-widest opacity-60">Select a patient from any queue to start uploading</p>
+              <span className={`block text-lg font-bold transition-colors duration-300 ${isLight ? 'text-[#753d3e]' : 'text-[#D4A574]'}`}>Selection Required</span>
+              <span className={`block text-sm font-medium transition-colors duration-300 ${isLight ? 'text-[#666]' : 'text-[#aaa]'}`}>SELECT A PATIENT FROM ANY QUEUE TO START UPLOADING</span>
             </div>
           </div>
         )}

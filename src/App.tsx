@@ -10,6 +10,7 @@ import { EditableText } from './components/EditableText';
 import Navbar from './components/Navbar';
 
 import { ReceptionistDashboardView } from './components/ReceptionistDashboardView';
+import { ReceptionistProfileView } from './components/ReceptionistProfileView';
 
 import { AnalyticsView } from './components/AnalyticsView';
 import { BillingView } from './components/BillingView';
@@ -1807,35 +1808,22 @@ export default function App() {
               <PatientHistoryView />
             ) : currentView === 'data-repair' ? (
               <DataRepairView />
-            ) : currentView === 'settings' ? (
-              <ProfileSettings 
-                username={currentUsername || undefined} 
-                role={userRole || undefined}
-                onPatientSelected={(patient) => {
-                  const regId = patient.patientRegistrationId || patient.registrationId;
-                  if (regId && regId !== 'Not Assigned') {
-                    loadPatientByRegistration(regId, true);
-                  }
-                }}
-              />
-            ) : currentView === 'profile-settings' ? (
+            ) : currentView === 'settings' || currentView === 'profile-settings' ? (
               (() => {
-                console.log('[DEBUG] profile-settings view - userRole:', userRole, 'currentUsername:', currentUsername);
-                // ReceptionistProfileView removed since file was deleted
-                // if (userRole === ROLES.RECEPTIONIST) {
-                //   return (
-                //     <ReceptionistProfileView 
-                //       username={currentUsername || ''}
-                //       onLogout={handleLogout}
-                //       onPatientSelected={(patient) => {
-                //         const regId = patient.patientRegistrationId || patient.registrationId;
-                //         if (regId && regId !== 'Not Assigned') {
-                //           loadPatientByRegistration(regId, true);
-                //         }
-                //       }}
-                //     />
-                //   );
-                // }
+                console.log('[DEBUG] profile view - userRole:', userRole, 'currentUsername:', currentUsername);
+                if (userRole === ROLES.RECEPTIONIST) {
+                  return (
+                    <ReceptionistProfileView 
+                      username={currentUsername || ''}
+                      onPatientSelected={(patient) => {
+                        const regId = patient.patientRegistrationId || patient.registrationId;
+                        if (regId && regId !== 'Not Assigned') {
+                          loadPatientByRegistration(regId, true);
+                        }
+                      }}
+                    />
+                  );
+                }
                 return (
                   <ProfileSettings 
                     username={currentUsername || undefined} 

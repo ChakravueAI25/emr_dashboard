@@ -10,7 +10,7 @@ import {
     Legend,
     CartesianGrid,
 } from "recharts";
-import { User, Search, Filter, Users } from 'lucide-react';
+import { User, Search, Filter, Users, Activity } from 'lucide-react';
 import API_ENDPOINTS from '../config/api';
 import { useIsLightTheme } from '../hooks/useTheme';
 
@@ -26,6 +26,7 @@ type FilterType = 'all' | 'incoming' | 'at-desk';
 
 export function ReceptionistDashboardView({ username, userRole = 'receptionist', onPatientSelected, onNavigate, onLogout }: ReceptionistDashboardViewProps) {
         // Action bar toggle state
+        const isLight = useIsLightTheme();
         const [activeBar, setActiveBar] = useState<'operations' | 'appointment'>('operations');
     const [stats, setStats] = useState({ scheduled: 0, opdFlow: 0, consulting: 0 });
     const [appointmentStats, setAppointmentStats] = useState({ totalPatients: 0, appointments: 0, consultations: 0 });
@@ -40,7 +41,6 @@ export function ReceptionistDashboardView({ username, userRole = 'receptionist',
     const [showFilterDropdown, setShowFilterDropdown] = useState(false);
     const [showMonthDropdown, setShowMonthDropdown] = useState(false);
     const [showYearDropdown, setShowYearDropdown] = useState(false);
-    const isLight = useIsLightTheme();
     const textColor = isLight ? 'text-[#111111]' : 'text-[#f5f5f5]';
 
     useEffect(() => {
@@ -168,12 +168,12 @@ export function ReceptionistDashboardView({ username, userRole = 'receptionist',
                 <div className="w-full flex items-center justify-between px-8 py-4 bg-[#0a0a0a] border-b border-[#D4A574]" style={{minHeight:'88px'}}>
                     {/* Left Section */}
                     <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-2xl bg-[#2A241D] flex items-center justify-center">
-                            <User className="w-6 h-6 text-[#D4A574]" />
+                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${isLight ? 'bg-[#1a1a1a]' : 'bg-[#2A241D]'}`}>
+                            <User className={`w-6 h-6 ${isLight ? 'text-[#444444]' : 'text-[#D4A574]'}`} />
                         </div>
                         <div className="flex flex-col">
-                            <span className="text-[10px] font-black uppercase tracking-[0.25em] text-[#C0C0C0] mb-1">RECEPTIONIST VIEW</span>
-                            <span className="text-xl font-bold text-white leading-none">Welcome, {username}</span>
+                            <span className={`text-[10px] font-black uppercase tracking-[0.25em] mb-1 ${isLight ? 'text-[#666666]' : 'text-[#C0C0C0]'}`}>RECEPTIONIST VIEW</span>
+                            <span className={`text-xl font-bold leading-none ${isLight ? 'text-[#1a1a1a]' : 'text-white'}`}>Welcome, {username}</span>
                         </div>
                     </div>
                     {/* Right Section */}
@@ -183,27 +183,27 @@ export function ReceptionistDashboardView({ username, userRole = 'receptionist',
                             className={`flex items-center gap-3 px-6 py-2.5 rounded-full transition-all duration-300 ${activeBar === 'operations' ? 'border border-[#D4A574] bg-[#0a0a0a]' : 'border border-transparent hover:bg-[#1a1a1a]'}`}
                             onClick={()=>setActiveBar('operations')}
                         >
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${activeBar === 'operations' ? 'bg-[#2A241D]' : 'bg-[#1a1a1a]'}`}>
-                                {/* Lightning bolt icon */}
-                                <svg width="20" height="20" fill="none" stroke={activeBar === 'operations' ? '#D4A574' : '#8B8B8B'} strokeWidth="2" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 9-12h-9l2-8z"/></svg>
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${activeBar === 'operations' ? (isLight ? 'bg-[#8B2C2C]' : 'bg-[#2A241D]') : (isLight ? 'bg-[#f0f0f0]' : 'bg-[#1a1a1a]')}`}>
+                                {/* Heartbeat/Activity icon */}
+                                <Activity className={`w-5 h-5 ${activeBar === 'operations' ? (isLight ? 'text-white force-white-text' : 'text-[#D4A574]') : (isLight ? 'text-[#1a1a1a]' : 'text-[#8B8B8B]')}`} />
                             </div>
                             <div className="flex flex-col items-start">
-                                <span className="text-sm font-bold text-white">Operations Hub</span>
-                                <span className="text-[10px] font-medium text-[#8B8B8B]">Overview & Status</span>
+                                <span className={`text-sm font-bold ${isLight ? 'text-[#1a1a1a]' : 'text-white'}`}>Operations Hub</span>
+                                <span className={`text-[10px] font-medium ${isLight ? 'text-[#666666]' : 'text-[#8B8B8B]'}`}>Overview & Status</span>
                             </div>
                         </button>
                         {/* Fix Appointment Button */}
                         <button
-                            className={`flex items-center gap-3 px-6 py-2.5 rounded-full transition-all duration-300 ${activeBar === 'appointment' ? 'border border-[#D4A574] bg-[#0a0a0a]' : 'border border-transparent hover:bg-[#1a1a1a]'}`}
+                            className={`flex items-center gap-3 px-6 py-2.5 rounded-full transition-all duration-300 ${activeBar === 'appointment' ? (isLight ? 'border border-[#8B2C2C] bg-white' : 'border border-[#D4A574] bg-[#0a0a0a]') : 'border border-transparent hover:bg-[#1a1a1a] dark:hover:bg-[#1a1a1a] hover:bg-gray-100'}`}
                             onClick={()=>setActiveBar('appointment')}
                         >
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${activeBar === 'appointment' ? 'bg-[#2A241D]' : 'bg-[#1a1a1a]'}`}>
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${activeBar === 'appointment' ? (isLight ? 'bg-[#8B2C2C]' : 'bg-[#2A241D]') : (isLight ? 'bg-[#f0f0f0]' : 'bg-[#1a1a1a]')}`}>
                                 {/* Calendar icon */}
-                                <svg width="20" height="20" fill="none" stroke={activeBar === 'appointment' ? '#D4A574' : '#8B8B8B'} strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                                <svg width="20" height="20" fill="none" stroke={activeBar === 'appointment' ? (isLight ? '#ffffff' : '#D4A574') : (isLight ? '#1a1a1a' : '#8B8B8B')} strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
                             </div>
                             <div className="flex flex-col items-start">
-                                <span className="text-sm font-bold text-white">Fix Appointment</span>
-                                <span className="text-[10px] font-medium text-[#8B8B8B]">New Patient Booking</span>
+                                <span className={`text-sm font-bold ${isLight ? 'text-[#1a1a1a]' : 'text-white'}`}>Fix Appointment</span>
+                                <span className={`text-[10px] font-medium ${isLight ? 'text-[#666666]' : 'text-[#8B8B8B]'}`}>New Patient Booking</span>
                             </div>
                         </button>
                     </div>
@@ -223,29 +223,6 @@ export function ReceptionistDashboardView({ username, userRole = 'receptionist',
                     />
                 ) : (
                     <>
-                        {/* Weekly Reports - 3 Cards in Flex */}
-                        <div className="mb-6">
-                            <div className="flex items-center justify-between mb-4">
-                                <h2 className="text-xl font-semibold text-[#F5F3EF]">Weekly Reports</h2>
-                            </div>
-                            <div className="flex gap-4 flex-wrap">
-                                <div className="flex-1 min-w-[200px] p-6 rounded-2xl bg-[#121015] border border-[#D4A574] flex flex-col items-center">
-                                    <div className="text-sm text-[#C2BAB1] mb-2">Total Patients</div>
-                                    <div className="text-4xl font-bold text-[#FF9D00] mb-1">{appointmentStats.totalPatients}</div>
-                                    <div className="text-xs text-[#8C847B]">Unique patients</div>
-                                </div>
-                                <div className="flex-1 min-w-[200px] p-6 rounded-2xl bg-[#121015] border border-[#D4A574] flex flex-col items-center">
-                                    <div className="text-sm text-[#C2BAB1] mb-2">Appointments</div>
-                                    <div className="text-4xl font-bold text-[#00A3FF] mb-1">{appointmentStats.appointments}</div>
-                                    <div className="text-xs text-[#8C847B]">Total appointments</div>
-                                </div>
-                                <div className="flex-1 min-w-[200px] p-6 rounded-2xl bg-[#121015] border border-[#D4A574] flex flex-col items-center">
-                                    <div className="text-sm text-[#C2BAB1] mb-2">Consultations</div>
-                                    <div className="text-4xl font-bold text-[#7CFF6B] mb-1">{appointmentStats.consultations}</div>
-                                    <div className="text-xs text-[#8C847B]">Estimated from data</div>
-                                </div>
-                            </div>
-                        </div>
                         {/* Chart + filters removed for receptionist view */}
                         {/* Top Row: Stats/Filter */}
                         <div className="flex items-center justify-between gap-4 flex-shrink-0">

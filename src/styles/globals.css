@@ -148,9 +148,9 @@
   --sidebar-ring: #753d3e;
 
   /* Light theme colors */
-  --theme-accent: #753d3e;
-  --theme-accent-rgb: 117, 61, 62;
-  --theme-accent-hover: #5a2e2f;
+  --theme-accent: #8B2C2C;
+  --theme-accent-rgb: 139, 44, 44;
+  --theme-accent-hover: #702323;
   --theme-bg: #ffffff;
   --theme-bg-secondary: #f8f9fa;
   --theme-bg-tertiary: #e9ecef;
@@ -1687,6 +1687,15 @@ html {
 .light .text-\[\#8B8B8B\] svg,
 .light svg.text-\[\#8B8B8B\] {
   color: #666666 !important;
+}
+
+/* Force white text/icon utility */
+.force-white-text,
+.light .force-white-text,
+.light svg.force-white-text {
+  color: #ffffff !important;
+  stroke: #ffffff !important;
+  fill: none !important; /* Ensure icons like Lucide stay outline-based */
 }
 
 /* === SCROLLBAR STYLING === */
