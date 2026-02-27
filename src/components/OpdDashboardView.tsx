@@ -11,6 +11,7 @@ import {
 } from "recharts";
 import { Activity } from 'lucide-react';
 import API_ENDPOINTS from '../config/api';
+import { useTheme } from '../context/ThemeContext';
 
 interface OpdDashboardViewProps {
   appSettings: any;
@@ -40,6 +41,7 @@ interface Appointment {
 }
 
 export function OpdDashboardView({ appSettings, setAppSettings, username, userRole }: OpdDashboardViewProps) {
+  const { isDark } = useTheme();
   const [doctorInfo, setDoctorInfo] = useState<DoctorInfo | null>(null);
   const [loadingDoctor, setLoadingDoctor] = useState(false);
   const [appointmentStats, setAppointmentStats] = useState({ totalPatients: 0, appointments: 0, consultations: 0 });
@@ -289,25 +291,39 @@ export function OpdDashboardView({ appSettings, setAppSettings, username, userRo
     return () => clearInterval(interval);
   }, []);
 
+  // Using CSS variables for theming - consistent with other pages
+
   const colors = {
-    consultations: "#FF9D00",
-    appointments: "#00A3FF",
-    followups: "#7CFF6B",
+    consultations: isDark ? "var(--theme-accent)" : "#FF8C00",
+    appointments: isDark ? "#3B82F6" : "#1D4ED8",
+    followups: isDark ? "#7CFF6B" : "#4CAF50",
   };
 
   return (
-    <div className="flex flex-col h-screen bg-[#050406] overflow-hidden">
+    <div className="flex flex-col h-screen overflow-hidden" style={{ backgroundColor: 'var(--theme-bg)' }}>
       {/* Greeting Navbar - Full Width Static */}
-      <div className="sticky top-0 flex-shrink-0 bg-gradient-to-br from-[#1a1520] to-[#0f0c12] border-b border-[#D4A574]/30 px-8 py-4 relative overflow-hidden z-20">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-[#FF9D00]/5 rounded-full blur-3xl"></div>
-        <div className="absolute bottom-0 left-0 w-24 h-24 bg-[#00A3FF]/5 rounded-full blur-3xl"></div>
+      <div 
+        className="sticky top-0 flex-shrink-0 border-b px-8 py-4 relative overflow-hidden z-20"
+        style={{
+          background: isDark ? 'var(--theme-bg-secondary)' : '#f3f3f3',
+          borderColor: 'var(--theme-accent)'
+        }}
+      >
+        <div 
+          className="absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl"
+          style={{ backgroundColor: 'rgba(var(--theme-accent-rgb), 0.08)' }}
+        ></div>
+        <div 
+          className="absolute bottom-0 left-0 w-24 h-24 rounded-full blur-3xl"
+          style={{ backgroundColor: 'rgba(212, 165, 116, 0.08)' }}
+        ></div>
 
         <div className="relative flex items-center justify-between gap-4">
           <div className="flex-1 min-w-0">
-            <h1 className="text-2xl font-bold tracking-tight leading-tight">
-              {greeting}, <span className="text-[#FF9D00]">{(doctor.name || doctor.full_name)?.replace(/^Dr\.\s*/, '')}</span>
+            <h1 className="text-2xl font-bold tracking-tight leading-tight" style={{ color: 'var(--theme-text-secondary)' }}>
+              {greeting}, <span style={{ color: 'var(--theme-accent)' }}>{(doctor.name || doctor.full_name)?.replace(/^Dr\.\s*/, '')}</span>
             </h1>
-            <p className="text-[#C2BAB1] text-sm tracking-wide mt-0.5">Have a nice day at work</p>
+            <p className="text-sm tracking-wide mt-0.5" style={{ color: 'var(--theme-text)' }}>Have a nice day at work</p>
           </div>
         </div>
       </div>
@@ -315,7 +331,7 @@ export function OpdDashboardView({ appSettings, setAppSettings, username, userRo
       {/* Content Area: Left Sidebar + Right Content */}
       <div className="flex flex-1 overflow-hidden">
         {/* LEFT SIDEBAR: 1/4 Width */}
-        <div className="w-1/4 border-r border-[#D4A574]/30 bg-[#0a0809] overflow-y-auto" style={{scrollbarWidth: 'none', msOverflowStyle: 'none'}}>
+        <div className="w-1/4 border-r overflow-y-auto" style={{scrollbarWidth: 'none', msOverflowStyle: 'none', backgroundColor: 'var(--theme-bg)', borderColor: 'var(--theme-border)'}}>
           <style>{`
             div[style*="scrollbarWidth"] {
               -ms-overflow-style: none;
@@ -332,21 +348,28 @@ export function OpdDashboardView({ appSettings, setAppSettings, username, userRo
               placeholder="Search patient..."
               value={patientSearchFilter}
               onChange={(e) => setPatientSearchFilter(e.target.value)}
-              className="w-full px-4 py-2 text-sm bg-[#121015] border border-[#D4A574]/30 rounded-lg text-[#C2BAB1] placeholder-[#8C847B] focus:outline-none focus:border-[#D4A574] focus:ring-1 focus:ring-[#FF9D00]"
+              className="w-full px-4 py-2 text-sm border rounded-lg focus:outline-none focus:ring-1 stat-box"
+              style={{
+                backgroundColor: 'var(--theme-bg-secondary)',
+                color: 'var(--theme-text)',
+                borderColor: '#E8D4B8',
+                borderWidth: '1.5px',
+                outlineColor: 'var(--theme-accent)'
+              }}
             />
 
             {/* Calendar Card */}
-            <div className="sticky top-0 p-4 rounded-lg bg-[#121015] border border-[#D4A574]/30">
-              <div className="text-sm text-[#C2BAB1] mb-4 font-semibold">Calendar</div>
+            <div className="sticky top-0 p-4 rounded-lg border stat-box" style={{ backgroundColor: 'var(--theme-bg-tertiary)', borderColor: '#E8D4B8', borderWidth: '1.5px' }}>
+              <div className="text-sm mb-4 font-semibold" style={{ color: 'var(--theme-text-secondary)' }}>Calendar</div>
               
               <div className="flex flex-col gap-3">
-                <div className="text-center text-sm text-[#C2BAB1] font-medium">
+                <div className="text-center text-sm font-medium" style={{ color: 'var(--theme-text)' }}>
                   {new Date(selectedDate).toLocaleString('default', { month: 'long', year: 'numeric' })}
                 </div>
                 
                 <div className="grid grid-cols-7 gap-1">
                   {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day) => (
-                    <div key={day} className="text-center text-xs text-[#8C847B] font-semibold py-1">
+                    <div key={day} className="text-center text-xs font-semibold py-1" style={{ color: 'var(--theme-text-muted)' }}>
                       {day}
                     </div>
                   ))}
@@ -357,7 +380,7 @@ export function OpdDashboardView({ appSettings, setAppSettings, username, userRo
                     const day = idx - startDay + 1;
 
                     if (day < 1 || day > daysInMonth) {
-                      return <div key={idx} className="text-xs text-[#4a4440] text-center py-1">-</div>;
+                      return <div key={idx} className="text-xs text-center py-1" style={{ color: 'var(--theme-bg-secondary)' }}>-</div>;
                     }
 
                     const dateStr = `${firstDay.getFullYear()}-${String(firstDay.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
@@ -367,11 +390,13 @@ export function OpdDashboardView({ appSettings, setAppSettings, username, userRo
                       <button
                         key={idx}
                         onClick={() => setSelectedDate(dateStr)}
-                        className={`text-xs py-1 rounded font-medium transition-all ${
-                          isSelected
-                            ? 'bg-[#FF9D00] text-[#050406] font-bold'
-                            : 'text-[#C2BAB1] hover:bg-[#D4A574]/20'
-                        }`}
+                        style={{
+                          backgroundColor: isSelected ? 'var(--theme-accent)' : 'transparent',
+                          color: isSelected ? '#FFFFFF' : 'var(--theme-text)',
+                          borderRadius: '4px',
+                          padding: '4px 0'
+                        }}
+                        className="text-xs font-medium transition-all hover:opacity-70"
                       >
                         {day}
                       </button>
@@ -384,7 +409,7 @@ export function OpdDashboardView({ appSettings, setAppSettings, username, userRo
         </div>
 
         {/* RIGHT CONTENT: 3/4 Width */}
-        <div className="flex-1 bg-[#050406] overflow-y-auto" style={{scrollbarWidth: 'none', msOverflowStyle: 'none'}}>
+        <div className="flex-1 overflow-y-auto" style={{scrollbarWidth: 'none', msOverflowStyle: 'none', backgroundColor: 'var(--theme-bg)'}}>
           <style>{`
             div[style*="scrollbarWidth"] {
               -ms-overflow-style: none;
@@ -393,55 +418,96 @@ export function OpdDashboardView({ appSettings, setAppSettings, username, userRo
             div[style*="scrollbarWidth"]::-webkit-scrollbar {
               display: none;
             }
+            .stat-box {
+              cursor: pointer;
+              transition: all 0.3s ease;
+            }
+            .light-mode .stat-box:hover {
+              border-color: #8B4513 !important;
+              box-shadow: 0 0 15px rgba(139, 69, 19, 0.3);
+            }
+            .dark-mode .stat-box:hover {
+              border-color: #FF9500 !important;
+              box-shadow: 0 0 15px rgba(255, 149, 0, 0.3);
+            }
+            .doctor-card {
+              cursor: pointer;
+              transition: all 0.3s ease;
+            }
+            .light-mode .doctor-card:hover {
+              border-color: #D2B48C !important;
+              box-shadow: 0 0 12px rgba(210, 180, 140, 0.4);
+              background-color: rgba(210, 180, 140, 0.08) !important;
+            }
+            .dark-mode .doctor-card:hover {
+              border-color: #A1502A !important;
+              box-shadow: 0 0 12px rgba(161, 80, 42, 0.4);
+              background-color: rgba(161, 80, 42, 0.08) !important;
+            }
           `}</style>
-          <div className="max-w-full p-12 space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
+          <div className={`max-w-full p-12 space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700 ${isDark ? 'dark-mode' : 'light-mode'}`}>
         <div className="mb-4">
-          <h2 className="text-lg font-semibold text-[#F5F3EF] mb-3">Weekly Reports</h2>
+          <h2 className="text-lg font-semibold mb-3" style={{ color: 'var(--theme-text-secondary)' }}>Weekly Reports</h2>
           <div className="flex gap-2 flex-wrap">
-            <div className="flex-1 min-w-[110px] p-3 rounded-lg bg-[#121015] border border-[#D4A574] flex flex-col items-center">
-              <div className="text-xs text-[#C2BAB1] mb-1">Total Patients</div>
-              <div className="text-2xl font-bold text-white mb-0.5">{appointmentStats.totalPatients}</div>
-              <div className="text-xs text-[#8C847B]">Unique patients</div>
+            <div className="flex-1 min-w-[110px] p-3 rounded-lg border flex flex-col items-center stat-box" style={{ backgroundColor: 'var(--theme-bg-secondary)', borderColor: '#E8D4B8', borderWidth: '1.5px' }}>
+              <div className="text-xs mb-1" style={{ color: 'var(--theme-text)' }}>Total Patients</div>
+              <div className="text-2xl font-bold mb-0.5" style={{ color: 'var(--theme-text-secondary)' }}>{appointmentStats.totalPatients}</div>
+              <div className="text-xs" style={{ color: 'var(--theme-text-muted)' }}>Unique patients</div>
             </div>
 
-            <div className="flex-1 min-w-[110px] p-3 rounded-lg bg-[#121015] border border-[#D4A574] flex flex-col items-center">
-              <div className="text-xs text-[#C2BAB1] mb-1">Appointments</div>
-              <div className="text-2xl font-bold text-white mb-0.5">{appointmentStats.appointments}</div>
-              <div className="text-xs text-[#8C847B]">Total appointments</div>
+            <div className="flex-1 min-w-[110px] p-3 rounded-lg border flex flex-col items-center stat-box" style={{ backgroundColor: 'var(--theme-bg-secondary)', borderColor: '#E8D4B8', borderWidth: '1.5px' }}>
+              <div className="text-xs mb-1" style={{ color: 'var(--theme-text)' }}>Appointments</div>
+              <div className="text-2xl font-bold mb-0.5" style={{ color: 'var(--theme-text-secondary)' }}>{appointmentStats.appointments}</div>
+              <div className="text-xs" style={{ color: 'var(--theme-text-muted)' }}>Total appointments</div>
             </div>
 
-            <div className="flex-1 min-w-[110px] p-3 rounded-lg bg-[#121015] border border-[#D4A574] flex flex-col items-center">
-              <div className="text-xs text-[#C2BAB1] mb-1">Consultations</div>
-              <div className="text-2xl font-bold text-white mb-0.5">{appointmentStats.consultations}</div>
-              <div className="text-xs text-[#8C847B]">Estimated from data</div>
+            <div className="flex-1 min-w-[110px] p-3 rounded-lg border flex flex-col items-center stat-box" style={{ backgroundColor: 'var(--theme-bg-secondary)', borderColor: '#E8D4B8', borderWidth: '1.5px' }}>
+              <div className="text-xs mb-1" style={{ color: 'var(--theme-text)' }}>Consultations</div>
+              <div className="text-2xl font-bold mb-0.5" style={{ color: 'var(--theme-text-secondary)' }}>{appointmentStats.consultations}</div>
+              <div className="text-xs" style={{ color: 'var(--theme-text-muted)' }}>Estimated from data</div>
             </div>
           </div>
         </div>
 
         {/* Custom OPD Cards Section - Larger Box */}
-        <div className="mb-6 p-6 rounded-2xl bg-[#121015] border border-[#D4A574] min-h-[300px]">
+        <div className="mb-6 p-6 rounded-2xl border min-h-[300px]" style={{ backgroundColor: 'var(--theme-bg-secondary)', borderColor: '#E8D4B8', borderWidth: '1.5px' }}>
           <div className="mb-6 flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-[#F5F3EF]">OPD Operations</h2>
-              <p className="text-xs text-[#8C847B] mt-1">Key metrics and status</p>
+              <h2 className="text-lg font-semibold" style={{ color: 'var(--theme-text-secondary)' }}>OPD Operations</h2>
+              <p className="text-xs mt-1" style={{ color: 'var(--theme-text-muted)' }}>Key metrics and status</p>
             </div>
             {/* Universal Filter */}
             <div className="flex gap-2">
               <button
                 onClick={() => setOperationsFilter('daily')}
-                className={`px-3 py-1 text-xs rounded font-medium ${operationsFilter === 'daily' ? 'bg-[#FF9D00] text-[#050406]' : 'bg-[#D4A574]/20 text-[#C2BAB1] hover:bg-[#D4A574]/30'} transition-all`}
+                className="px-3 py-1 text-xs rounded font-medium transition-all"
+                style={{
+                  backgroundColor: operationsFilter === 'daily' ? 'var(--theme-accent)' : 'var(--theme-bg)',
+                  color: operationsFilter === 'daily' ? '#FFFFFF' : 'var(--theme-text)',
+                  border: '1px solid var(--theme-border)'
+                }}
               >
                 Daily
               </button>
               <button
                 onClick={() => setOperationsFilter('weekly')}
-                className={`px-3 py-1 text-xs rounded font-medium ${operationsFilter === 'weekly' ? 'bg-[#FF9D00] text-[#050406]' : 'bg-[#D4A574]/20 text-[#C2BAB1] hover:bg-[#D4A574]/30'} transition-all`}
+                className="px-3 py-1 text-xs rounded font-medium transition-all"
+                style={{
+                  backgroundColor: operationsFilter === 'weekly' ? 'var(--theme-accent)' : 'var(--theme-bg)',
+                  color: operationsFilter === 'weekly' ? '#FFFFFF' : 'var(--theme-text)',
+                  border: '1px solid var(--theme-border)'
+                }}
               >
                 Weekly
               </button>
               <button
                 onClick={() => setOperationsFilter('monthly')}
-                className={`px-3 py-1 text-xs rounded font-medium ${operationsFilter === 'monthly' ? 'bg-[#FF9D00] text-[#050406]' : 'bg-[#D4A574]/20 text-[#C2BAB1] hover:bg-[#D4A574]/30'} transition-all`}
+                className="px-3 py-1 text-xs rounded font-medium transition-all"
+                style={{
+                  backgroundColor: operationsFilter === 'monthly' ? 'var(--theme-accent)' : 'var(--theme-bg)',
+                  color: operationsFilter === 'monthly' ? '#FFFFFF' : 'var(--theme-text)',
+                  border: '1px solid var(--theme-border)'
+                }}
               >
                 Monthly
               </button>
@@ -451,38 +517,56 @@ export function OpdDashboardView({ appSettings, setAppSettings, username, userRo
           {/* Cards Grid - 6 Cards (3 per row) */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {/* Card 1: Patient Wait List */}
-            <div className="p-4 rounded-lg bg-[#0A0809] border border-[#D4A574]/30 hover:border-[#D4A574] transition-all">
-              <div className="text-xs text-[#C2BAB1] mb-2">Patient Wait List</div>
-              <div className="text-2xl font-bold text-white">{todayAppointmentsCount}</div>
+            <div className="p-4 rounded-lg border transition-all stat-box" style={{ backgroundColor: 'var(--theme-bg-tertiary)', borderColor: '#E8D4B8', borderWidth: '1.5px' }}>
+              <div className="text-xs mb-2" style={{ color: 'var(--theme-text)' }}>Patient Wait List</div>
+              <div className="text-2xl font-bold" style={{ color: 'var(--theme-text-secondary)' }}>{todayAppointmentsCount}</div>
               <div className="mt-3 space-y-1 max-h-16 overflow-y-auto">
                 {myAppointments.slice(0, 2).map((apt: any, idx: number) => (
-                  <p key={idx} className="text-xs text-[#C2BAB1] truncate">
+                  <p key={idx} className="text-xs truncate" style={{ color: 'var(--theme-text)' }}>
                     {idx + 1}. {apt.patientName || 'Unknown'}
                   </p>
                 ))}
                 {todayAppointmentsCount === 0 && (
-                  <p className="text-xs text-[#8C847B]">No appointments today</p>
+                  <p className="text-xs" style={{ color: 'var(--theme-text-muted)' }}>No appointments today</p>
                 )}
               </div>
-              <p className="text-xs text-[#8C847B] mt-2">Booked today</p>
+              <p className="text-xs mt-2" style={{ color: 'var(--theme-text-muted)' }}>Booked today</p>
             </div>
 
             {/* Card 2: Doctor Availability */}
-            <div className="p-4 rounded-lg bg-[#0A0809] border border-[#D4A574]/30 hover:border-[#D4A574] transition-all">
-              <div className="text-xs text-[#C2BAB1] mb-2">Doctor Availability</div>
-              <div className="text-2xl font-bold text-white">0</div>
-              <p className="text-xs text-[#8C847B] mt-1">Currently consulting</p>
+            <div className="p-4 rounded-lg border transition-all stat-box" style={{ backgroundColor: 'var(--theme-bg-tertiary)', borderColor: '#E8D4B8', borderWidth: '1.5px' }}>
+              <div className="text-xs mb-3" style={{ color: 'var(--theme-text)' }}>Doctor Availability</div>
+              
+              <div className="space-y-2">
+                {/* Doctor 1: Occupied */}
+                <div className="p-2 rounded border flex items-center gap-2 doctor-card" style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', borderColor: '#EF4444', borderWidth: '1px' }}>
+                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#EF4444' }}></div>
+                  <div className="flex-1">
+                    <div className="text-xs font-semibold" style={{ color: 'var(--theme-text)' }}>Dr. Ajay Chakravarthi</div>
+                    <div className="text-xs" style={{ color: '#EF4444' }}>Occupied</div>
+                  </div>
+                </div>
+
+                {/* Doctor 2: Available */}
+                <div className="p-2 rounded border flex items-center gap-2 doctor-card" style={{ backgroundColor: 'rgba(34, 197, 94, 0.1)', borderColor: '#22C55E', borderWidth: '1px' }}>
+                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#22C55E' }}></div>
+                  <div className="flex-1">
+                    <div className="text-xs font-semibold" style={{ color: 'var(--theme-text)' }}>Dr. Unnathi</div>
+                    <div className="text-xs" style={{ color: '#22C55E' }}>Available</div>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* Card 3: Total Patients */}
-            <div className="p-4 rounded-lg bg-[#0A0809] border border-[#D4A574]/30 hover:border-[#D4A574] transition-all">
-              <div className="text-xs text-[#C2BAB1] mb-2">Total Patients</div>
-              <div className="text-2xl font-bold text-white">
+            <div className="p-4 rounded-lg border transition-all stat-box" style={{ backgroundColor: 'var(--theme-bg-tertiary)', borderColor: '#E8D4B8', borderWidth: '1.5px' }}>
+              <div className="text-xs mb-2" style={{ color: 'var(--theme-text)' }}>Total Patients</div>
+              <div className="text-2xl font-bold" style={{ color: 'var(--theme-text-secondary)' }}>
                 {operationsFilter === 'daily' && todayAppointmentsCount}
                 {operationsFilter === 'weekly' && weeklyAppointmentsCount}
                 {operationsFilter === 'monthly' && monthlyAppointmentsCount}
               </div>
-              <p className="text-xs text-[#8C847B] mt-3">
+              <p className="text-xs mt-3" style={{ color: 'var(--theme-text-muted)' }}>
                 {operationsFilter === 'daily' && 'Today'}
                 {operationsFilter === 'weekly' && 'Last 7 days'}
                 {operationsFilter === 'monthly' && 'Last 30 days'}
@@ -493,8 +577,8 @@ export function OpdDashboardView({ appSettings, setAppSettings, username, userRo
           {/* Cards 4 and 5 - Half Width Each */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4 mt-4">
             {/* Card 4 Expanded: Patient Details - Half Width */}
-            <div className="p-4 rounded-lg bg-[#0A0809] border border-[#D4A574]/30 hover:border-[#D4A574] transition-all">
-              <div className="text-xs text-[#C2BAB1] mb-3">Patient Details</div>
+            <div className="p-4 rounded-lg border transition-all stat-box" style={{ backgroundColor: 'var(--theme-bg-tertiary)', borderColor: '#E8D4B8', borderWidth: '1.5px', minHeight: '400px', display: 'flex', flexDirection: 'column' }}>
+              <div className="text-xs mb-3" style={{ color: 'var(--theme-text)' }}>Patient Details</div>
               
               {/* Search Filter */}
               <input
@@ -502,13 +586,19 @@ export function OpdDashboardView({ appSettings, setAppSettings, username, userRo
                 placeholder="Search by name..."
                 value={patientSearchFilter}
                 onChange={(e) => setPatientSearchFilter(e.target.value)}
-                className="w-full px-2 py-1 text-xs bg-[#1a1520] border border-[#D4A574]/30 rounded text-[#C2BAB1] placeholder-[#8C847B] focus:outline-none focus:border-[#D4A574] focus:ring-1 focus:ring-[#FF9D00] mb-2"
+                className="w-full px-2 py-1 text-xs border rounded mb-2 focus:outline-none focus:ring-1"
+                style={{
+                  backgroundColor: 'var(--theme-bg-secondary)',
+                  borderColor: 'var(--theme-border)',
+                  color: 'var(--theme-text)',
+                  outlineColor: 'var(--theme-accent)'
+                }}
               />
               
               {/* Patient List */}
-              <div className="mt-3 space-y-2 max-h-56 overflow-y-auto pr-2" style={{
+              <div className="mt-3 space-y-2 max-h-52 overflow-y-auto pr-2" style={{
                 scrollbarWidth: 'thin',
-                scrollbarColor: '#FF9D00 #1a1520'
+                scrollbarColor: 'var(--theme-accent) var(--theme-bg-secondary)'
               }}>
                 {selectedDateAppointments
                   .filter((apt: any) => {
@@ -529,16 +619,21 @@ export function OpdDashboardView({ appSettings, setAppSettings, username, userRo
                         setSelectedPatient(apt);
                         setShowPatientOverlay(true);
                       }}
-                      className="p-2 bg-[#1a1520] rounded border border-[#D4A574]/20 hover:border-[#D4A574] cursor-pointer transition-all text-xs text-[#C2BAB1]"
+                      className="p-2 rounded border cursor-pointer transition-all text-xs"
+                      style={{
+                        backgroundColor: 'var(--theme-bg-secondary)',
+                        borderColor: 'var(--theme-border)',
+                        color: 'var(--theme-text)'
+                      }}
                     >
-                      <div className="truncate font-medium">{apt.patientName || 'Unknown'}</div>
-                      <div className="text-xs text-[#8C847B] truncate">
+                      <div className="truncate font-medium" style={{ color: 'var(--theme-text-secondary)' }}>{apt.patientName || 'Unknown'}</div>
+                      <div className="text-xs truncate" style={{ color: 'var(--theme-text-muted)' }}>
                         {apt.regId || apt.reg_id || apt.registrationId || apt.patientId || '-'} {apt.patientPhone || apt.phone ? `• ${apt.patientPhone || apt.phone}` : ''}
                       </div>
                     </div>
                   ))
                 ) : (
-                  <p className="text-xs text-[#8C847B]">
+                  <p className="text-xs" style={{ color: 'var(--theme-text-muted)' }}>
                     {selectedDateAppointments.length === 0 ? 'No patients on selected date' : 'No matching patients'}
                   </p>
                 )}
@@ -546,8 +641,8 @@ export function OpdDashboardView({ appSettings, setAppSettings, username, userRo
             </div>
 
             {/* Card 5 Expanded: To Do List - Half Width */}
-            <div className="p-4 rounded-lg bg-[#0A0809] border border-[#D4A574]/30 hover:border-[#D4A574] transition-all flex flex-col">
-              <div className="text-xs text-[#C2BAB1] mb-3 font-semibold">To Do List</div>
+            <div className="p-4 rounded-lg border transition-all flex flex-col stat-box" style={{ backgroundColor: 'var(--theme-bg-tertiary)', borderColor: '#E8D4B8', borderWidth: '1.5px', minHeight: '400px' }}>
+              <div className="text-xs mb-3 font-semibold" style={{ color: 'var(--theme-text)' }}>To Do List</div>
               
               {/* Add To-Do Input */}
               <div className="flex gap-2 mb-3">
@@ -557,54 +652,73 @@ export function OpdDashboardView({ appSettings, setAppSettings, username, userRo
                   value={todoInput}
                   onChange={(e) => setTodoInput(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && addTodoItem()}
-                  className="flex-1 px-2 py-1 text-xs bg-[#1a1520] border border-[#D4A574]/30 rounded text-[#C2BAB1] placeholder-[#8C847B] focus:outline-none focus:border-[#D4A574] focus:ring-1 focus:ring-[#FF9D00]"
+                  className="flex-1 px-2 py-1 text-xs border rounded focus:outline-none focus:ring-1"
+                  style={{
+                    backgroundColor: 'var(--theme-bg-secondary)',
+                    borderColor: 'var(--theme-border)',
+                    color: 'var(--theme-text)',
+                    outlineColor: 'var(--theme-accent)'
+                  }}
                 />
                 <button
                   onClick={addTodoItem}
-                  className="px-3 py-1 text-xs bg-[#FF9D00] text-[#050406] rounded font-medium hover:bg-[#FFB839] transition-all"
+                  className="px-3 py-1 text-xs rounded font-medium hover:opacity-80 transition-all"
+                  style={{
+                    backgroundColor: 'var(--theme-accent)',
+                    color: '#FFFFFF'
+                  }}
                 >
                   Add
                 </button>
               </div>
 
               {/* To-Do Items List */}
-              <div className="flex-1 space-y-2 overflow-y-auto pr-2 max-h-64" style={{
+              <div className="flex-1 space-y-2 overflow-y-auto pr-2 max-h-52" style={{
                 scrollbarWidth: 'thin',
-                scrollbarColor: '#FF9D00 #1a1520'
+                scrollbarColor: 'var(--theme-accent) var(--theme-bg-secondary)'
               }}>
                 {todoItems.length > 0 ? (
                   todoItems.map((item) => (
                     <div
                       key={item.id}
-                      className="p-2 bg-[#1a1520] rounded border border-[#D4A574]/20 hover:border-[#D4A574] transition-all flex items-start gap-2"
+                      className="p-2 rounded border transition-all flex items-start gap-2"
+                      style={{
+                        backgroundColor: 'var(--theme-bg-secondary)',
+                        borderColor: 'var(--theme-border)'
+                      }}
                     >
                       <input
                         type="checkbox"
                         checked={item.completed}
                         onChange={() => toggleTodoCompletion(item.id)}
-                        className="mt-1 cursor-pointer accent-[#FF9D00]"
+                        className="mt-1 cursor-pointer"
+                        style={{ accentColor: 'var(--theme-accent)' }}
                       />
                       <div className="flex-1 min-w-0">
-                        <div className={`text-xs ${item.completed ? 'line-through text-[#8C847B]' : 'text-[#C2BAB1]'}`}>
+                        <div className="text-xs" style={{
+                          color: item.completed ? 'var(--theme-text-muted)' : 'var(--theme-text)',
+                          textDecoration: item.completed ? 'line-through' : 'none'
+                        }}>
                           {item.text}
                         </div>
                       </div>
                       <button
                         onClick={() => deleteTodoItem(item.id)}
-                        className="text-xs text-[#FF6B6B] hover:text-[#FF9D00] transition-all font-medium"
+                        className="text-xs transition-all font-medium hover:opacity-80"
+                        style={{ color: 'var(--theme-accent)' }}
                       >
                         ✕
                       </button>
                     </div>
                   ))
                 ) : (
-                  <p className="text-xs text-[#8C847B] text-center py-4">No tasks yet. Add one to get started!</p>
+                  <p className="text-xs text-center py-4" style={{ color: 'var(--theme-text-muted)' }}>No tasks yet. Add one to get started!</p>
                 )}
               </div>
 
               {/* Summary */}
               {todoItems.length > 0 && (
-                <div className="mt-3 pt-2 border-t border-[#D4A574]/20 text-xs text-[#8C847B]">
+                <div className="mt-3 pt-2 text-xs" style={{ borderTop: '1px solid var(--theme-border)', color: 'var(--theme-text-muted)' }}>
                   {todoItems.filter(item => item.completed).length} of {todoItems.length} completed
                 </div>
               )}
@@ -613,17 +727,22 @@ export function OpdDashboardView({ appSettings, setAppSettings, username, userRo
         </div>
 
         {/* Chart + filters */}
-        <div className="p-4 rounded-2xl bg-[#121015] border border-[#D4A574] mb-6">
+        <div className="p-4 rounded-2xl border mb-6 stat-box" style={{ backgroundColor: 'var(--theme-bg-secondary)', borderColor: '#E8D4B8', borderWidth: '1.5px' }}>
           <div className="flex items-center justify-between mb-4">
             <div>
-              <div className="text-lg font-semibold">Activity Overview</div>
-              <div className="text-xs text-[#8C847B]">Consultations, Appointments & Follow-ups</div>
+              <div className="text-lg font-semibold" style={{ color: 'var(--theme-text-secondary)' }}>Activity Overview</div>
+              <div className="text-xs" style={{ color: 'var(--theme-text-muted)' }}>Consultations, Appointments & Follow-ups</div>
             </div>
             <div className="flex items-center gap-3">
               <select
                 value={range}
                 onChange={(e) => setRange(e.target.value)}
-                className="bg-[#0A0809] border border-[#D4A574] px-3 py-2 rounded-md text-sm"
+                className="border px-3 py-2 rounded-md text-sm"
+                style={{
+                  backgroundColor: 'var(--theme-bg-tertiary)',
+                  borderColor: 'var(--theme-border)',
+                  color: 'var(--theme-text)'
+                }}
               >
                 <option value="7">Past 7 days</option>
                 <option value="30">Past 30 days</option>
@@ -636,11 +755,11 @@ export function OpdDashboardView({ appSettings, setAppSettings, username, userRo
           <div style={{ width: "100%", height: 300 }}>
             <ResponsiveContainer>
               <LineChart data={activityData.length > 0 ? activityData : []} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
-                <CartesianGrid stroke="#222" />
-                <XAxis dataKey="date" tick={{ fill: "#C2BAB1", fontSize: 11 }} />
-                <YAxis tick={{ fill: "#C2BAB1", fontSize: 11 }} />
+                <CartesianGrid stroke={isDark ? '#333' : '#ddd'} />
+                <XAxis dataKey="date" tick={{ fill: 'var(--theme-text-muted)', fontSize: 11 }} />
+                <YAxis tick={{ fill: 'var(--theme-text-muted)', fontSize: 11 }} />
                 <Tooltip
-                  contentStyle={{ background: "#0A0809", border: "1px solid #D4A574", color: "#F5F3EF" }}
+                  contentStyle={{ background: 'var(--theme-bg-tertiary)', border: '1px solid var(--theme-border)', color: 'var(--theme-text-secondary)' }}
                 />
                 <Legend />
                 <Line
@@ -668,104 +787,56 @@ export function OpdDashboardView({ appSettings, setAppSettings, username, userRo
             </ResponsiveContainer>
           </div>
 
-          <div className="mt-4 text-xs text-[#8C847B]">
+          <div className="mt-4 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
             Note: data above is from appointment records in the system.
-          </div>
-        </div>
-
-        {/* Lower section: Chart in middle, Appointments list and Monthly Reports below */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-          {/* Appointments List - Left */}
-          <div className="lg:col-span-2 p-4 rounded-2xl bg-[#121015] border border-[#D4A574]">
-            <div className="flex items-center justify-between mb-3">
-              <div className="font-medium">My Appointments</div>
-              <div className="text-sm text-[#8C847B]">{new Date().toLocaleDateString()}</div>
-            </div>
-
-            <div className="divide-y divide-[#D4A574]">
-              {myAppointments.length > 0 ? (
-                myAppointments.map((apt, idx) => (
-                  <div key={apt._id || idx} className="py-3 flex items-center justify-between">
-                    <div>
-                      <div className="font-medium">{apt.patientName || `Patient ${idx + 1}`} — {apt.type || 'Checkup'}</div>
-                      <div className="text-xs text-[#8C847B]">
-                        Time: {apt.appointmentTime || '--:-- '} • {apt.location || 'Room TBD'}
-                      </div>
-                    </div>
-                    <div className="text-sm text-[#C2BAB1]">
-                      Status: {apt.status || 'Pending'}
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="py-4 text-center text-xs text-[#8C847B]">No appointments for today</div>
-              )}
-            </div>
-          </div>
-
-          {/* Monthly Reports - Right */}
-          <div className="p-4 rounded-2xl bg-[#121015] border border-[#D4A574]">
-            <div className="flex items-center justify-between mb-4">
-              <div className="font-medium">Patient Reports</div>
-            </div>
-            <div className="space-y-3">
-              {monthlyReports.length > 0 ? (
-                monthlyReports.map((item, idx) => (
-                  <div key={idx} className="p-4 bg-[#0A0809] rounded-xl border border-[#D4A574]">
-                    <div className="text-xs text-[#8C847B] mb-1">{item.label}</div>
-                    <div className="text-sm font-medium text-[#F5F3EF]">{item.value}</div>
-                    <div className="text-xs text-[#8C847B] mt-1">{item.type}</div>
-                  </div>
-                ))
-              ) : (
-                <div className="p-4 bg-[#0A0809] rounded-xl border border-[#D4A574] text-center">
-                  <div className="text-xs text-[#8C847B]">No patient data available</div>
-                </div>
-              )}
-            </div>
           </div>
         </div>
 
         {/* Patient Details Overlay Modal */}
         {showPatientOverlay && selectedPatient && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-[#121015] border border-[#D4A574] rounded-xl p-8 max-w-md w-full mx-4 animate-in fade-in zoom-in-95 duration-300">
+          <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: isDark ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.3)' }}>
+            <div className="rounded-xl p-8 max-w-md w-full mx-4 animate-in fade-in zoom-in-95 duration-300 border" style={{ backgroundColor: 'var(--theme-bg-secondary)', borderColor: 'var(--theme-border)' }}>
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-lg font-semibold text-[#F5F3EF]">Patient Details</h2>
+                <h2 className="text-lg font-semibold" style={{ color: 'var(--theme-text-secondary)' }}>Patient Details</h2>
                 <button
                   onClick={() => setShowPatientOverlay(false)}
-                  className="text-[#8C847B] hover:text-[#FF9D00] transition-colors"
+                  className="transition-colors hover:opacity-70"
+                  style={{ color: 'var(--theme-accent)' }}
                 >
                   ✕
                 </button>
               </div>
 
-              <div className="space-y-4 text-[#C2BAB1]">
+              <div className="space-y-4" style={{ color: 'var(--theme-text)' }}>
                 <div>
-                  <p className="text-xs text-[#8C847B] mb-1">Patient Name</p>
-                  <p className="text-sm font-semibold">{selectedPatient.patientName || 'Unknown'}</p>
+                  <p className="text-xs mb-1" style={{ color: 'var(--theme-text-muted)' }}>Patient Name</p>
+                  <p className="text-sm font-semibold" style={{ color: 'var(--theme-text-secondary)' }}>{selectedPatient.patientName || 'Unknown'}</p>
                 </div>
 
                 <div>
-                  <p className="text-xs text-[#8C847B] mb-1">Appointment Date</p>
-                  <p className="text-sm font-semibold">{selectedPatient.appointmentDate || '-'}</p>
+                  <p className="text-xs mb-1" style={{ color: 'var(--theme-text-muted)' }}>Appointment Date</p>
+                  <p className="text-sm font-semibold" style={{ color: 'var(--theme-text-secondary)' }}>{selectedPatient.appointmentDate || '-'}</p>
                 </div>
 
                 <div>
-                  <p className="text-xs text-[#8C847B] mb-1">Appointment Time</p>
-                  <p className="text-sm font-semibold">{selectedPatient.appointmentTime || '-'}</p>
+                  <p className="text-xs mb-1" style={{ color: 'var(--theme-text-muted)' }}>Appointment Time</p>
+                  <p className="text-sm font-semibold" style={{ color: 'var(--theme-text-secondary)' }}>{selectedPatient.appointmentTime || '-'}</p>
                 </div>
 
                 <div>
-                  <p className="text-xs text-[#8C847B] mb-1">Status</p>
-                  <p className="text-sm font-semibold">{selectedPatient.status || 'Scheduled'}</p>
+                  <p className="text-xs mb-1" style={{ color: 'var(--theme-text-muted)' }}>Status</p>
+                  <p className="text-sm font-semibold" style={{ color: 'var(--theme-text-secondary)' }}>{selectedPatient.status || 'Scheduled'}</p>
                 </div>
               </div>
 
               <div className="mt-6 flex gap-2">
                 <button
                   onClick={() => setShowPatientOverlay(false)}
-                  className="flex-1 px-4 py-2 bg-[#D4A574]/20 text-[#C2BAB1] rounded-lg hover:bg-[#D4A574]/30 transition-all text-sm font-medium"
+                  className="flex-1 px-4 py-2 rounded-lg hover:opacity-80 transition-all text-sm font-medium"
+                  style={{
+                    backgroundColor: 'var(--theme-border)',
+                    color: 'var(--theme-text)'
+                  }}
                 >
                   Close
                 </button>
@@ -775,7 +846,7 @@ export function OpdDashboardView({ appSettings, setAppSettings, username, userRo
         )}
 
         {/* Footer */}
-        <div className="mt-6 text-xs text-[#8C847B]">
+        <div className="mt-6 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
           Dashboard view: shows concise, relevant metrics for quick monitoring. Contact IT to enable real live data.
         </div>
           </div>
