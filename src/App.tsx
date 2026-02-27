@@ -136,19 +136,14 @@ const existingPatientData: PatientData = {
 export default function App() {
   const [dashboardTitle, setDashboardTitle] = useState('Chakravue AI');
   const [dashboardSubtitle, setDashboardSubtitle] = useState('');
-<<<<<<< HEAD
   
   // Persisted State Initialization
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => localStorage.getItem('is_authenticated') === 'true');
   const [userRole, setUserRole] = useState<UserRole | null>(() => (localStorage.getItem('user_role') as UserRole) || null);
   const [currentUsername, setCurrentUsername] = useState<string | null>(() => localStorage.getItem('current_username'));
-=======
-  // Default to the login view so users must sign in first
-  const [currentView, setCurrentView] = useState<'dashboard' | 'analytics' | 'billing' | 'billing-dashboard' | 'individual-billing' | 'login' | 'documents' | 'notifications' | 'settings' | 'profile-settings' | 'patients' | 'appointments' | 'appointment-queue' | 'reception-queue' | 'opd-queue' | 'doctor-queue' | 'patient-history' | 'data-repair' | 'pharmacy-billing' | 'medicine-management' | 'payment-setup' | 'organization-login' | 'admin-dashboard' | 'admin-data-management' | 'telemedicine' | 'reception-patient-view' | 'doctor-profile'>('login');
->>>>>>> 0ea76a72455c5f967acb3596c57a6939f677cd68
 
   // Default to the login view, or restore from storage
-  const [currentView, setCurrentView] = useState<'dashboard' | 'analytics' | 'billing' | 'billing-dashboard' | 'individual-billing' | 'login' | 'documents' | 'notifications' | 'settings' | 'profile-settings' | 'patients' | 'appointments' | 'appointment-queue' | 'reception-queue' | 'opd-queue' | 'doctor-queue' | 'patient-history' | 'data-repair' | 'pharmacy-billing' | 'medicine-management' | 'payment-setup' | 'organization-login' | 'admin-dashboard' | 'admin-data-management' | 'telemedicine' | 'reception-patient-view'>(
+  const [currentView, setCurrentView] = useState<'dashboard' | 'analytics' | 'billing' | 'billing-dashboard' | 'individual-billing' | 'login' | 'documents' | 'notifications' | 'settings' | 'profile-settings' | 'patients' | 'appointments' | 'appointment-queue' | 'reception-queue' | 'opd-queue' | 'doctor-queue' | 'patient-history' | 'data-repair' | 'pharmacy-billing' | 'medicine-management' | 'payment-setup' | 'organization-login' | 'admin-dashboard' | 'admin-data-management' | 'telemedicine' | 'reception-patient-view' | 'doctor-profile'>(
     () => (localStorage.getItem('current_view') as any) || 'login'
   );
 
@@ -1490,8 +1485,6 @@ export default function App() {
       {/* Main Content */}
       <div className={`${!isFullScreen ? 'pl-16 pt-20' : ''} min-h-screen transition-all duration-300`}>
 
-<<<<<<< HEAD
-=======
         {/* Back Button - In-flow at top of content (prevents overlap) */}
         {currentView !== 'dashboard' && currentView !== 'doctor-profile' && isAuthenticated && (
           <div className="px-6 py-4 mb-4">
@@ -1507,7 +1500,6 @@ export default function App() {
           </div>
         )}
 
->>>>>>> 0ea76a72455c5f967acb3596c57a6939f677cd68
         {/* Navbar */}
         {!isFullScreen && (
           <Navbar
@@ -1765,15 +1757,12 @@ export default function App() {
             ) : currentView === 'appointments' ? (
               <AppointmentBookingView
                 onNavigateToBilling={(registrationId, patientData) => {
-<<<<<<< HEAD
                   console.log('📍 [App] AppointmentBooking callback invoked with:', { registrationId, patientData });
                   (window as any)._debugBillingNav = {
                     registrationId,
                     patientData,
                     stack: new Error().stack
                   };
-=======
->>>>>>> 0ea76a72455c5f967acb3596c57a6939f677cd68
                   setLastSavedRegistrationId(registrationId);
                   setLastAppointmentPatientData(patientData);
                   setCurrentView('individual-billing');
@@ -1826,7 +1815,6 @@ export default function App() {
               <PatientHistoryView />
             ) : currentView === 'data-repair' ? (
               <DataRepairView />
-<<<<<<< HEAD
             ) : currentView === 'settings' || currentView === 'profile-settings' ? (
               (() => {
                 console.log('[DEBUG] profile view - userRole:', userRole, 'currentUsername:', currentUsername);
@@ -1856,11 +1844,6 @@ export default function App() {
                   />
                 );
               })()
-=======
-            ) : currentView === 'settings' ? (
-              <ProfileSettings username={currentUsername || undefined} role={userRole || undefined} />
-            ) : currentView === 'profile-settings' ? (
-              <ProfileSettings username={currentUsername || undefined} role={userRole || undefined} />
             ) : currentView === 'doctor-profile' ? (
               <DoctorProfileView
                 username={currentUsername || undefined}
@@ -1890,7 +1873,6 @@ export default function App() {
                   }
                 }}
               />
->>>>>>> 0ea76a72455c5f967acb3596c57a6939f677cd68
             ) : (
               <NotificationsView />
             )}
