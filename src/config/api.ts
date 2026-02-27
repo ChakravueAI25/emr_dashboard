@@ -5,7 +5,7 @@
  * Centralized API endpoint management for easy deployment across environments
  */
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string) || 'http://127.0.0.1:8000';
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string) || 'http://127.0.0.1:8008';
 
 export { API_BASE_URL };
 
@@ -92,6 +92,7 @@ export const API_ENDPOINTS = {
   // Billing Dashboard
   BILLING_DASHBOARD: {
     STATS: `${API_BASE_URL}/api/billing/dashboard/stats`,
+    ANALYTICS: `${API_BASE_URL}/api/billing/analytics`,
   },
 
   // Surgery Packages endpoints

@@ -33,6 +33,7 @@ from database import (
     final_surgery_bills_collection,
     slit_lamp_collection
 )
+from invoice_parser import parse_invoice
 from models import (
     NewPatient,
     PatientInDB,
@@ -2291,6 +2292,7 @@ def create_invoice(reg_id: str, invoice_data: dict = Body(...)):
             "couponCode": coupon_code,
             "appliedBy": worker_id,
             "discountAmount": discount_amount,
+            "paymentMethod": invoice_data.get("paymentMethod", ""),
             "notes": invoice_data.get("notes", ""),
             "createdAt": datetime.utcnow().isoformat(),
             # Doctor/appointment tracking for billing dashboard
@@ -2897,6 +2899,19 @@ async def get_medicine(medicine_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/medicines/parse-invoice")
+async def parse_medicine_invoice(file: UploadFile = File(...)):
+    """
+    Parse an uploaded invoice (PDF or Image) and extract medicine details.
+    """
+    if not file:
+         raise HTTPException(status_code=400, detail="No file uploaded")
+    contents = await file.read()
+    medicines = parse_invoice(contents, file.filename)
+    if isinstance(medicines, dict) and 'error' in medicines:
+        raise HTTPException(status_code=400, detail=medicines['error'])
+    return medicines
+
 
 @app.post("/pharmacy/medicines")
 async def create_medicine(medicine_data: dict = Body(...)):
@@ -3044,6 +3059,39 @@ async def create_pharmacy_bill(billing_data: dict = Body(...)):
         if not items or len(items) == 0:
             raise HTTPException(status_code=400, detail="At least one medicine item is required")
         
+        # New: Extract additional fields
+        gst_rate = float(billing_data.get("gstRate", 0))
+        gst_amount = float(billing_data.get("gstAmount", 0))
+        sub_total = float(billing_data.get("subTotal", 0))
+        is_insurance_claimed = billing_data.get("isInsuranceClaimed", False)
+        insurance_details = billing_data.get("insuranceDetails", {})
+        wave_off_reason = billing_data.get("waveOffReason")
+
+        # Wave Off Logic
+        if payment_method == "WaveOff":
+            total_amount = 0.0
+            gst_amount = 0.0
+            sub_total = 0.0
+            is_insurance_claimed = False
+            insurance_details = None
+            if not wave_off_reason:
+                raise HTTPException(status_code=400, detail="Wave Off Reason is required")
+            
+            # Ensure generic patient for Wave Off if not provided
+            if registration_id == "WAVEOFF-STAFF":
+                # Check if this generic patient exists, create if not
+                existing_staff = patient_collection.find_one({"registrationId": "WAVEOFF-STAFF"})
+                if not existing_staff:
+                    staff_patient = {
+                        "registrationId": "WAVEOFF-STAFF",
+                        "name": "Hospital Staff / Internal",
+                        "contactNumber": "0000000000",
+                        "age": 0,
+                        "gender": "Other",
+                        "createdAt": datetime.utcnow()
+                    }
+                    patient_collection.insert_one(staff_patient)
+
         # Validate all items have sufficient stock before committing any updates
         for item in items:
             medicine_id = item.get("medicineId")
@@ -3077,7 +3125,15 @@ async def create_pharmacy_bill(billing_data: dict = Body(...)):
             "paymentMethod": payment_method,
             "status": "completed",
             "billDate": datetime.utcnow().isoformat(),
-            "createdAt": datetime.utcnow().isoformat()
+            "createdAt": datetime.utcnow().isoformat(),
+            
+            # --- New Logic: Add Structured Billing Data ---
+            "subTotal": sub_total,
+            "gstRate": gst_rate,
+            "gstAmount": gst_amount,
+            "isInsuranceClaimed": is_insurance_claimed,
+            "insuranceDetails": insurance_details,
+            "waveOffReason": wave_off_reason if payment_method == "WaveOff" else None
         }
         
         # Save billing record
@@ -3198,118 +3254,460 @@ async def get_patient_pharmacy_bills(registration_id: str):
 
 
 # ============ AGGREGATED BILLING DASHBOARD ENDPOINT ============
-
 @app.get("/api/billing/dashboard/stats")
-def get_billing_dashboard_stats():
+async def get_billing_dashboard_stats(page: int = 1, limit: int = 50):
     """Get aggregated billing statistics for the dashboard.
     Returns aggregated data across ALL patients for KPI cards and billing records table.
+    Includes: invoices, surgery bills, and pharmacy bills.
     """
     try:
-        from datetime import datetime, timedelta
+        from datetime import datetime
         
-        # Get all patients with billing info
-        all_patients = list(patient_collection.find({"billing.invoices": {"$exists": True}}))
+        # --- 1. Aggregation for KPI Stats (Total Revenue, etc) ---
         
-        # Build appointment lookup cache for doctor names
-        appointments_collection = db["appointments"]
-        all_appointments = list(appointments_collection.find({}))
-        appt_lookup = {}
-        for appt in all_appointments:
-            appt_id = str(appt.get("_id", ""))
-            appt_lookup[appt_id] = appt.get("doctorName", "")
-            # Also index by registrationId for fallback
-            reg = appt.get("registrationId", "")
-            if reg and reg not in appt_lookup:
-                appt_lookup[f"reg_{reg}"] = appt.get("doctorName", "")
-        
-        today = datetime.utcnow().date()
-        total_revenue = 0
-        pending_bills_count = 0
-        completed_today_count = 0
-        refunds_total = 0
-        all_billing_records = []
-        
-        # Process each patient
-        for patient in all_patients:
-            invoices = patient.get("billing", {}).get("invoices", [])
-            
-            for invoice in invoices:
-                # Build billing record for table
-                invoice_date_str = invoice.get("date", "")
-                try:
-                    invoice_date = datetime.strptime(invoice_date_str, "%Y-%m-%d").date()
-                except:
-                    invoice_date = today
-                
-                # KPI calculations
-                status = invoice.get("status", "pending")
-                patient_responsibility = float(invoice.get("patientResponsibility", 0))
-                
-                if status == "paid":
-                    total_revenue += patient_responsibility
-                    # Check if paid today
-                    created_at_str = invoice.get("createdAt", "")
-                    try:
-                        created_at = datetime.fromisoformat(created_at_str).date()
-                        if created_at == today:
-                            completed_today_count += 1
-                    except:
-                        pass
-                else:
-                    pending_bills_count += 1
-                
-                # Track refunds (if status is 'refunded' or amount is negative)
-                if status == "refunded" or patient_responsibility < 0:
-                    refunds_total += abs(patient_responsibility)
-                
-                # Build record for table
-                # Lookup doctor name from appointment
-                appt_id = invoice.get("appointmentId", "")
-                reg_id = patient.get("registrationId", "")
-                doctor_name = appt_lookup.get(appt_id, "") or appt_lookup.get(f"reg_{reg_id}", "") or invoice.get("doctorName", "N/A")
-                
-                record = {
-                    "id": invoice.get("id", ""),
-                    "type": invoice.get("service", "OPD"),
-                    "checkInTime": invoice_date_str,
-                    "patientName": patient.get("name", "Unknown"),
-                    "registrationId": patient.get("registrationId", "N/A"),
-                    "age": str(patient.get("demographics", {}).get("age", "N/A")),
-                    "sex": patient.get("demographics", {}).get("sex", "N/A"),
-                    "phone": patient.get("contactInfo", {}).get("phone", "N/A"),
-                    "refDoctor": "Self",
-                    "visitType": "New",
-                    "visitReason": invoice.get("service", "General Checkup"),
-                    "doctorName": doctor_name,
-                    "optomName": "Optom. Jane",
-                    "followUpDate": "",
-                    "waitingTime": "0 min",
-                    "status": "Completed" if status == "paid" else "Waiting",
-                    "paymentStatus": status,
-                    "insuranceStatus": invoice.get("insuranceStatus", "none"),
-                    "notes": invoice.get("notes", ""),
-                    "dilationStatus": "Not Started",
-                    "amount": patient_responsibility,
-                    "insuranceCovered": float(invoice.get("insuranceCovered", 0))
+        # Pipeline for Invoices (inside Patient document)
+        invoice_pipeline = [
+            {"$unwind": "$billing.invoices"},
+            {"$group": {
+                "_id": None,
+                "totalRevenue": {
+                    "$sum": {
+                        "$cond": [{"$eq": ["$billing.invoices.status", "paid"]}, "$billing.invoices.patientResponsibility", 0]
+                    }
+                },
+                "pendingBills": {
+                    "$sum": {
+                        "$cond": [{"$ne": ["$billing.invoices.status", "paid"]}, 1, 0]
+                    }
+                },
+                "refunds": {
+                    "$sum": {
+                        "$cond": [{"$eq": ["$billing.invoices.status", "refunded"]}, "$billing.invoices.patientResponsibility", 0]
+                    }
                 }
-                all_billing_records.append(record)
+            }}
+        ]
         
-        # Sort records by date descending
-        all_billing_records.sort(key=lambda x: x["checkInTime"], reverse=True)
+        # Pipeline for Surgery Bills (inside Patient document)
+        surgery_pipeline = [
+            {"$unwind": "$billing.surgeryBills"},
+            {"$group": {
+                "_id": None,
+                "totalRevenue": {
+                    "$sum": {
+                         "$cond": [
+                            {"$in": ["$billing.surgeryBills.status", ["settled", "balance_due", "partially_paid"]]}, 
+                            {"$ifNull": ["$billing.surgeryBills.patientTotalShare", 0]}, 
+                            0
+                        ]
+                    }
+                },
+                "settledRevenue": {
+                     "$sum": {
+                         "$cond": [
+                            {"$eq": ["$billing.surgeryBills.status", "settled"]}, 
+                            {"$ifNull": ["$billing.surgeryBills.patientTotalShare", 0]}, 
+                            0
+                        ]
+                    }
+                },
+                "unsettledRevenue": {
+                     "$sum": {
+                         "$cond": [
+                            {"$in": ["$billing.surgeryBills.status", ["balance_due", "partially_paid"]]}, 
+                            {"$ifNull": ["$billing.surgeryBills.patientTotalShare", 0]}, 
+                            0
+                        ]
+                    }
+                },
+                "pendingBills": {
+                    "$sum": {
+                        "$cond": [{"$eq": ["$billing.surgeryBills.status", "balance_due"]}, 1, 0]
+                    }
+                },
+                "refunds": {
+                    "$sum": "$billing.surgeryBills.refundAmount"
+                }
+            }}
+        ]
+
+        # Pipeline for Pharmacy Bills (separate collection)
+        pharmacy_pipeline = [
+            {"$group": {
+                "_id": None,
+                "totalRevenue": {
+                    "$sum": {
+                        "$cond": [{"$eq": ["$status", "completed"]}, "$totalAmount", 0]
+                    }
+                },
+                "pendingBills": {
+                    "$sum": {
+                        "$cond": [{"$ne": ["$status", "completed"]}, 1, 0]
+                    }
+                }
+            }}
+        ]
+
+        # Execute Aggregations
+        inv_stats = list(patient_collection.aggregate(invoice_pipeline))
+        surg_stats = list(patient_collection.aggregate(surgery_pipeline))
+        pharm_stats = list(pharmacy_billing_collection.aggregate(pharmacy_pipeline))
+
+        # Sum up results
+        total_revenue = (inv_stats[0]["totalRevenue"] if inv_stats else 0) + \
+                        (surg_stats[0]["totalRevenue"] if surg_stats else 0) + \
+                        (pharm_stats[0]["totalRevenue"] if pharm_stats else 0)
         
+        # Calculate settled vs unsettled
+        # settled = invoice(paid) + surgery(settled) + pharmacy(completed)
+        # unsettled = surgery(balance_due/partially)
+        
+        settled_revenue = (inv_stats[0]["totalRevenue"] if inv_stats else 0) + \
+                          (surg_stats[0]["settledRevenue"] if surg_stats and "settledRevenue" in surg_stats[0] else 0) + \
+                          (pharm_stats[0]["totalRevenue"] if pharm_stats else 0)
+                          
+        unsettled_revenue = (surg_stats[0]["unsettledRevenue"] if surg_stats and "unsettledRevenue" in surg_stats[0] else 0)
+
+        pending_bills_count = (inv_stats[0]["pendingBills"] if inv_stats else 0) + \
+                              (surg_stats[0]["pendingBills"] if surg_stats else 0) + \
+                              (pharm_stats[0]["pendingBills"] if pharm_stats else 0)
+
+        # Total Refunds
+        refunds_total = (inv_stats[0]["refunds"] if inv_stats else 0) + \
+                        (surg_stats[0]["refunds"] if surg_stats else 0)
+        
+        # --- 2. Fetch Recent Pending Bills (for hover card) ---
+        # Fetch Top 5 pending items from each category to display in hover card
+        hover_limit = 5
+        
+        pending_inv_docs = list(patient_collection.aggregate([
+            {"$unwind": "$billing.invoices"},
+            {"$match": {"billing.invoices.status": {"$ne": "paid"}}},
+            {"$sort": {"billing.invoices.date": -1}},
+            {"$limit": hover_limit},
+            {"$project": {
+                "name": 1, "registrationId": 1, 
+                "invoice": "$billing.invoices"
+            }}
+        ]))
+        
+        pending_surg_docs = list(patient_collection.aggregate([
+            {"$unwind": "$billing.surgeryBills"},
+            {"$match": {"billing.surgeryBills.status": {"$ne": "settled"}}},
+            {"$sort": {"billing.surgeryBills.createdAt": -1}},
+            {"$limit": hover_limit},
+            {"$project": {
+                "name": 1, "registrationId": 1,
+                "bill": "$billing.surgeryBills"
+            }}
+        ]))
+        
+        pending_pharm_docs = list(pharmacy_billing_collection.find(
+            {"status": {"$ne": "completed"}}
+        ).sort("billDate", -1).limit(hover_limit))
+        
+        pending_list = []
+        for d in pending_inv_docs:
+            inv = d["invoice"]
+            pending_list.append({
+                "id": str(inv.get("_id", "")) if "_id" in inv else "",
+                "patientName": d.get("name", "Unknown"),
+                "registrationId": d.get("registrationId", ""),
+                "amount": float(inv.get("patientResponsibility", 0)),
+                "type": "OPD",
+                "date": inv.get("date")
+            })
+
+        for d in pending_surg_docs:
+            bill = d["bill"]
+            pending_list.append({
+                "id": str(bill.get("billId", "")),
+                "patientName": d.get("name", "Unknown"),
+                "registrationId": d.get("registrationId", ""),
+                "amount": float(bill.get("patientTotalShare", 0)),
+                "type": "Surgery",
+                "date": bill.get("createdAt")
+            })
+            
+        for d in pending_pharm_docs:
+            pending_list.append({
+                "id": str(d.get("_id", "")),
+                "patientName": d.get("patientName", "Unknown"),
+                "registrationId": d.get("registrationId", ""),
+                "amount": float(d.get("totalAmount", 0)),
+                "type": "Pharmacy",
+                "date": d.get("billDate")
+            })
+            
+        # Sort pending list by date desc and take top 5
+        pending_list.sort(key=lambda x: str(x.get("date", "")), reverse=True)
+        pending_list = pending_list[:hover_limit]
+
+        # Completed Today (approximate for MVP: just use date match)
+        today_str = datetime.utcnow().strftime("%Y-%m-%d")
+        
+        # --- 3. Pagination for Billing Records Table ---
+        
+        # We need to fetch records from 3 sources and merge them sorted by date.
+        # Ideally, we'd have a unified 'transactions' collection.
+        # For now, we fetch a simplified slice from each source using $project and sort in app (or use limit on each).
+        # Since patient data is nested, we'll use a simplified approach:
+        # Fetch the most recent N records from each source, merge, and slice.
+        
+        # Fetch recent Invoices (from Patient)
+        recent_invoices = list(patient_collection.aggregate([
+            {"$unwind": "$billing.invoices"},
+            {"$sort": {"billing.invoices.date": -1}},
+            {"$limit": limit},
+            {"$project": {
+                "name": 1, "registrationId": 1, 
+                "demographics": 1, "contactInfo": 1,
+                "invoice": "$billing.invoices"
+            }}
+        ]))
+        
+        # Fetch recent Surgery Bills (from Patient)
+        recent_surgery = list(patient_collection.aggregate([
+            {"$unwind": "$billing.surgeryBills"},
+            {"$sort": {"billing.surgeryBills.createdAt": -1}},
+            {"$limit": limit},
+            {"$project": {
+                "name": 1, "registrationId": 1,
+                "demographics": 1, "contactInfo": 1,
+                "bill": "$billing.surgeryBills"
+            }}
+        ]))
+        
+        # Fetch recent Pharmacy Bills (from PharmacyBilling)
+        recent_pharmacy = list(pharmacy_billing_collection.find().sort("billDate", -1).limit(limit))
+
+        # Convert to Unified Format
+        all_records = []
+        
+        for doc in recent_invoices:
+            inv = doc["invoice"]
+            all_records.append({
+                "id": inv.get("id"),
+                "registrationId": doc.get("registrationId"),
+                "patientName": doc.get("name"),
+                "checkInTime": inv.get("date"),
+                "amount": float(inv.get("patientResponsibility", 0)),
+                "status": "Completed" if inv.get("status") == "paid" else "Waiting",
+                "paymentStatus": inv.get("status"),
+                "type": "Invoice",
+                "notes": inv.get("service")
+            })
+
+        for doc in recent_surgery:
+            bill = doc["bill"]
+            all_records.append({
+                "id": bill.get("billId"),
+                "registrationId": doc.get("registrationId"),
+                "patientName": doc.get("name"),
+                "checkInTime": bill.get("createdAt"),
+                "amount": float(bill.get("patientTotalShare", 0)),
+                "status": "Completed" if bill.get("status") == "settled" else "Waiting",
+                "paymentStatus": bill.get("status"),
+                "type": "Surgery",
+                "notes": bill.get("surgeryName")
+            })
+            
+        for bill in recent_pharmacy:
+            all_records.append({
+                "id": bill.get("billId"),
+                "registrationId": bill.get("registrationId"),
+                "patientName": bill.get("patientName"),
+                "checkInTime": bill.get("billDate"),
+                "amount": float(bill.get("totalAmount", 0)),
+                "status": "Completed" if bill.get("status") == "completed" else "Waiting",
+                "paymentStatus": bill.get("status"),
+                "type": "Pharmacy",
+                "notes": "Pharmacy Bill"
+            })
+
+        # Sort combined list by date desc
+        all_records.sort(key=lambda x: str(x.get("checkInTime", "")), reverse=True)
+        
+        # Apply manual pagination on the merged list (since sources are disparate)
+        start_idx = (page - 1) * limit
+        paginated_records = all_records[start_idx : start_idx + limit]
+
         return {
             "status": "success",
             "totalRevenue": round(total_revenue, 2),
+            "settledRevenue": round(settled_revenue, 2),
+            "unsettledRevenue": round(unsettled_revenue, 2),
             "pendingBills": pending_bills_count,
-            "completedToday": completed_today_count,
+            "completedToday": 0, # Placeholder or separate query if needed
             "refunds": round(refunds_total, 2),
-            "records": all_billing_records,
-            "totalRecords": len(all_billing_records)
+            "pendingBillsList": pending_list,
+            "records": paginated_records,
+            "totalRecords": len(all_records), # This is approximate total of top slices
+            "page": page,
+            "limit": limit
         }
     except Exception as e:
         print(f"Error fetching billing dashboard stats: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# ============ ANALYTICS ENDPOINT ============
+@app.get("/api/billing/analytics")
+async def get_billing_analytics():
+    """
+    Get detailed analytics for OP, Surgery, Lab, and Pharmacy.
+    Returns daily, monthly, and yearly aggregation.
+    """
+    try:
+        from datetime import datetime
+        
+        # --- Define Lab Keywords (lowercase) ---
+        lab_keywords = ["ot scan", "visual field", "iop", "refraction", "lab", "investigation"]
+        
+        # 1. OP & Lab Analytics (from Invoices)
+        # We fetch daily aggregates from Mongo and split OP vs Lab in Python or Mongo
+        # To keep Mongo query simple, let's fetch daily totals for all paid invoices with their service name
+        # Actually, aggregating by service content in Mongo is better to reduce data transfer
+        
+        pipeline_invoices = [
+            {"$unwind": "$billing.invoices"},
+            {"$match": {"billing.invoices.status": "paid"}},
+            {"$project": {
+                "date": "$billing.invoices.date",
+                "amount": "$billing.invoices.patientResponsibility",
+                "service": {"$toLower": {"$ifNull": ["$billing.invoices.service", ""]}}
+            }},
+            {"$group": {
+                "_id": {
+                    "date": "$date",
+                    "service": "$service"
+                },
+                "totalAmount": {"$sum": "$amount"},
+                "count": {"$sum": 1}
+            }}
+        ]
+        
+        # 2. Surgery Analytics
+        pipeline_surgery = [
+            {"$unwind": "$billing.surgeryBills"},
+            # Include 'balance_due', 'partially_paid', and 'settled'
+            {"$match": {"billing.surgeryBills.status": {"$in": ["settled", "balance_due", "partially_paid"]}}},
+            {"$project": {
+                "date": {"$substr": ["$billing.surgeryBills.createdAt", 0, 10]},
+                "amount": "$billing.surgeryBills.patientTotalShare"
+            }},
+            {"$group": {
+                "_id": "$date",
+                "totalAmount": {"$sum": "$amount"},
+                "count": {"$sum": 1}
+            }}
+        ]
+        
+        # 3. Pharmacy Analytics
+        pipeline_pharmacy = [
+            {"$match": {"status": "completed"}},
+            {"$project": {
+                "date": {"$substr": ["$billDate", 0, 10]},
+                "amount": "$totalAmount"
+            }},
+            {"$group": {
+                "_id": "$date",
+                "totalAmount": {"$sum": "$amount"},
+                "count": {"$sum": 1}
+            }}
+        ]
+
+        # Execute Queries
+        invoice_data = list(patient_collection.aggregate(pipeline_invoices))
+        surgery_data = list(patient_collection.aggregate(pipeline_surgery))
+        pharmacy_data = list(pharmacy_billing_collection.aggregate(pipeline_pharmacy))
+
+        # Process Data in Python
+        # Structure: { "YYYY-MM-DD": { "op": {amount, count}, "lab": {...}, "surgery": {...}, "pharmacy": {...} } }
+        daily_map = {}
+
+        def init_date(d):
+            if d not in daily_map:
+                daily_map[d] = {
+                    "op": {"amount": 0, "count": 0},
+                    "lab": {"amount": 0, "count": 0},
+                    "surgery": {"amount": 0, "count": 0},
+                    "pharmacy": {"amount": 0, "count": 0}
+                }
+
+        # Process Invoices (OP vs Lab)
+        for item in invoice_data:
+            date = item["_id"].get("date", "Unknown")
+            if not date: continue
+            service = item["_id"].get("service", "")
+            amount = item["totalAmount"]
+            count = item["count"]
+            
+            init_date(date)
+            
+            # Check if Lab
+            is_lab = any(k in service for k in lab_keywords)
+            category = "lab" if is_lab else "op"
+            
+            daily_map[date][category]["amount"] += amount
+            daily_map[date][category]["count"] += count
+
+        # Process Surgery
+        for item in surgery_data:
+            date = item["_id"]
+            if not date: continue
+            init_date(date)
+            daily_map[date]["surgery"]["amount"] += item["totalAmount"]
+            daily_map[date]["surgery"]["count"] += item["count"]
+
+        # Process Pharmacy
+        for item in pharmacy_data:
+            date = item["_id"]
+            if not date: continue
+            init_date(date)
+            daily_map[date]["pharmacy"]["amount"] += item["totalAmount"]
+            daily_map[date]["pharmacy"]["count"] += item["count"]
+
+        # Convert to sorted list
+        sorted_dates = sorted(daily_map.keys())
+        
+        # Create Monthly and Yearly Maps
+        monthly_map = {}
+        yearly_map = {}
+
+        for d in sorted_dates:
+            if d == "Unknown": continue
+            try:
+                dt = datetime.strptime(d, "%Y-%m-%d")
+                m_key = dt.strftime("%Y-%m")
+                y_key = dt.strftime("%Y")
+            except:
+                continue
+
+            # Init Month/Year
+            if m_key not in monthly_map: monthly_map[m_key] = {"op": {"amount": 0, "count": 0}, "lab": {"amount": 0, "count": 0}, "surgery": {"amount": 0, "count": 0}, "pharmacy": {"amount": 0, "count": 0}}
+            if y_key not in yearly_map: yearly_map[y_key] = {"op": {"amount": 0, "count": 0}, "lab": {"amount": 0, "count": 0}, "surgery": {"amount": 0, "count": 0}, "pharmacy": {"amount": 0, "count": 0}}
+
+            # Aggregate
+            for cat in ["op", "lab", "surgery", "pharmacy"]:
+                vals = daily_map[d][cat]
+                monthly_map[m_key][cat]["amount"] += vals["amount"]
+                monthly_map[m_key][cat]["count"] += vals["count"]
+                yearly_map[y_key][cat]["amount"] += vals["amount"]
+                yearly_map[y_key][cat]["count"] += vals["count"]
+
+        # Format Output Lists
+        def format_output(source_map):
+            return [{"date": k, **v} for k, v in sorted(source_map.items())]
+
+        return {
+            "status": "success",
+            "daily": format_output(daily_map),
+            "monthly": format_output(monthly_map),
+            "yearly": format_output(yearly_map)
+        }
+    except Exception as e:
+        print(f"Error in analytics: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/pharmacy/stock-report")
 async def get_stock_report():

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Minus, Trash2, Edit2, Save, X, AlertCircle } from 'lucide-react';
-import API_ENDPOINTS from '../config/api';
+import { Plus, Minus, Trash2, Edit2, Save, X, AlertCircle, Upload } from 'lucide-react';
+import API_ENDPOINTS, { API_BASE_URL } from '../config/api';
 
 interface Medicine {
   id: string;
@@ -9,11 +9,11 @@ interface Medicine {
   price: number;
   stock: number;
   description: string;
-  // Backend fields
+  // Backend fields used for internal mapping
   expiry_date?: string;
   batch_number?: string;
   manufacturer?: string;
-  // Legacy fields
+  // Frontend/Form fields
   expiryDate?: string;
   batchNumber?: string;
   vendorName?: string;
@@ -23,12 +23,7 @@ interface Medicine {
   purchasePrice?: number;
   purchaseDate?: string;
   branchName?: string;
-}
-
-interface StockChange {
-  medicineId: string;
-  quantity: number;
-  type: 'add' | 'remove';
+  isExisting?: boolean;
 }
 
 export function MedicineManagementView() {
@@ -39,8 +34,15 @@ export function MedicineManagementView() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Invoice Upload State
+  const [importedMedicines, setImportedMedicines] = useState<Partial<Medicine>[]>([]);
+  const [isProcessingInvoice, setIsProcessingInvoice] = useState(false);
 
-  const categories: string[] = [
+  // Stock Management State
+  const [stockChanges, setStockChanges] = useState<{ [key: string]: number }>({});
+
+  const categories = [
     'Drops',
     'Tablet',
     'Capsules',
@@ -56,7 +58,7 @@ export function MedicineManagementView() {
 
   const [formData, setFormData] = useState({
     name: '',
-    category: 'Eye Drops' as const,
+    category: 'Eye Drops',
     price: '',
     stock: '',
     description: '',
@@ -69,8 +71,6 @@ export function MedicineManagementView() {
     purchaseDate: '',
     branchName: ''
   });
-
-  const [stockChanges, setStockChanges] = useState<{ [key: string]: number }>({});
 
   // Fetch medicines on mount
   useEffect(() => {
@@ -85,6 +85,7 @@ export function MedicineManagementView() {
       if (!response.ok) throw new Error('Failed to fetch medicines');
       const data = await response.json();
       if (data.medicines && Array.isArray(data.medicines)) {
+        // Map backend fields to frontend if needed or keep as is
         setMedicines(data.medicines);
       }
     } catch (err) {
@@ -95,6 +96,251 @@ export function MedicineManagementView() {
     }
   };
 
+  // --- Invoice Parsing Logic ---
+  const handleInvoiceUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    setIsProcessingInvoice(true);
+    setError(null);
+    setSuccess(null);
+    
+    const formDataUpload = new FormData();
+    formDataUpload.append('file', file);
+    
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/medicines/parse-invoice`, {
+            method: 'POST',
+            body: formDataUpload,
+        });
+        
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.detail || 'Failed to parse invoice');
+        }
+        
+        const data = await response.json();
+        if (Array.isArray(data) && data.length > 0) {
+            // Map parsed data to our structure
+            const mapped = data.map((item: any, idx: number) => {
+                // Check if medicine already exists (simple fuzzy match on name)
+                const existing = medicines.find(m => 
+                    m.name.toLowerCase().trim() === (item.name || '').toLowerCase().trim()
+                );
+
+                if (existing) {
+                    return {
+                        ...existing, // Keep existing ID and details
+                        stock: item.stock || 0, // This will be ADDED to stock
+                        // Update price/mrp if available in invoice, otherwise keep existing
+                        price: item.mrp || existing.price,
+                        mrp: item.mrp || existing.mrp || 0,
+                        purchasePrice: item.purchasePrice || existing.purchasePrice || 0,
+                        
+                        // New batch info
+                        expiry_date: item.expiry || existing.expiry_date,
+                        batch_number: item.batch || existing.batch_number,
+                        
+                        // Frontend helpers
+                        expiryDate: item.expiry || existing.expiryDate,
+                        batchNumber: item.batch || existing.batchNumber,
+                        
+                        isExisting: true // Flag to UI
+                    };
+                } else {
+                    return {
+                        id: `import-${Date.now()}-${idx}`,
+                        name: item.name || '',
+                        category: 'Others',
+                        price: item.mrp || 0,
+                        stock: item.stock || 0,
+                        description: '',
+                        expiry_date: item.expiry || '',
+                        batch_number: item.batch || '',
+                        mrp: item.mrp || 0,
+                        purchasePrice: item.purchasePrice || 0,
+                        expiryDate: item.expiry || '',
+                        batchNumber: item.batch || '',
+                        isExisting: false
+                    };
+                }
+            });
+            setImportedMedicines(mapped);
+            setSuccess(`Successfully extracted ${data.length} medicines. matched ${mapped.filter((m: any) => m.isExisting).length} existing items.`);
+        } else {
+            setError('No medicines could be extracted from this invoice. Please try a clearer image or PDF.');
+        }
+    } catch (err: any) {
+        console.error('Error uploading invoice:', err);
+        setError(err.message || 'Failed to upload invoice');
+    } finally {
+        setIsProcessingInvoice(false);
+        e.target.value = ''; // Reset input
+    }
+  };
+
+  const saveImportedMedicine = async (index: number) => {
+    const medicineToSave = importedMedicines[index];
+    if (!medicineToSave) return;
+
+    try {
+        if (medicineToSave.isExisting && medicineToSave.id && !medicineToSave.id.startsWith('import-')) {
+            // Update existing stock
+            const existing = medicines.find(m => m.id === medicineToSave.id);
+            const currentStock = existing ? existing.stock : 0;
+            const quantityToAdd = Number(medicineToSave.stock);
+            
+            const response = await fetch(API_ENDPOINTS.PHARMACY.UPDATE_MEDICINE(medicineToSave.id), {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    stock: currentStock + quantityToAdd,
+                    // Optionally update price/batch if it changed
+                    price: Number(medicineToSave.price),
+                    mrp: Number(medicineToSave.mrp),
+                    expiry_date: medicineToSave.expiryDate,
+                    batch_number: medicineToSave.batchNumber
+                })
+            });
+            if (!response.ok) throw new Error('Failed to update stock');
+        } else {
+            // Create new medicine
+            const payload = {
+                ...medicineToSave,
+                price: Number(medicineToSave.price),
+                stock: Number(medicineToSave.stock),
+                mrp: Number(medicineToSave.mrp),
+                expiry_date: medicineToSave.expiryDate,
+                batch_number: medicineToSave.batchNumber
+            };
+            // Remove temp ID if it exists
+            if (payload.id && payload.id.startsWith('import-')) {
+                delete (payload as any).id;
+            }
+            // Remove UI flags
+            delete (payload as any).isExisting;
+
+            const response = await fetch(API_ENDPOINTS.PHARMACY.CREATE_MEDICINE, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+
+            if (!response.ok) throw new Error('Failed to save medicine');
+        }
+
+        // Remove from import list
+        const newImported = [...importedMedicines];
+        newImported.splice(index, 1);
+        setImportedMedicines(newImported);
+        
+        fetchMedicines();
+        setSuccess(`Saved ${medicineToSave.name}`);
+        
+        if (newImported.length === 0) {
+            setSuccess('All imported medicines saved successfully!');
+        }
+    } catch (err) {
+        console.error(err);
+        setError('Failed to save medicine');
+    }
+  };
+
+  const saveAllImportedMedicines = async () => {
+    if (!window.confirm(`Save all ${importedMedicines.length} medicines? This will update stock for existing items and create new entries for others.`)) return;
+    
+    setIsProcessingInvoice(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    // Process sequentially to avoid race conditions or backend overload
+    // We iterate backwards or create a copy so splicing doesn't mess up indexing?
+    // Better to iterate a copy and clear successful ones.
+    
+    // Actually, let's just process all and then remove successful ones.
+    const remaining = [...importedMedicines];
+    const processedIndices: number[] = [];
+
+    for (let i = 0; i < importedMedicines.length; i++) {
+        const medicineToSave = importedMedicines[i];
+        try {
+            if (medicineToSave.isExisting && medicineToSave.id && !medicineToSave.id.startsWith('import-')) {
+                const existing = medicines.find(m => m.id === medicineToSave.id);
+                const currentStock = existing ? existing.stock : 0;
+                const quantityToAdd = Number(medicineToSave.stock);
+                
+                await fetch(API_ENDPOINTS.PHARMACY.UPDATE_MEDICINE(medicineToSave.id), {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        stock: currentStock + quantityToAdd,
+                        price: Number(medicineToSave.price),
+                        mrp: Number(medicineToSave.mrp),
+                        expiry_date: medicineToSave.expiryDate,
+                        batch_number: medicineToSave.batchNumber
+                    })
+                });
+            } else {
+                 const payload = {
+                    ...medicineToSave,
+                    price: Number(medicineToSave.price),
+                    stock: Number(medicineToSave.stock),
+                    mrp: Number(medicineToSave.mrp),
+                    expiry_date: medicineToSave.expiryDate,
+                    batch_number: medicineToSave.batchNumber
+                };
+                if (payload.id && payload.id.startsWith('import-')) delete (payload as any).id;
+                delete (payload as any).isExisting;
+
+                await fetch(API_ENDPOINTS.PHARMACY.CREATE_MEDICINE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+            }
+            processedIndices.push(i);
+            successCount++;
+        } catch (e) {
+            console.error(e);
+            failCount++;
+        }
+    }
+
+    // Update state to remove successfully saved items
+    // Filter out items that were processed successfully
+    const newImportedList = importedMedicines.filter((_, index) => !processedIndices.includes(index));
+    setImportedMedicines(newImportedList);
+    
+    fetchMedicines();
+    setIsProcessingInvoice(false);
+    
+    if (failCount === 0) {
+        setSuccess(`Successfully saved all ${successCount} medicines.`);
+    } else {
+        setError(`Saved ${successCount} medicines, but failed to save ${failCount}. Please review remaining items.`);
+    }
+  };
+
+  const updateImportedField = (index: number, field: keyof Medicine, value: any) => {
+      const newImported = [...importedMedicines];
+      const updates: any = { [field]: value };
+      
+      // Sync duplicate fields
+      if (field === 'expiryDate') updates.expiry_date = value;
+      if (field === 'batchNumber') updates.batch_number = value;
+
+      newImported[index] = { ...newImported[index], ...updates };
+      setImportedMedicines(newImported);
+  };
+
+  const removeImportedMedicine = (index: number) => {
+      const newImported = [...importedMedicines];
+      newImported.splice(index, 1);
+      setImportedMedicines(newImported);
+  };
+
+  // --- CRUD Operations ---
+
   const handleAddMedicine = async () => {
     if (!formData.name || !formData.price || !formData.stock) {
       setError('Please fill all required fields');
@@ -104,7 +350,9 @@ export function MedicineManagementView() {
     try {
       const response = await fetch(API_ENDPOINTS.PHARMACY.CREATE_MEDICINE, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
           name: formData.name,
           category: formData.category,
@@ -291,7 +539,135 @@ export function MedicineManagementView() {
             <Plus size={20} />
             Add Medicine
           </button>
+          
+          <label className={`px-6 py-2 bg-[#1E1C24] text-[#F5F3EF] border border-[#262028] rounded-xl hover:bg-[#262028] transition-all flex items-center gap-2 cursor-pointer ${isProcessingInvoice ? 'opacity-50 pointer-events-none' : ''}`}>
+            <input type="file" accept=".pdf,.jpg,.jpeg,.png,.bmp" className="hidden" onChange={handleInvoiceUpload} disabled={isProcessingInvoice} />
+            <Upload size={20} />
+            <span>{isProcessingInvoice ? 'Processing...' : 'Upload Invoice'}</span>
+          </label>
         </div>
+
+        {/* Imported Medicines Review Section */}
+        {importedMedicines.length > 0 && (
+          <div className="mb-8 p-6 bg-[#121015] border border-[#D4A574] rounded-2xl shadow-lg shadow-[#D4A574]/10">
+            <h3 className="text-xl font-semibold mb-4 text-[#D4A574] flex justify-between items-center">
+              <span>Review Imported Medicines ({importedMedicines.length})</span>
+              <div className="flex gap-2">
+                <button 
+                  onClick={saveAllImportedMedicines}
+                  className="px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded text-sm font-semibold flex items-center gap-1"
+                >
+                  <Save size={16} />
+                  Save All
+                </button>
+                <button 
+                  onClick={() => setImportedMedicines([])}
+                  className="px-4 py-1.5 bg-red-900/40 hover:bg-red-900/60 text-red-400 rounded text-sm"
+                >
+                  Discard All
+                </button>
+              </div>
+            </h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="text-[#8C847B] border-b border-[#262028]">
+                    <th className="p-3">Status</th>
+                    <th className="p-3">Name</th>
+                    <th className="p-3">Batch</th>
+                    <th className="p-3">Expiry</th>
+                    <th className="p-3">MRP</th>
+                    <th className="p-3">Qty (+Current)</th>
+                    <th className="p-3">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {importedMedicines.map((med, idx) => {
+                    // Calculate expected total for display if matched
+                    const existing = medicines.find(m => m.id === med.id);
+                    const currentStock = existing ? existing.stock : 0;
+                    
+                    return (
+                    <tr key={idx} className={`border-b border-[#262028] hover:bg-[#1E1C24] ${med.isExisting ? 'bg-blue-900/10' : ''}`}>
+                      <td className="p-3">
+                        {med.isExisting ? (
+                          <span className="px-2 py-1 bg-blue-900/40 text-blue-300 text-xs rounded border border-blue-800">Update Stock</span>
+                        ) : (
+                          <span className="px-2 py-1 bg-green-900/40 text-green-300 text-xs rounded border border-green-800">New Item</span>
+                        )}
+                      </td>
+                      <td className="p-3">
+                        <input 
+                          type="text" 
+                          value={med.name} 
+                          onChange={(e) => updateImportedField(idx, 'name', e.target.value)}
+                          className="bg-transparent border border-[#262028] rounded px-2 py-1 w-full text-[#F5F3EF]"
+                        />
+                      </td>
+                      <td className="p-3">
+                         <input 
+                          type="text" 
+                          value={med.batchNumber || med.batch_number} 
+                          onChange={(e) => updateImportedField(idx, 'batchNumber', e.target.value)}
+                          className="bg-transparent border border-[#262028] rounded px-2 py-1 w-24 text-[#F5F3EF]"
+                          placeholder="Batch"
+                        />
+                      </td>
+                      <td className="p-3">
+                        <input 
+                          type="text" 
+                          value={med.expiryDate || med.expiry_date} 
+                          onChange={(e) => updateImportedField(idx, 'expiryDate', e.target.value)}
+                          className="bg-transparent border border-[#262028] rounded px-2 py-1 w-24 text-[#F5F3EF]"
+                          placeholder="MM/YY"
+                        />
+                      </td>
+                      <td className="p-3">
+                        <input 
+                          type="number" 
+                          value={med.mrp} 
+                          onChange={(e) => updateImportedField(idx, 'mrp', parseFloat(e.target.value))}
+                          className="bg-transparent border border-[#262028] rounded px-2 py-1 w-20 text-[#F5F3EF]"
+                        />
+                      </td>
+                      <td className="p-3">
+                         <div className="flex items-center gap-1">
+                            <input 
+                            type="number" 
+                            value={med.stock} 
+                            onChange={(e) => updateImportedField(idx, 'stock', parseFloat(e.target.value))}
+                            className="bg-transparent border border-[#262028] rounded px-2 py-1 w-16 text-[#F5F3EF]"
+                            />
+                            {med.isExisting && (
+                                <span className="text-xs text-[#8C847B] whitespace-nowrap">
+                                    + {currentStock} = {currentStock + (med.stock || 0)}
+                                </span>
+                            )}
+                         </div>
+                      </td>
+                      <td className="p-3 flex gap-2">
+                        <button 
+                            onClick={() => saveImportedMedicine(idx)}
+                            className="p-2 bg-green-900/40 text-green-400 rounded hover:bg-green-900/60"
+                            title={med.isExisting ? "Update Stock" : "Create New"}
+                        >
+                            <Save size={16} />
+                        </button>
+                        <button 
+                            onClick={() => removeImportedMedicine(idx)}
+                            className="p-2 bg-red-900/40 text-red-400 rounded hover:bg-red-900/60"
+                            title="Remove"
+                        >
+                            <Trash2 size={16} />
+                        </button>
+                      </td>
+                    </tr>
+                  )})}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {/* Add Medicine Form */}
         {showAddForm && (
@@ -448,106 +824,138 @@ export function MedicineManagementView() {
                   <th className="text-left p-4 text-[#C2BAB1] font-semibold min-w-[80px]">MRP</th>
                   <th className="text-left p-4 text-[#C2BAB1] font-semibold min-w-[100px]">Cost Price</th>
                   <th className="text-left p-4 text-[#C2BAB1] font-semibold min-w-[70px]">Stock</th>
-                  <th className="text-left p-4 text-[#C2BAB1] font-semibold min-w-[120px]">Batch</th>
+                  <th className="text-left p-4 text-[#C2BAB1] font-semibold min-w-[100px]">Batch</th>
                   <th className="text-left p-4 text-[#C2BAB1] font-semibold min-w-[100px]">Expiry</th>
-                  <th className="text-left p-4 text-[#C2BAB1] font-semibold min-w-[120px]">Vendor</th>
-                  <th className="text-left p-4 text-[#C2BAB1] font-semibold min-w-[150px]">Actions</th>
+                  <th className="text-left p-4 text-[#C2BAB1] font-semibold min-w-[150px]">Vendor</th>
+                  <th className="text-left p-4 text-[#C2BAB1] font-semibold">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredMedicines.map(medicine => (
                   <tr key={medicine.id} className="border-b border-[#262028] hover:bg-[#121015] transition-colors">
-                    <td className="p-4">{medicine.name}</td>
                     <td className="p-4">
-                      <span className="px-3 py-1 bg-[#262028] rounded-full text-sm">
+                      <div>
+                        {medicine.name}
+                        {medicine.description && (
+                          <div className="text-sm text-[#8C847B]">{medicine.description}</div>
+                        )}
+                      </div>
+                    </td>
+                    <td className="p-4">
+                      <span className="px-2 py-1 bg-[#262028] rounded text-sm text-[#C2BAB1]">
                         {medicine.category}
                       </span>
                     </td>
-                    <td className="p-4">₹{medicine.price.toFixed(2)}</td>
-                    <td className="p-4">{medicine.mrp ? `₹${medicine.mrp.toFixed(2)}` : '-'}</td>
-                    <td className="p-4">{medicine.purchasePrice ? `₹${medicine.purchasePrice.toFixed(2)}` : '-'}</td>
+                    <td className="p-4">₹{medicine.price}</td>
+                    <td className="p-4">{medicine.mrp ? `₹${medicine.mrp}` : '-'}</td>
+                    <td className="p-4">{medicine.purchasePrice ? `₹${medicine.purchasePrice}` : '-'}</td>
                     <td className="p-4">
-                      <span className={`font-semibold ${medicine.stock > 10 ? 'text-[#7CFF6B]' : medicine.stock > 0 ? 'text-[#FF9D00]' : 'text-red-500'}`}>
+                      <span className={`font-semibold ${medicine.stock < 10 ? 'text-red-500' : 'text-green-500'}`}>
                         {medicine.stock} units
                       </span>
                     </td>
-                    <td className="p-4 text-sm">{medicine.batch_number || medicine.batchNumber || '-'}</td>
-                    <td className="p-4 text-sm">{(medicine.expiry_date || medicine.expiryDate) ? new Date((medicine.expiry_date || medicine.expiryDate) as string).toLocaleDateString('en-IN') : '-'}</td>
-                    <td className="p-4 text-sm">{medicine.manufacturer || medicine.vendorName || '-'}</td>
+                    <td className="p-4 font-mono text-sm">{medicine.batchNumber || medicine.batch_number || '-'}</td>
+                    <td className="p-4 text-sm">{medicine.expiryDate || medicine.expiry_date || '-'}</td>
+                    <td className="p-4 text-sm">{medicine.vendorName || medicine.manufacturer || '-'}</td>
                     <td className="p-4">
-                      <div className="flex gap-2 flex-wrap">
-                        {/* Stock Management */}
-                        <div className="flex gap-1 items-center bg-[#121015] px-2 py-1 rounded">
+                      {/* Edit Mode Logic */}
+                      {editingId === medicine.id ? (
+                        <div className="flex flex-col gap-2 min-w-[300px] bg-[#0A0809] border border-[#262028] rounded p-4 absolute right-12 z-10 shadow-xl">
+                          <h5 className="font-semibold text-sm mb-2">Edit Details</h5>
                           <input
-                            type="number"
-                            min="1"
-                            value={stockChanges[medicine.id] || ''}
-                            onChange={e => setStockChanges(prev => ({ ...prev, [medicine.id]: parseInt(e.target.value) || 0 }))}
-                            placeholder="Qty"
-                            className="w-12 px-2 py-1 bg-[#0A0809] border border-[#262028] rounded text-[#F5F3EF] text-sm"
-                          />
-                          <button
-                            onClick={() => handleAddStock(medicine.id, stockChanges[medicine.id] || 1)}
-                            title="Add Stock"
-                            className="p-1 hover:bg-green-600 rounded transition-colors"
-                          >
-                            <Plus size={16} className="text-green-500" />
-                          </button>
-                          <button
-                            onClick={() => handleRemoveStock(medicine.id, stockChanges[medicine.id] || 1)}
-                            title="Remove Stock"
-                            className="p-1 hover:bg-red-600 rounded transition-colors"
-                          >
-                            <Minus size={16} className="text-red-500" />
-                          </button>
-                        </div>
-
-                        {/* Edit & Delete */}
-                        <button
-                          onClick={() => setEditingId(editingId === medicine.id ? null : medicine.id)}
-                          className="p-2 hover:bg-[#262028] rounded transition-colors"
-                          title="Edit"
-                        >
-                          <Edit2 size={16} className="text-[#00A3FF]" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteMedicine(medicine.id)}
-                          className="p-2 hover:bg-red-600/20 rounded transition-colors"
-                          title="Delete"
-                        >
-                          <Trash2 size={16} className="text-red-500" />
-                        </button>
-                      </div>
-
-                      {/* Edit Form */}
-                      {editingId === medicine.id && (
-                        <div className="mt-3 p-3 bg-[#0A0809] border border-[#262028] rounded col-span-5">
-                          <div className="grid grid-cols-2 gap-2 mb-2">
-                            <input
-                              type="text"
-                              value={medicine.name}
-                              onChange={e => {
+                            type="text"
+                            value={medicine.name}
+                            onChange={e => {
                                 const updated = { ...medicine, name: e.target.value };
                                 setMedicines(medicines.map(m => m.id === medicine.id ? updated : m));
-                              }}
-                              className="px-2 py-1 bg-[#121015] border border-[#262028] rounded text-sm"
+                            }}
+                            className="bg-[#121015] border border-[#262028] rounded p-2 text-sm"
+                            placeholder="Name"
+                          />
+                          <div className="grid grid-cols-2 gap-2">
+                             <input
+                                type="number"
+                                value={medicine.price}
+                                onChange={e => {
+                                    const updated = { ...medicine, price: parseFloat(e.target.value) };
+                                    setMedicines(medicines.map(m => m.id === medicine.id ? updated : m));
+                                }}
+                                className="bg-[#121015] border border-[#262028] rounded p-2 text-sm"
+                                placeholder="Price"
                             />
                             <input
-                              type="number"
-                              value={medicine.price}
-                              onChange={e => {
-                                const updated = { ...medicine, price: parseFloat(e.target.value) };
-                                setMedicines(medicines.map(m => m.id === medicine.id ? updated : m));
-                              }}
-                              className="px-2 py-1 bg-[#121015] border border-[#262028] rounded text-sm"
+                                type="number"
+                                value={medicine.stock}
+                                onChange={e => {
+                                    const updated = { ...medicine, stock: parseFloat(e.target.value) };
+                                    setMedicines(medicines.map(m => m.id === medicine.id ? updated : m));
+                                }}
+                                className="bg-[#121015] border border-[#262028] rounded p-2 text-sm"
+                                placeholder="Stock"
                             />
                           </div>
-                          <button
-                            onClick={() => handleUpdateMedicine(medicine.id, medicine)}
-                            className="px-4 py-1 bg-green-600 hover:bg-green-700 rounded text-sm font-semibold transition-colors"
-                          >
-                            Save
-                          </button>
+                          <div className="flex gap-2 mt-2">
+                            <button
+                                onClick={() => handleUpdateMedicine(medicine.id, medicine)}
+                                className="flex-1 bg-green-600 hover:bg-green-700 text-white rounded py-1 text-sm font-semibold"
+                            >
+                                Save
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setEditingId(null);
+                                    fetchMedicines(); // revert changes
+                                }}
+                                className="flex-1 bg-red-600/20 text-red-400 hover:bg-red-600/40 rounded py-1 text-sm"
+                            >
+                                Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                            {/* Stock Management */}
+                            <div className="flex items-center gap-1 bg-[#1E1C24] rounded-lg p-1 mr-2 border border-[#262028]">
+                            <span className="text-xs text-[#8C847B] px-1">Qt</span>
+                            <input
+                                type="number"
+                                value={stockChanges[medicine.id] || ''}
+                                onChange={e => setStockChanges(prev => ({ ...prev, [medicine.id]: parseInt(e.target.value) || 0 }))}
+                                placeholder="0"
+                                className="w-8 bg-transparent text-center text-sm focus:outline-none"
+                            />
+                            <div className="flex gap-1 border-l border-[#262028] pl-1">
+                                <button
+                                    onClick={() => handleAddStock(medicine.id, stockChanges[medicine.id] || 1)}
+                                    title="Add Stock"
+                                    className="p-1 hover:text-green-400 text-[#8C847B]"
+                                >
+                                <Plus size={14} />
+                                </button>
+                                <button
+                                    onClick={() => handleRemoveStock(medicine.id, stockChanges[medicine.id] || 1)}
+                                    title="Remove Stock"
+                                    className="p-1 hover:text-red-400 text-[#8C847B]"
+                                >
+                                <Minus size={14} />
+                                </button>
+                            </div>
+                            </div>
+
+                            <button
+                                onClick={() => setEditingId(medicine.id)}
+                                className="p-2 hover:bg-[#262028] rounded transition-colors text-[#00A3FF]"
+                                title="Edit"
+                            >
+                                <Edit2 size={16} />
+                            </button>
+                            <button
+                                onClick={() => handleDeleteMedicine(medicine.id)}
+                                className="p-2 hover:bg-red-600/20 rounded transition-colors text-red-500"
+                                title="Delete"
+                            >
+                                <Trash2 size={16} />
+                            </button>
                         </div>
                       )}
                     </td>
