@@ -234,6 +234,8 @@ interface IndividualBillingViewProps {
     _id?: string;
     name?: string;
     registrationId?: string;
+    age?: string;
+    sex?: string;
     contactInfo?: {
       phone?: string;
       email?: string;
@@ -405,12 +407,12 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
   useEffect(() => {
     if (initialPatientData && initialPatientData.registrationId) {
       console.log('📋 Pre-filling patient data from appointment booking:', initialPatientData);
-      
+
       // Set the registration ID
       setCurrentRegId(initialPatientData.registrationId);
       setHasInitialPatientData(true);
       
-      // Pre-fill patient object immediately to match the expected structure
+      // Pre-fill patient object immediately
       const prefilledPatient = {
         name: initialPatientData.name || '',
         registrationId: initialPatientData.registrationId || '',
@@ -421,9 +423,15 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
         contactInfo: {
           phone: initialPatientData.contactInfo?.phone || '',
           email: initialPatientData.contactInfo?.email || '',
+          age: (initialPatientData as any).age || '',
+          sex: (initialPatientData as any).sex || '',
+          address: '',
+          bloodType: '',
+          allergies: '',
+          emergencyContact: ''
         }
       };
-      
+
       setPatient(prefilledPatient);
       setLoading(false);
       console.log('✅ Patient data pre-filled successfully');
@@ -2476,6 +2484,7 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
                       {patient?.name || 'Select Patient'}
                     </h2>
                     <p className="text-[10px] text-[#8B8B8B] font-mono tracking-wider mt-0.5 uppercase">
+                      REG: {patient?.registrationId || 'N/A'}
                       REG: {patient?.registrationId || 'N/A'}
                     </p>
                     <p className="text-[11px] text-[#D4A574] font-medium mt-1">

@@ -130,8 +130,8 @@ export function VideoConsultationView({ onBack, username }: VideoConsultationVie
     <div className="h-full flex flex-col bg-[#050505] text-white p-6">
       {/* Header */}
       <div className="flex items-center gap-4 mb-6">
-        <button onClick={() => { leaveCall(); onBack(); }} className="p-2 hover:bg-[#1a1a1a] rounded-full transition-colors">
-          <ArrowLeft className="w-6 h-6 text-[#888]" />
+        <button onClick={() => { leaveCall(); onBack(); }} className="flex items-center justify-center w-10 h-10 p-0 bg-[var(--theme-accent)] text-white force-text-white rounded-full shadow-lg hover:opacity-90 transition-all flex-shrink-0">
+          <ArrowLeft className="w-5 h-5" />
         </button>
         <div>
            <h1 className="text-2xl font-bold">Virtual Consultation</h1>

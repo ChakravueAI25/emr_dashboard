@@ -12,6 +12,7 @@ import {
 import { Activity } from 'lucide-react';
 import API_ENDPOINTS from '../config/api';
 import { ReceptionistDashboardView } from './ReceptionistDashboardView';
+import { OpdDashboardView } from './OpdDashboardView';
 
 interface DashboardViewProps {
   appSettings: AppSettings;
@@ -65,23 +66,17 @@ export function DashboardView({ appSettings, setAppSettings, username, userRole 
 
       setLoadingDoctor(true);
       try {
-        // Fetch all users and find the current doctor
-        const res = await fetch(API_ENDPOINTS.USERS_ALL);
+        const res = await fetch(API_ENDPOINTS.USERS_ONE(username));
         if (res.ok) {
-          const data = await res.json();
-          const doctors = data.users || [];
-          const foundDoctor = doctors.find((u: any) => u.username === username);
-
-          if (foundDoctor) {
-            setDoctorInfo({
-              username: foundDoctor.username,
-              full_name: (foundDoctor.full_name && foundDoctor.full_name.startsWith('Dr.') ? foundDoctor.full_name : `Dr. ${foundDoctor.full_name || foundDoctor.username}`),
-              role: foundDoctor.role,
-              specialty: foundDoctor.specialty || 'Ophthalmologist',
-              location: foundDoctor.location || 'Hospital',
-              age: foundDoctor.age
-            });
-          }
+          const foundDoctor = await res.json();
+          setDoctorInfo({
+            username: foundDoctor.username,
+            full_name: (foundDoctor.full_name && foundDoctor.full_name.startsWith('Dr.') ? foundDoctor.full_name : `Dr. ${foundDoctor.full_name || foundDoctor.username}`),
+            role: foundDoctor.role,
+            specialty: foundDoctor.specialty || 'Ophthalmologist',
+            location: foundDoctor.location || 'Hospital',
+            age: foundDoctor.age
+          });
         }
       } catch (error) {
         console.error('Failed to fetch doctor info:', error);
@@ -243,6 +238,12 @@ export function DashboardView({ appSettings, setAppSettings, username, userRole 
     return <ReceptionistDashboardView username={username || ''} userRole={userRole} />;
   }
 
+  // OPD-specific dashboard layout
+  if (userRole === 'opd') {
+    return <OpdDashboardView appSettings={appSettings} setAppSettings={setAppSettings} username={username} userRole={userRole} />;
+  }
+
+  // Original universal dashboard layout for other roles
   return (
     <div className="max-w-[1600px] mx-auto p-12 space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700 bg-[#050406]">
       <div className="w-full">
