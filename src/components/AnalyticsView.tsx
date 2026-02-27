@@ -458,8 +458,8 @@ export function AnalyticsView({ registrationId }: AnalyticsViewProps) {
             <table className="w-full text-xs">
               <thead>
                 <tr className="bg-[#D4A574] bg-opacity-20">
-                  <th className="text-left p-3 text-[#8B8B8B] border-r border-[#D4A574]">IOP Range (mmHg)</th>
-                  <th className="text-center p-3 text-[#8B8B8B]">Frequency</th>
+                  <th className="text-left p-3 text-white border-r border-[#D4A574]">IOP Range (mmHg)</th>
+                  <th className="text-center p-3 text-white">Frequency</th>
                 </tr>
               </thead>
               <tbody>

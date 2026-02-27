@@ -141,8 +141,8 @@ export function SlitLampView({ onBack, patientId, patientName, doctorName }: Sli
     <div className="h-[calc(100vh-100px)] flex flex-col p-6 animate-in fade-in zoom-in-95 duration-500">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <Button onClick={onBack} variant="outline" className="w-10 h-10 p-0 rounded-full border-[#D4A574] hover:bg-[#222]">
-             <ChevronLeft className="w-5 h-5 text-gray-400" />
+          <Button onClick={onBack} className="flex items-center justify-center w-10 h-10 p-0 bg-[var(--theme-accent)] text-white force-text-white rounded-full shadow-lg hover:opacity-90 transition-all flex-shrink-0">
+             <ChevronLeft className="w-5 h-5" />
           </Button>
           <div>
             <h2 className="text-2xl font-bold text-white">Slit Lamp Imaging</h2>

@@ -1,6 +1,6 @@
 ﻿import { useRef } from 'react';
 import { Search } from 'lucide-react';
-import { ChevronLeft, ChevronRight, CheckCircle, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle, X, ArrowLeft } from 'lucide-react';
 import { PatientDetailsCard } from '../PatientDetailsCard';
 import { VitalSignsCard } from '../VitalSignsCard';
 import { AppointmentsCard } from '../AppointmentsCard';
@@ -212,23 +212,6 @@ export const PatientDashboard = ({
                         </button>
                     )}
 
-                    {/* Close button to clear active record */}
-                    <button
-                        onClick={() => {
-                            if (confirm('Close current patient file? Any unsaved changes will be lost.')) {
-                                setActivePatientData(null);
-                                setIsPatientDischarged(false);
-                                // For clinical roles, go back to portal hub (dashboard)
-                                if (userRole === 'receptionist' || userRole === 'opd' || userRole === 'doctor') {
-                                    setCurrentView('dashboard');
-                                }
-                            }
-                        }}
-                        className="p-3 text-[#555] hover:text-white hover:bg-[#1a1a1a] rounded-2xl transition-all"
-                        title="Close Patient File"
-                    >
-                        <X className="w-5 h-5" />
-                    </button>
                 </div>
             </div>
 

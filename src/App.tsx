@@ -1456,11 +1456,12 @@ export default function App() {
           <div className="px-6 py-4 mb-4">
             <button
               onClick={() => handleViewChange('dashboard')}
-              className="flex items-center gap-2 px-4 py-2 bg-[var(--theme-bg)] border border-[var(--theme-accent)] text-[var(--theme-accent)] rounded-lg shadow-md hover:bg-[var(--theme-accent)] hover:text-[var(--theme-bg)] transition-all duration-300 font-bold text-sm group"
+              className="flex items-center gap-2.5 px-5 py-2.5 bg-[var(--theme-accent)] text-white force-text-white rounded-xl shadow-lg hover:opacity-90 transition-all font-bold text-sm group"
+              style={{ color: '#ffffff' }}
               title="Back to Dashboard"
             >
-              <ArrowLeft className="w-5 h-5 transition-transform duration-300 group-hover:-translate-x-1" />
-              <span className="font-bold">Back to Dashboard</span>
+              <ArrowLeft className="w-4 h-4 transition-transform duration-300 group-hover:-translate-x-1" style={{ color: '#ffffff' }} />
+              <span style={{ color: '#ffffff' }}>Back to Dashboard</span>
             </button>
           </div>
         )}

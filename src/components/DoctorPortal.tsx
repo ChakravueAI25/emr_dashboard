@@ -109,7 +109,7 @@ export function DoctorPortal({
                         <div className="mb-6">
                             <button
                                 onClick={handleBackToDashboard}
-                                className="flex items-center gap-2.5 px-6 py-3 bg-[var(--theme-accent)] text-[var(--theme-bg)] rounded-xl shadow-lg hover:opacity-90 transition-all font-bold text-sm group"
+                                className="flex items-center gap-2.5 px-6 py-3 bg-[var(--theme-accent)] text-white force-text-white rounded-xl shadow-lg hover:opacity-90 transition-all font-bold text-sm group"
                             >
                                 <ArrowLeft className="w-5 h-5 transition-transform duration-300 group-hover:-translate-x-1.5" />
                                 Back to Dashboard
