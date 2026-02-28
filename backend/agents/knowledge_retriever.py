@@ -25,7 +25,7 @@ from sentence_transformers import SentenceTransformer
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BACKEND_DIR = Path(__file__).resolve().parents[1]
-CHROMA_DIR = BACKEND_DIR / "vector_db" / "book_chunks"
+CHROMA_DIR = REPO_ROOT / "vector_db" / "book_chunks"
 COLLECTION_NAME = "ophthal_book"
 MODEL_NAME = os.getenv("EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
 EMBED_CACHE_DIR = os.getenv("EMBED_CACHE_DIR")
@@ -277,7 +277,9 @@ def _get_embedder() -> SentenceTransformer:
         if EMBED_CACHE_DIR:
             kwargs["cache_folder"] = EMBED_CACHE_DIR
 
+        print(f"[EMBEDDER] Loading model: '{MODEL_NAME}' kwargs={kwargs}")
         _embedder = SentenceTransformer(MODEL_NAME, **kwargs)
+        print(f"[EMBEDDER] Loaded OK, dim={_embedder.get_sentence_embedding_dimension()}")
     return _embedder
 
 
@@ -287,7 +289,13 @@ def _get_collection():
         return _collection
 
     _client = chromadb.PersistentClient(path=str(CHROMA_DIR))
-    _collection = _client.get_or_create_collection(name=COLLECTION_NAME)
+    # We compute embeddings ourselves via SentenceTransformer and pass
+    # query_embeddings directly, so disable ChromaDB's default embedding
+    # function to avoid it trying to load a HuggingFace model.
+    _collection = _client.get_or_create_collection(
+        name=COLLECTION_NAME,
+        embedding_function=None,
+    )
     return _collection
 
 
@@ -452,14 +460,22 @@ def search_knowledge(
         
     if not patient_context.get("specialty"):
         q_lower = query.lower()
-        if any(w in q_lower for w in ["iop", "cup", "disc", "glaucoma", "angle"]):
+        if any(w in q_lower for w in ["iop", "cup", "disc", "glaucoma", "angle", "trabeculectomy", "tonometry"]):
              patient_context["specialty"] = "glaucoma"
-        elif any(w in q_lower for w in ["macula", "retina", "vitreous", "detach", "diabetic", "pdr", "npdr"]):
+        elif any(w in q_lower for w in ["macula", "retina", "vitreous", "detach", "diabetic", "pdr", "npdr", "vegf", "fundus", "choroid"]):
              patient_context["specialty"] = "retina"
-        elif any(w in q_lower for w in ["cornea", "conjunctiva", "ulcer", "edema", "hyphema"]):
+        elif any(w in q_lower for w in ["cornea", "conjunctiva", "ulcer", "keratitis", "keratoconus", "dry eye", "pterygium"]):
              patient_context["specialty"] = "cornea"
-        elif "cataract" in q_lower or "iol" in q_lower or "lens" in q_lower:
+        elif any(w in q_lower for w in ["cataract", "iol", "lens", "phaco", "pseudophakia", "capsul"]):
              patient_context["specialty"] = "cataract"
+        elif any(w in q_lower for w in ["optic nerve", "papilledema", "nystagmus", "diplopia", "strabismus", "rapd", "cranial nerve"]):
+             patient_context["specialty"] = "neuro"
+        elif any(w in q_lower for w in ["eyelid", "ptosis", "orbit", "lacrimal", "proptosis", "dacryocystitis"]):
+             patient_context["specialty"] = "oculoplastics"
+        elif any(w in q_lower for w in ["uveitis", "iritis", "hypopyon", "synechiae", "choroiditis"]):
+             patient_context["specialty"] = "uveitis"
+        elif any(w in q_lower for w in ["pediatric", "amblyopia", "retinoblastoma", "rop", "congenital"]):
+             patient_context["specialty"] = "pediatric"
 
     # ── Step 1: Multi-step query expansion ──
     sub_queries = expand_query_multistep(query.strip(), patient_context)
@@ -472,16 +488,12 @@ def search_knowledge(
         # ── Step 2a: Dense vector search with metadata filtering ──
         embedding = embedder.encode(sq).tolist()
         
-        # [Step - New] Apply metadata filter if context provided
+        # Apply specialty metadata filter when auto-detected from query
         filter_dict = None
         if patient_context:
             specialty = patient_context.get("specialty")
-            chapter = patient_context.get("chapter")
-            
             if specialty:
                 filter_dict = {"specialty": specialty}
-            elif chapter:
-                filter_dict = {"chapter": chapter}
 
         results = collection.query(
             query_embeddings=[embedding],
@@ -489,6 +501,15 @@ def search_knowledge(
             where=filter_dict,
             include=["documents", "distances"],
         )
+
+        # If filtered query returned nothing, retry without filter
+        filtered_docs = results.get("documents", [[]])[0]
+        if not filtered_docs and filter_dict:
+            results = collection.query(
+                query_embeddings=[embedding],
+                n_results=fetch_per_query,
+                include=["documents", "distances"],
+            )
 
         all_docs = results.get("documents", [])
         if not all_docs:

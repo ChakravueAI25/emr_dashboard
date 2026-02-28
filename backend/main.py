@@ -31,7 +31,8 @@ from database import (
     billing_invoices_collection,
     initial_surgery_bills_collection,
     final_surgery_bills_collection,
-    slit_lamp_collection
+    slit_lamp_collection,
+    doctor_feedback_collection
 )
 from invoice_parser import parse_invoice
 from models import (
@@ -478,9 +479,16 @@ def patient_procedures_timeline(reg_id: str):
     return out
 
 # --- CORS Middleware ---
-# For local development allow all origins to avoid CORS blocking from various dev servers.
-# Narrow this before deploying to production.
-origins = ["*"]
+# For local development allow common dev origins.
+# Using explicit origins because wildcard "*" is incompatible with allow_credentials=True.
+origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:8008",
+    "http://127.0.0.1:8008",
+]
 
 app.add_middleware(
     CORSMiddleware,
@@ -489,6 +497,28 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+def _safe_billing(patient_doc: dict) -> dict:
+    """Safely extract the billing sub-document from a patient record.
+    
+    Handles legacy data where 'billing' might be stored as a list instead of a dict.
+    Also auto-migrates the document in MongoDB when a list is found.
+    """
+    billing = patient_doc.get("billing") if patient_doc else None
+    if billing is None:
+        return {}
+    if isinstance(billing, dict):
+        return billing
+    # Legacy data: billing stored as a list — migrate it to a dict
+    try:
+        patient_collection.update_one(
+            {"_id": patient_doc["_id"]},
+            {"$set": {"billing": {"invoices": [], "surgeryBills": [], "payments": [], "claims": [], "insurance": {}}}}
+        )
+    except Exception:
+        pass  # best-effort migration; don't crash the request
+    return {}
+
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -2201,12 +2231,13 @@ def get_billing_summary(reg_id: str):
     if not p:
         return {"totalOutstanding": 0, "totalPaid": 0, "pendingClaims": 0, "deductibleMet": 0, "activeCases": 0}
     
-    invoices = p.get("billing", {}).get("invoices", [])
+    billing = _safe_billing(p)
+    invoices = billing.get("invoices", [])
     
-    total_outstanding = sum(inv["patientResponsibility"] for inv in invoices if inv.get("status") != "paid")
-    total_paid = sum(inv["patientResponsibility"] for inv in invoices if inv.get("status") == "paid")
+    total_outstanding = sum(inv.get("patientResponsibility", 0) for inv in invoices if inv.get("status") != "paid")
+    total_paid = sum(inv.get("patientResponsibility", 0) for inv in invoices if inv.get("status") == "paid")
     pending_claims = sum(1 for inv in invoices if inv.get("status") == "pending")
-    deductible_met = p.get("billing", {}).get("insurance", {}).get("deductibleMet", 0)
+    deductible_met = billing.get("insurance", {}).get("deductibleMet", 0)
 
     # New: Check for active billing cases (insurance cycles)
     active_cases = billing_cases_collection.count_documents({"registrationId": reg_id, "status": "open"})
@@ -2227,7 +2258,7 @@ def get_patient_insurance(reg_id: str):
     if not p:
         return None
     
-    insurance = p.get("billing", {}).get("insurance", {})
+    insurance = _safe_billing(p).get("insurance", {})
     return {
         "provider": insurance.get("provider", ""),
         "policyNumber": insurance.get("policyNumber", ""),
@@ -2269,7 +2300,7 @@ def get_patient_invoices(reg_id: str):
     if not p:
         return []
     
-    invoices = p.get("billing", {}).get("invoices", [])
+    invoices = _safe_billing(p).get("invoices", [])
     # Sort by date descending
     return sorted(invoices, key=lambda x: x.get("date", ""), reverse=True)
 
@@ -2360,6 +2391,14 @@ def create_invoice(reg_id: str, invoice_data: dict = Body(...)):
             billing_cases_collection.insert_one(new_case)
             invoice["linkedCaseId"] = case_id
         
+        # Ensure billing is a dict before $push (handles legacy list data)
+        p = patient_collection.find_one({"registrationId": reg_id})
+        if p and not isinstance(p.get("billing"), dict):
+            patient_collection.update_one(
+                {"registrationId": reg_id},
+                {"$set": {"billing": {"invoices": [], "surgeryBills": [], "payments": [], "claims": [], "insurance": {}}}}
+            )
+        
         patient_collection.update_one(
             {"registrationId": reg_id},
             {"$push": {"billing.invoices": invoice}},
@@ -2421,6 +2460,14 @@ def create_initial_surgery_bill(reg_id: str, bill_data: dict = Body(...)):
             "notes": bill_data.get("notes", "Insurance Approval Pending"),
             "createdBy": bill_data.get("createdBy", ""),
         }
+        
+        # Ensure billing is a dict before $push (handles legacy list data)
+        p_check = patient_collection.find_one({"registrationId": reg_id})
+        if p_check and not isinstance(p_check.get("billing"), dict):
+            patient_collection.update_one(
+                {"registrationId": reg_id},
+                {"$set": {"billing": {"invoices": [], "surgeryBills": [], "payments": [], "claims": [], "insurance": {}}}}
+            )
         
         # Store in patient's billing.surgeryBills array
         patient_collection.update_one(
@@ -2509,6 +2556,14 @@ def create_final_surgery_bill(reg_id: str, bill_data: dict = Body(...)):
             "createdBy": bill_data.get("createdBy", ""),
         }
         
+        # Ensure billing is a dict before $push (handles legacy list data)
+        p_fb = patient_collection.find_one({"registrationId": reg_id})
+        if p_fb and not isinstance(p_fb.get("billing"), dict):
+            patient_collection.update_one(
+                {"registrationId": reg_id},
+                {"$set": {"billing": {"invoices": [], "surgeryBills": [], "payments": [], "claims": [], "insurance": {}}}}
+            )
+        
         # Store in patient's billing.surgeryBills array
         patient_collection.update_one(
             {"registrationId": reg_id},
@@ -2552,7 +2607,7 @@ def get_patient_surgery_bills(reg_id: str):
     if not p:
         return []
     
-    surgery_bills = p.get("billing", {}).get("surgeryBills", [])
+    surgery_bills = _safe_billing(p).get("surgeryBills", [])
     # Sort by createdAt descending
     return sorted(surgery_bills, key=lambda x: x.get("createdAt", ""), reverse=True)
 
@@ -2564,7 +2619,7 @@ def get_surgery_bill_by_id(reg_id: str, bill_id: str):
     if not p:
         raise HTTPException(status_code=404, detail="Patient not found")
     
-    surgery_bills = p.get("billing", {}).get("surgeryBills", [])
+    surgery_bills = _safe_billing(p).get("surgeryBills", [])
     for bill in surgery_bills:
         if bill.get("billId") == bill_id:
             return bill
@@ -2647,7 +2702,7 @@ def get_patient_payments(reg_id: str):
     if not p:
         return []
     
-    payments = p.get("billing", {}).get("payments", [])
+    payments = _safe_billing(p).get("payments", [])
     # Sort by date descending
     return sorted(payments, key=lambda x: x.get("date", ""), reverse=True)
 
@@ -2667,6 +2722,14 @@ def record_payment(reg_id: str, payment_data: dict = Body(...)):
             "notes": payment_data.get("notes", ""),
             "createdAt": datetime.utcnow().isoformat()
         }
+        
+        # Ensure billing is a dict before $push (handles legacy list data)
+        p_pay = patient_collection.find_one({"registrationId": reg_id})
+        if p_pay and not isinstance(p_pay.get("billing"), dict):
+            patient_collection.update_one(
+                {"registrationId": reg_id},
+                {"$set": {"billing": {"invoices": [], "surgeryBills": [], "payments": [], "claims": [], "insurance": {}}}}
+            )
         
         patient_collection.update_one(
             {"registrationId": reg_id},
@@ -2698,8 +2761,9 @@ def record_payment(reg_id: str, payment_data: dict = Body(...)):
         # Update invoice status if all paid
         if payment_data.get("invoiceId"):
             p = patient_collection.find_one({"registrationId": reg_id})
-            invoices = p.get("billing", {}).get("invoices", [])
-            payments = p.get("billing", {}).get("payments", [])
+            billing = _safe_billing(p)
+            invoices = billing.get("invoices", [])
+            payments = billing.get("payments", [])
             
             # Find invoice and update if fully paid
             for inv in invoices:
@@ -2814,7 +2878,7 @@ def get_insurance_claims(reg_id: str):
     if not p:
         return []
     
-    claims = p.get("billing", {}).get("claims", [])
+    claims = _safe_billing(p).get("claims", [])
     return sorted(claims, key=lambda x: x.get("dateFiled", ""), reverse=True)
 
 
@@ -2833,6 +2897,14 @@ def create_claim(reg_id: str, claim_data: dict = Body(...)):
             "notes": claim_data.get("notes", ""),
             "createdAt": datetime.utcnow().isoformat()
         }
+        
+        # Ensure billing is a dict before $push (handles legacy list data)
+        p_clm = patient_collection.find_one({"registrationId": reg_id})
+        if p_clm and not isinstance(p_clm.get("billing"), dict):
+            patient_collection.update_one(
+                {"registrationId": reg_id},
+                {"$set": {"billing": {"invoices": [], "surgeryBills": [], "payments": [], "claims": [], "insurance": {}}}}
+            )
         
         patient_collection.update_one(
             {"registrationId": reg_id},
@@ -4319,12 +4391,52 @@ async def get_patient_slit_lamp_images(patient_id: str):
 
 @app.post("/ai/generate-summary")
 async def ai_generate_summary(payload: dict = Body(...)):
-    return await proxy_request("/ai/generate-summary", payload)
+    """Generate AI clinical summary using the local RAG pipeline."""
+    patient_id = payload.get("patientId")
+    print(f"[AI-ENDPOINT] /ai/generate-summary called with patientId={patient_id}")
+    if not patient_id:
+        raise HTTPException(status_code=400, detail="patientId is required")
+    try:
+        from agents.retrival_agent1 import get_raw_patient
+        from agents.pipeline.clinical_summary_pipeline import generate_final_summary
+
+        patient_doc = get_raw_patient(patient_id)
+        if "error" in patient_doc:
+            print(f"[AI-ENDPOINT] get_raw_patient error: {patient_doc['error']}")
+            raise HTTPException(status_code=404, detail=patient_doc["error"])
+
+        print(f"[AI-ENDPOINT] Patient fetched: name={patient_doc.get('name','?')}, "
+              f"visits={len(patient_doc.get('visits', []))}, "
+              f"encounters={len(patient_doc.get('encounters', []))}")
+
+        summary = generate_final_summary(patient_doc)
+        print(f"[AI-ENDPOINT] Summary result ({len(summary)} chars): {summary[:200]}")
+        return {"summary": summary}
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        print(f"[AI-ENDPOINT ERROR] {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/ai/save-feedback")
 async def ai_save_feedback(payload: dict = Body(...)):
-    return await proxy_request("/ai/save-feedback", payload)
+    """Save doctor feedback on an AI-generated summary."""
+    try:
+        feedback_doc = {
+            "patientId": payload.get("patientId", ""),
+            "summary": payload.get("summary", ""),
+            "feedback": payload.get("feedback", ""),
+            "rating": payload.get("rating", 0),
+            "createdAt": datetime.utcnow().isoformat()
+        }
+        doctor_feedback_collection.insert_one(feedback_doc)
+        return {"status": "saved"}
+    except Exception as e:
+        print(f"[Feedback Save Error] {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 

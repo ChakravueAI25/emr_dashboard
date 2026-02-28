@@ -12,10 +12,19 @@ DISEASE_MAP = {
 
     "glaucoma": [
         "elevated iop",
+        "iop asymmetry",
         "cup disc",
         "cupping",
+        "cdr",
         "field defect",
-        "disc notch"
+        "disc notch",
+        "shallow ac",
+        "narrow angle",
+        "angle closure",
+        "pilocarpine",
+        "timolol",
+        "brimonidine",
+        "travoprost"
     ],
 
     "diabetic retinopathy": [
@@ -24,7 +33,11 @@ DISEASE_MAP = {
         "hemorrhage",
         "neovascularization",
         "nve",
-        "nvd"
+        "nvd",
+        "csme",
+        "macular edema",
+        "diabetic",
+        "dm"
     ],
 
     "cataract": [
@@ -32,7 +45,28 @@ DISEASE_MAP = {
         "no glow",
         "mature cataract",
         "ns",
-        "psc"
+        "psc",
+        "cataract",
+        "iol",
+        "aciol",
+        "pciol",
+        "pseudophakia"
+    ],
+
+    "corneal pathology": [
+        "corneal edema",
+        "corneal opacity",
+        "corneal ulcer",
+        "keratitis",
+        "guttae"
+    ],
+
+    "uveitis": [
+        "flare",
+        "cells in ac",
+        "kp",
+        "synechiae",
+        "vitritis"
     ]
 
 }

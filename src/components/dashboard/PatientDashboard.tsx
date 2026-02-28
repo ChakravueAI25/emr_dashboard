@@ -1,5 +1,5 @@
-﻿import { useRef } from 'react';
-import { Search } from 'lucide-react';
+﻿import { useRef, useState } from 'react';
+import { Search, Sparkles } from 'lucide-react';
 import { ChevronLeft, ChevronRight, CheckCircle, X, ArrowLeft } from 'lucide-react';
 import { PatientDetailsCard } from '../PatientDetailsCard';
 import { VitalSignsCard } from '../VitalSignsCard';
@@ -13,6 +13,7 @@ import { OphthalmologistExaminationCard } from '../OphthalmologistExaminationCar
 import { SpecialExaminationCard } from '../SpecialExaminationCard';
 import { MedicationPrescribedCard } from '../MedicationPrescribedCard';
 import { InvestigationsSurgeriesCard } from '../InvestigationsSurgeriesCard';
+import { AiSummaryPanel } from '../AiSummaryPanel';
 import { PatientData, UserRole, ROLES, CARD_ACCESS } from '../patient';
 
 import { useMemo } from 'react';
@@ -57,11 +58,61 @@ export const PatientDashboard = ({
     newVisit
 }: PatientDashboardProps) => {
 
+    const [showAiPanel, setShowAiPanel] = useState(false);
+
+    // MEMOIZED DATA SANITIZATION (Legacy Data Fix)
+    // Legacy SQL-imported patients often lack nested structures (e.g. optometry.vision.unaided).
+    // This memoized proxy ensures all expected fields exist before rendering child cards.
+    // It is defined early so it can be used by helper functions like getCardHasData.
+    const memoizedData = useMemo(() => {
+        const d = activePatientData;
+        if (!d) return null;
+
+        // Recursive merge or just shallow default checks for major sections
+        return {
+            ...d,
+            patientDetails: d.patientDetails || { name: '', age: '', sex: '', phone: '' },
+            medicalHistory: {
+                ...d.medicalHistory,
+                // Ensure familyHistory is a string if it's missing or an array
+                familyHistory: Array.isArray(d.medicalHistory?.familyHistory) 
+                    ? d.medicalHistory.familyHistory.join(', ') 
+                    : (d.medicalHistory?.familyHistory || '')
+            },
+            optometry: {
+                vision: {
+                    unaided: d.optometry?.vision?.unaided || { rightEye: '', leftEye: '' },
+                    withGlass: d.optometry?.vision?.withGlass || { rightEye: '', leftEye: '' },
+                    withPinhole: d.optometry?.vision?.withPinhole || { rightEye: '', leftEye: '' },
+                    bestCorrected: d.optometry?.vision?.bestCorrected || { rightEye: '', leftEye: '' },
+                    colourVision: d.optometry?.vision?.colourVision || { rightEye: '', leftEye: '' },
+                    contrastSensitivity: d.optometry?.vision?.contrastSensitivity || { rightEye: '', leftEye: '' },
+                },
+                autoRefraction: {
+                    ur: d.optometry?.autoRefraction?.ur || { sph: '', cyl: '', axis: '' },
+                    dr: d.optometry?.autoRefraction?.dr || { sph: '', cyl: '', axis: '' },
+                    cyclo: d.optometry?.autoRefraction?.cyclo || { sph: '', cyl: '', axis: '' },
+                },
+                finalGlasses: d.optometry?.finalGlasses || { rightEye: {}, leftEye: {} }
+            },
+            iop: d.iop || { iopReadings: [], chartData: [] },
+            ophthalmicInvestigations: d.ophthalmicInvestigations || { oct: {}, biometry: {}, pachymetry: {}, colourVision: {}, ffa: '', hvf: '', otherInvestigations: [] },
+            systemicInvestigations: d.systemicInvestigations || { bloodTests: [], vitals: { bp: { value: '' }, pulse: { value: '' }, rbs: { value: '' }, rp: { value: '' } } },
+            ophthalmologistExamination: d.ophthalmologistExamination || {},
+            specialExamination: d.specialExamination || {},
+            medicationPrescribed: d.medicationPrescribed || { items: [] },
+            investigationsSurgeries: d.investigationsSurgeries || { investigations: [], surgeries: [] }
+        };
+    }, [activePatientData]);
+
     const visibleCards = useMemo(() => userRole ? CARD_ACCESS[userRole] : [], [userRole]);
 
     // Returns true when a card has meaningful saved data → drives the green-tick badge
     const getCardHasData = (cardName: string): boolean => {
-        const data = activePatientData;
+        // Use memoizedData if available for safety, otherwise fall back to raw
+        // This ensures the same sanitization rules apply to the "Done" badge check
+        const data = memoizedData || activePatientData;
+        
         if (!data) return false;
         switch (cardName) {
             case 'PatientDetailsCard':
@@ -69,9 +120,15 @@ export const PatientDashboard = ({
             case 'VitalSignsCard':
                 return (data.presentingComplaints?.complaints ?? []).some(c => c.complaint?.trim() !== '');
             case 'AppointmentsCard':
+                const family = data.medicalHistory?.familyHistory;
+                // Double safety: handle array, string, or other types
+                const hasFamily = Array.isArray(family) 
+                    ? family.length > 0
+                    : (typeof family === 'string' ? !!family.trim() : !!family);
+                
                 return (data.medicalHistory?.medical ?? []).length > 0
                     || (data.medicalHistory?.surgical ?? []).length > 0
-                    || !!(data.medicalHistory?.familyHistory?.trim());
+                    || hasFamily;
             case 'MedicationsCard':
                 return (data.drugHistory?.currentMeds ?? []).length > 0
                     || (data.drugHistory?.allergies ?? []).length > 0;
@@ -200,6 +257,8 @@ export const PatientDashboard = ({
         );
     };
 
+
+    // Force a re-render/ref check when data changes
     if (!activePatientData) {
         return (
             <div className="h-full flex flex-col items-center justify-center text-center text-[#8B8B8B]">
@@ -214,13 +273,14 @@ export const PatientDashboard = ({
         );
     }
 
+
     return (
         <>
             <div className="mb-8 flex items-center justify-between">
                 <div>
                     {/* <p className="text-[10px] font-bold text-[#D4A574] uppercase tracking-[0.3em] mb-1">Active Documentation</p> */}
                     <div className="flex items-center gap-4">
-                        <h2 className="text-3xl font-bold text-white tracking-tight">{activePatientData.patientDetails.name}</h2>
+                        <h2 className="text-3xl font-bold text-white tracking-tight">{memoizedData?.patientDetails?.name || 'Unknown Patient'}</h2>
                         {/* History Navigation for Doctors - Global for all cards */}
                         {userRole === ROLES.DOCTOR && totalVisits > 1 && (
                             <div className="flex items-center gap-1 bg-[#1a1a1a] rounded-lg p-1 border border-[#D4A574] ml-2">
@@ -266,12 +326,20 @@ export const PatientDashboard = ({
                         </button>
                     )}
                     {userRole === ROLES.DOCTOR && !isPatientDischarged && (
-                        <button
-                            onClick={handleDoctorSave}
-                            className="flex items-center gap-2 px-6 py-3 bg-[#D4A574] text-[#0a0a0a] rounded-2xl hover:bg-[#C9955E] transition-all text-sm font-bold shadow-xl"
-                        >
-                            <CheckCircle className="w-4 h-4" /> Finalize & Discharge
-                        </button>
+                        <>
+                            <button
+                                onClick={() => setShowAiPanel(true)}
+                                className="flex items-center gap-2 px-5 py-3 bg-[#1a1a1a] border border-[#D4A574] text-[#D4A574] rounded-2xl hover:bg-[#D4A574] hover:text-[#0a0a0a] transition-all text-sm font-bold shadow-xl"
+                            >
+                                <Sparkles className="w-4 h-4" /> AI Summary
+                            </button>
+                            <button
+                                onClick={handleDoctorSave}
+                                className="flex items-center gap-2 px-6 py-3 bg-[#D4A574] text-[#0a0a0a] rounded-2xl hover:bg-[#C9955E] transition-all text-sm font-bold shadow-xl"
+                            >
+                                <CheckCircle className="w-4 h-4" /> Finalize & Discharge
+                            </button>
+                        </>
                     )}
                     {userRole === ROLES.PATIENT && handleAdminSave && (
                         <button
@@ -288,7 +356,7 @@ export const PatientDashboard = ({
             {/* When new visit: ONLY show Personal Details Card */}
             {newVisit ? (
                 <div className="grid grid-cols-4 gap-6 mb-6">
-                    {renderCard('PatientDetailsCard', PatientDetailsCard, { data: activePatientData.patientDetails, updateData: updateActivePatientData, isEditable: userRole === ROLES.RECEPTIONIST || userRole === ROLES.DOCTOR || userRole === ROLES.OPD || userRole === ROLES.PATIENT })}
+                    {renderCard('PatientDetailsCard', PatientDetailsCard, { data: memoizedData?.patientDetails, updateData: updateActivePatientData, isEditable: userRole === ROLES.RECEPTIONIST || userRole === ROLES.DOCTOR || userRole === ROLES.OPD || userRole === ROLES.PATIENT })}
                 </div>
             ) : (
                 <>
@@ -306,9 +374,9 @@ export const PatientDashboard = ({
                     )}
 
                     <div className="grid gap-6 mb-6" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
-                        {renderCard('PatientDetailsCard', PatientDetailsCard, { data: activePatientData.patientDetails, updateData: updateActivePatientData, isEditable: userRole === ROLES.PATIENT || (!isPatientDischarged && (userRole === ROLES.RECEPTIONIST || userRole === ROLES.DOCTOR || userRole === ROLES.OPD)) })}
+                        {renderCard('PatientDetailsCard', PatientDetailsCard, { data: memoizedData?.patientDetails, updateData: updateActivePatientData, isEditable: userRole === ROLES.PATIENT || (!isPatientDischarged && (userRole === ROLES.RECEPTIONIST || userRole === ROLES.DOCTOR || userRole === ROLES.OPD)) })}
                         {renderCard('VitalSignsCard', VitalSignsCard, {
-                            data: activePatientData.presentingComplaints,
+                            data: memoizedData?.presentingComplaints,
                             updateData: updateActivePatientData,
                             isEditable: userRole === ROLES.PATIENT || (!isPatientDischarged && (userRole === ROLES.OPD || userRole === ROLES.RECEPTIONIST || userRole === ROLES.DOCTOR)),
                             // Task 2: Visit Navigation (Doctor only)
@@ -320,13 +388,13 @@ export const PatientDashboard = ({
                             isViewingPastVisit: visitIndex > 0,
                             fullScreen: true
                         })}
-                        {renderCard('AppointmentsCard', AppointmentsCard, { data: activePatientData.medicalHistory, updateData: updateActivePatientData, isEditable: userRole === ROLES.PATIENT || (!isPatientDischarged && (userRole === ROLES.OPD || userRole === ROLES.RECEPTIONIST || userRole === ROLES.DOCTOR)) })}
-                        {renderCard('MedicationsCard', MedicationsCard, { data: activePatientData.drugHistory, updateData: updateActivePatientData, isEditable: userRole === ROLES.PATIENT || (!isPatientDischarged && (userRole === ROLES.OPD || userRole === ROLES.RECEPTIONIST || userRole === ROLES.DOCTOR)) })}
+                        {renderCard('AppointmentsCard', AppointmentsCard, { data: memoizedData?.medicalHistory, updateData: updateActivePatientData, isEditable: userRole === ROLES.PATIENT || (!isPatientDischarged && (userRole === ROLES.OPD || userRole === ROLES.RECEPTIONIST || userRole === ROLES.DOCTOR)) })}
+                        {renderCard('MedicationsCard', MedicationsCard, { data: memoizedData?.drugHistory, updateData: updateActivePatientData, isEditable: userRole === ROLES.PATIENT || (!isPatientDischarged && (userRole === ROLES.OPD || userRole === ROLES.RECEPTIONIST || userRole === ROLES.DOCTOR)) })}
                     </div>
 
                     <div className="grid gap-6 mb-6" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
                         {renderCard('OptometryCard', OptometryCard, {
-                            data: activePatientData.optometry,
+                            data: memoizedData?.optometry,
                             updateData: updateActivePatientData,
                             isEditable: userRole === ROLES.PATIENT || (!isPatientDischarged && (userRole === ROLES.OPD || userRole === ROLES.DOCTOR)),
                             // Task 2: Visit Navigation (Doctor only)
@@ -337,18 +405,28 @@ export const PatientDashboard = ({
                             onNextVisit: () => setVisitIndex(prev => Math.max(prev - 1, 0)),
                             isViewingPastVisit: visitIndex > 0
                         })}
-                        {renderCard('IOPCard', IOPCard, { data: activePatientData.iop, updateData: updateActivePatientData, isEditable: userRole === ROLES.PATIENT || (!isPatientDischarged && (userRole === ROLES.OPD || userRole === ROLES.DOCTOR)) })}
-                        {renderCard('OphthalmicInvestigationsCard', OphthalmicInvestigationsCard, { data: activePatientData.ophthalmicInvestigations, updateData: updateActivePatientData, isEditable: userRole === ROLES.PATIENT || (!isPatientDischarged && (userRole === ROLES.OPD || userRole === ROLES.DOCTOR)) })}
-                        {renderCard('SystemicInvestigationsCard', SystemicInvestigationsCard, { data: activePatientData.systemicInvestigations, updateData: updateActivePatientData, isEditable: userRole === ROLES.PATIENT || (!isPatientDischarged && (userRole === ROLES.OPD || userRole === ROLES.DOCTOR)) })}
+                        {renderCard('IOPCard', IOPCard, { data: memoizedData?.iop, updateData: updateActivePatientData, isEditable: userRole === ROLES.PATIENT || (!isPatientDischarged && (userRole === ROLES.OPD || userRole === ROLES.DOCTOR)) })}
+                        {renderCard('OphthalmicInvestigationsCard', OphthalmicInvestigationsCard, { data: memoizedData?.ophthalmicInvestigations, updateData: updateActivePatientData, isEditable: userRole === ROLES.PATIENT || (!isPatientDischarged && (userRole === ROLES.OPD || userRole === ROLES.DOCTOR)) })}
+                        {renderCard('SystemicInvestigationsCard', SystemicInvestigationsCard, { data: memoizedData?.systemicInvestigations, updateData: updateActivePatientData, isEditable: userRole === ROLES.PATIENT || (!isPatientDischarged && (userRole === ROLES.OPD || userRole === ROLES.DOCTOR)) })}
                     </div>
 
                     <div className="grid gap-6 mb-6" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
-                        {renderCard('OphthalmologistExaminationCard', OphthalmologistExaminationCard, { data: activePatientData.ophthalmologistExamination, updateData: updateActivePatientData, isEditable: userRole === ROLES.PATIENT || (!isPatientDischarged && (userRole === ROLES.DOCTOR)) })}
-                        {renderCard('SpecialExaminationCard', SpecialExaminationCard, { data: activePatientData.specialExamination, updateData: updateActivePatientData, isEditable: userRole === ROLES.PATIENT || (!isPatientDischarged && (userRole === ROLES.DOCTOR)) })}
-                        {renderCard('MedicationPrescribedCard', MedicationPrescribedCard, { data: activePatientData.medicationPrescribed, updateData: updateActivePatientData, isEditable: userRole === ROLES.PATIENT || (!isPatientDischarged && (userRole === ROLES.DOCTOR)) })}
-                        {renderCard('InvestigationsSurgeriesCard', InvestigationsSurgeriesCard, { data: activePatientData.investigationsSurgeries, updateData: updateActivePatientData, isEditable: userRole === ROLES.PATIENT || (!isPatientDischarged && (userRole === ROLES.DOCTOR)) })}
+                        {renderCard('OphthalmologistExaminationCard', OphthalmologistExaminationCard, { data: memoizedData?.ophthalmologistExamination, updateData: updateActivePatientData, isEditable: userRole === ROLES.PATIENT || (!isPatientDischarged && (userRole === ROLES.DOCTOR)) })}
+                        {renderCard('SpecialExaminationCard', SpecialExaminationCard, { data: memoizedData?.specialExamination, updateData: updateActivePatientData, isEditable: userRole === ROLES.PATIENT || (!isPatientDischarged && (userRole === ROLES.DOCTOR)) })}
+                        {renderCard('MedicationPrescribedCard', MedicationPrescribedCard, { data: memoizedData?.medicationPrescribed, updateData: updateActivePatientData, isEditable: userRole === ROLES.PATIENT || (!isPatientDischarged && (userRole === ROLES.DOCTOR)) })}
+                        {renderCard('InvestigationsSurgeriesCard', InvestigationsSurgeriesCard, { data: memoizedData?.investigationsSurgeries, updateData: updateActivePatientData, isEditable: userRole === ROLES.PATIENT || (!isPatientDischarged && (userRole === ROLES.DOCTOR)) })}
                     </div>
                 </>
+            )}
+
+            {/* AI Summary Panel Modal */}
+            {showAiPanel && (
+                <AiSummaryPanel
+                    patientName={memoizedData?.patientDetails?.name || 'Unknown'}
+                    registrationId={memoizedData?.patientDetails?.registrationId || ''}
+                    mongoId={activePatientData?.mongoId || ''}
+                    onClose={() => setShowAiPanel(false)}
+                />
             )}
         </>
     );

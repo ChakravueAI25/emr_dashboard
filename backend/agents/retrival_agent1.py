@@ -294,13 +294,10 @@ def _build_current_visit_from_document(patient: dict) -> dict:
 def get_patient_summary(patient_id, max_visits=3):
     """Legacy curated summary — kept for backward compat."""
     oid = _coerce_object_id(patient_id)
-    if oid is None:
-        return {
-            "error": "Invalid patient_id (expected a 24-character hex MongoDB ObjectId)",
-            "patient_id": str(patient_id),
-        }
-
-    patient = patients.find_one({ "_id": oid })
+    if oid is not None:
+        patient = patients.find_one({"_id": oid})
+    else:
+        patient = patients.find_one({"_id": patient_id})
 
     if not patient:
         return { "error": "Patient not found" }
@@ -342,15 +339,15 @@ def get_raw_patient(patient_id: str) -> dict:
 
     Returns the complete document with _id converted to string.
     Downstream agents (signal_extractor) decide what is clinically relevant.
+    Supports both standard ObjectId and legacy string _id values.
     """
+    # Try ObjectId first, then fall back to plain string _id
     oid = _coerce_object_id(patient_id)
-    if oid is None:
-        return {
-            "error": "Invalid patient_id (expected a 24-character hex MongoDB ObjectId)",
-            "patient_id": str(patient_id),
-        }
-
-    patient = patients.find_one({"_id": oid})
+    if oid is not None:
+        patient = patients.find_one({"_id": oid})
+    else:
+        # Legacy SQL-imported patients have plain string _id (e.g. "10", "1002")
+        patient = patients.find_one({"_id": patient_id})
 
     if not patient:
         return {"error": "Patient not found"}

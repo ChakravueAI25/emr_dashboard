@@ -156,8 +156,8 @@ export function AppointmentBookingView(props: AppointmentBookingViewProps) {
       const response = await fetch(`${API_ENDPOINTS.PATIENTS_SEARCH}?q=${encodeURIComponent(query)}`);
       if (response.ok) {
         const data = await response.json();
-        const formattedResults = (data.results || []).map((r: any) => ({
-          _id: r.registrationId,
+        const formattedResults = (data.results || []).map((r: any, idx: number) => ({
+          _id: r._id || `${r.registrationId}-${idx}`,
           name: r.name,
           registrationId: r.registrationId,
           contactInfo: {

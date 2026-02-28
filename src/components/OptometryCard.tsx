@@ -467,8 +467,8 @@ export function OptometryCard({
         <Zap className="w-4 h-4" /> Quick Fill
       </h4>
       <div className="space-y-3">
-        {presets.map((preset) => (
-          <div key={preset} className="flex gap-2 group">
+          {presets.map((preset, idx) => (
+            <div key={`${preset}-${idx}`} className="flex gap-2 group">
             <button
               onClick={() => applySmartFill(preset)}
               className="flex-1 bg-[#252525] hover:bg-[#333] active:bg-[#D4A574] active:text-black text-white text-sm py-3 rounded-lg transition-all text-center font-bold shadow-lg border border-transparent hover:border-[#444]"

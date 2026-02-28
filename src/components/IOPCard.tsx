@@ -26,8 +26,8 @@ export function IOPCard({ data, updateData, isEditable = false }: IOPCardProps) 
 
   const iopReadings =
     data?.iopReadings || [
-      { type: 'NCT', time: '10:15 AM', od: '13', os: '14', remarks: '' },
-      { type: 'AT', time: '--:--', od: '--', os: '--', remarks: '' },
+      { type: 'NCT', time: '10:15 AM', od: '', os: '', remarks: '' },
+      { type: 'AT', time: '--:--', od: '', os: '', remarks: '' },
     ];
 
   const chartData =
@@ -77,9 +77,31 @@ export function IOPCard({ data, updateData, isEditable = false }: IOPCardProps) 
 
               <div className="flex-shrink-0 min-w-[110px] text-right">
                 <div className="flex items-center justify-end gap-3">
-                  <div className={`text-xs ${isElevated(reading.od) ? 'text-[#EF4444]' : 'text-white'}`}>OD: {reading.od || '--'}</div>
+                  <div className="flex items-center gap-1" onClick={() => fieldRefs.current[`iop-summary-${idx}-od`]?.startEditing()}>
+                    <span className={`text-xs ${isElevated(reading.od) ? 'text-[#EF4444]' : 'text-white'}`}>OD:</span>
+                    <EditableText
+                        ref={(el) => { fieldRefs.current[`iop-summary-${idx}-od`] = el; }}
+                        value={reading.od ?? ''}
+                        onSave={(val) => updateReading(idx, 'od', (val ?? '').toString())}
+                        className={`text-xs ${isElevated(reading.od) ? 'text-[#EF4444]' : 'text-white'} min-w-[20px] text-right cursor-pointer hover:bg-white/10 rounded px-1`}
+                        placeholder="--"
+                        isEditable={isEditable}
+                        evalField="iop"
+                    />
+                  </div>
                   <div className="text-[#8B8B8B] text-xs">|</div>
-                  <div className={`text-xs ${isElevated(reading.os) ? 'text-[#EF4444]' : 'text-white'}`}>OS: {reading.os || '--'}</div>
+                  <div className="flex items-center gap-1" onClick={() => fieldRefs.current[`iop-summary-${idx}-os`]?.startEditing()}>
+                    <span className={`text-xs ${isElevated(reading.os) ? 'text-[#EF4444]' : 'text-white'}`}>OS:</span>
+                    <EditableText
+                        ref={(el) => { fieldRefs.current[`iop-summary-${idx}-os`] = el; }}
+                        value={reading.os ?? ''}
+                        onSave={(val) => updateReading(idx, 'os', (val ?? '').toString())}
+                        className={`text-xs ${isElevated(reading.os) ? 'text-[#EF4444]' : 'text-white'} min-w-[20px] text-right cursor-pointer hover:bg-white/10 rounded px-1`}
+                        placeholder="--"
+                        isEditable={isEditable}
+                        evalField="iop"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -106,11 +128,11 @@ export function IOPCard({ data, updateData, isEditable = false }: IOPCardProps) 
           <table className="w-full text-sm table-auto border-collapse">
             <thead>
               <tr className="bg-[#D4A574] bg-opacity-20">
-                <th className="p-3 text-left text-[#8B8B8B] border-r border-[#D4A574] text-xs">Type</th>
-                <th className="p-3 text-center text-[#8B8B8B] border-r border-[#D4A574] text-xs">Time</th>
-                <th className="p-3 text-center text-[#8B8B8B] border-r border-[#D4A574] text-xs">OD (Right Eye)</th>
-                <th className="p-3 text-center text-[#8B8B8B] border-r border-[#D4A574] text-xs">OS (Left Eye)</th>
-                <th className="p-3 text-center text-[#8B8B8B] text-xs">Remarks</th>
+                <th className="p-3 text-left text-white border-r border-[#D4A574] text-xs">Type</th>
+                <th className="p-3 text-center text-white border-r border-[#D4A574] text-xs">Time</th>
+                <th className="p-3 text-center text-white border-r border-[#D4A574] text-xs">OD (Right Eye)</th>
+                <th className="p-3 text-center text-white border-r border-[#D4A574] text-xs">OS (Left Eye)</th>
+                <th className="p-3 text-center text-white text-xs">Remarks</th>
               </tr>
             </thead>
             <tbody>
@@ -119,64 +141,83 @@ export function IOPCard({ data, updateData, isEditable = false }: IOPCardProps) 
                   key={index}
                   className={`${index % 2 === 0 ? 'bg-[#121212]' : 'bg-[#1a1a1a]'} hover:bg-[#2a2a2a] transition-colors`}
                 >
-                  <td className="p-3 text-[#D4A574] font-semibold border-r border-[#D4A574] text-left align-middle text-sm">{(reading as any).type}</td>
-
-                  <td
-                    className="p-3 text-center border-r border-[#D4A574] align-middle cursor-pointer hover:bg-[#2a2a2a] transition-colors"
-                    onClick={() => fieldRefs.current[`iop-${index}-time`]?.startEditing()}
-                  >
-                    <EditableText
-                      ref={(el) => { fieldRefs.current[`iop-${index}-time`] = el; }}
-                      value={reading.time ?? ''}
-                      onSave={(val) => updateReading(index, 'time', (val ?? '').toString())}
-                      className="text-white text-sm"
-                      placeholder="--:--"
-                      isEditable={isEditable}
-                    />
+                  <td className="p-3 text-[#D4A574] font-bold border-r border-[#D4A574] text-left align-middle text-sm uppercase bg-[#1a1a1a]">
+                    {(reading as any).type}
                   </td>
 
-                  <td
-                    className="p-3 text-center border-r border-[#D4A574] align-middle cursor-pointer hover:bg-[#2a2a2a] transition-colors"
-                    onClick={() => fieldRefs.current[`iop-${index}-od`]?.startEditing()}
-                  >
-                    <EditableText
-                      ref={(el) => { fieldRefs.current[`iop-${index}-od`] = el; }}
-                      value={reading.od ?? ''}
-                      onSave={(val) => updateReading(index, 'od', (val ?? '').toString())}
-                      className="text-white text-sm"
-                      placeholder="--"
-                      isEditable={isEditable}
-                      evalField="iop"
-                    />
+                  <td className="p-3 text-center border-r border-[#D4A574] align-middle">
+                    <div 
+                      className="border border-[#D4A574] rounded px-3 py-2 bg-[#0a0a0a] cursor-pointer hover:border-white transition-colors flex items-center justify-center gap-2 group"
+                      onClick={() => fieldRefs.current[`iop-${index}-time`]?.startEditing()}
+                    >
+                      {reading.time && reading.time !== '--:--' && (
+                        <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_5px_rgba(34,197,94,0.5)]"></div>
+                      )}
+                      <EditableText
+                        ref={(el) => { fieldRefs.current[`iop-${index}-time`] = el; }}
+                        value={reading.time ?? ''}
+                        onSave={(val) => updateReading(index, 'time', (val ?? '').toString())}
+                        className="text-white text-sm bg-transparent outline-none text-center w-full"
+                        placeholder="--:--"
+                        isEditable={isEditable}
+                      />
+                    </div>
                   </td>
 
-                  <td
-                    className="p-3 text-center border-r border-[#D4A574] align-middle cursor-pointer hover:bg-[#2a2a2a] transition-colors"
-                    onClick={() => fieldRefs.current[`iop-${index}-os`]?.startEditing()}
-                  >
-                    <EditableText
-                      ref={(el) => { fieldRefs.current[`iop-${index}-os`] = el; }}
-                      value={reading.os ?? ''}
-                      onSave={(val) => updateReading(index, 'os', (val ?? '').toString())}
-                      className="text-white text-sm"
-                      placeholder="--"
-                      isEditable={isEditable}
-                      evalField="iop"
-                    />
+                  <td className="p-3 text-center border-r border-[#D4A574] align-middle">
+                    <div 
+                      className="border border-[#D4A574] rounded px-3 py-2 bg-[#0a0a0a] cursor-pointer hover:border-white transition-colors flex items-center justify-center gap-2 group"
+                      onClick={() => fieldRefs.current[`iop-${index}-od`]?.startEditing()}
+                    >
+                      {reading.od && reading.od !== '--' && (
+                        <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_5px_rgba(34,197,94,0.5)]"></div>
+                      )}
+                      <EditableText
+                        ref={(el) => { fieldRefs.current[`iop-${index}-od`] = el; }}
+                        value={reading.od ?? ''}
+                        onSave={(val) => updateReading(index, 'od', (val ?? '').toString())}
+                        className="text-white text-sm bg-transparent outline-none text-center w-full"
+                        placeholder="--"
+                        isEditable={isEditable}
+                        evalField="iop"
+                      />
+                    </div>
                   </td>
 
-                  <td
-                    className="p-3 text-center align-middle cursor-pointer hover:bg-[#2a2a2a] transition-colors"
-                    onClick={() => fieldRefs.current[`iop-${index}-remarks`]?.startEditing()}
-                  >
-                    <EditableText
-                      ref={(el) => { fieldRefs.current[`iop-${index}-remarks`] = el; }}
-                      value={reading.remarks ?? ''}
-                      onSave={(val) => updateReading(index, 'remarks', (val ?? '').toString())}
-                      className="text-white text-sm"
-                      placeholder="--"
-                      isEditable={isEditable}
-                    />
+                  <td className="p-3 text-center border-r border-[#D4A574] align-middle">
+                    <div 
+                      className="border border-[#D4A574] rounded px-3 py-2 bg-[#0a0a0a] cursor-pointer hover:border-white transition-colors flex items-center justify-center gap-2 group"
+                      onClick={() => fieldRefs.current[`iop-${index}-os`]?.startEditing()}
+                    >
+                       {reading.os && reading.os !== '--' && (
+                        <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_5px_rgba(34,197,94,0.5)]"></div>
+                      )}
+                      <EditableText
+                        ref={(el) => { fieldRefs.current[`iop-${index}-os`] = el; }}
+                        value={reading.os ?? ''}
+                        onSave={(val) => updateReading(index, 'os', (val ?? '').toString())}
+                        className="text-white text-sm bg-transparent outline-none text-center w-full"
+                        placeholder="--"
+                        isEditable={isEditable}
+                        evalField="iop"
+                      />
+                    </div>
+                  </td>
+
+                  <td className="p-3 text-center align-middle">
+                    <div 
+                       className="border border-[#D4A574] rounded px-3 py-2 bg-[#0a0a0a] cursor-pointer hover:border-white transition-colors flex items-center justify-center"
+                       onClick={() => fieldRefs.current[`iop-${index}-remarks`]?.startEditing()}
+                    >
+                      <EditableText
+                        ref={(el) => { fieldRefs.current[`iop-${index}-remarks`] = el; }}
+                        value={reading.remarks ?? ''}
+                        onSave={(val) => updateReading(index, 'remarks', (val ?? '').toString())}
+                        className="text-white text-sm bg-transparent outline-none text-center w-full truncate"
+                        placeholder="--"
+                        isEditable={isEditable}
+                      />
+                    </div>
                   </td>
                 </tr>
               ))}

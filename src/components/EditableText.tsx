@@ -29,7 +29,7 @@ export const EditableText = forwardRef<EditableTextHandle, EditableTextProps>(({
   disableEval = false,
 }, ref) => {
   const [isEditing, setIsEditing] = useState(false);
-  const [tempValue, setTempValue] = useState(value || '');
+  const [tempValue, setTempValue] = useState<string>(value != null ? String(value) : '');
   const inputRef = useRef<HTMLInputElement>(null);
 
   useImperativeHandle(ref, () => ({
@@ -41,12 +41,13 @@ export const EditableText = forwardRef<EditableTextHandle, EditableTextProps>(({
   }));
 
   useEffect(() => {
-    setTempValue(value || '');
+    const valStr = value != null ? String(value) : '';
+    setTempValue(valStr);
     // Evaluate the current value even when not editing
-    if (!disableEval && value && value.trim().length > 0) {
-      console.log(`[EVAL-INIT] Evaluating value on mount/change: "${value}"`);
+    if (!disableEval && valStr.trim().length > 0) {
+      console.log(`[EVAL-INIT] Evaluating value on mount/change: "${valStr}"`);
       const handle = setTimeout(() => {
-        evaluateReading(value).catch(() => { });
+        evaluateReading(valStr).catch(() => { });
       }, 300);
       return () => clearTimeout(handle);
     } else {
@@ -68,7 +69,7 @@ export const EditableText = forwardRef<EditableTextHandle, EditableTextProps>(({
     // Do not persist placeholder text into the model. If the user clears the
     // input, save an empty string. This avoids storing UI placeholders as data.
     const finalValue = tempValue.trim();
-    if (finalValue !== value) onSave(finalValue);
+    if (finalValue !== (value != null ? String(value) : '')) onSave(finalValue);
     // evaluate the reading (fire-and-forget) unless disabled
     if (!disableEval) evaluateReading(finalValue).catch(() => { });
   };
@@ -189,13 +190,14 @@ export const EditableText = forwardRef<EditableTextHandle, EditableTextProps>(({
       handleSave();
     } else if (e.key === 'Escape') {
       e.preventDefault();
-      setTempValue(value);
+      setTempValue(value != null ? String(value) : '');
       setIsEditing(false);
     } else if (e.key === 'Tab') {
       e.preventDefault();
       // Save the current value first
       const finalValue = tempValue.trim();
-      if (finalValue !== value) onSave(finalValue);
+      const strValue = value != null ? String(value) : '';
+      if (finalValue !== strValue) onSave(finalValue);
       setIsEditing(false);
 
       // Find all editable elements and move to next/previous

@@ -2031,9 +2031,9 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
           {/* Search Results Dropdown */}
           {showPatientDropdown && patientSearchResults.length > 0 && (
             <div className="absolute top-full left-0 mt-1 w-full bg-[#1a1a1a] border border-[#D4A574] rounded-lg shadow-xl z-50 max-h-64 overflow-y-auto">
-              {patientSearchResults.map((result) => (
+              {patientSearchResults.map((result, idx) => (
                 <button
-                  key={result.registrationId}
+                  key={`${result.registrationId}-${idx}`}
                   onClick={() => handleSelectPatient(result)}
                   className="w-full px-4 py-3 text-left hover:bg-[#2a2a2a] border-b border-[#D4A574] last:border-b-0 transition-colors"
                 >

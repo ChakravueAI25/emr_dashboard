@@ -191,10 +191,50 @@ export default function App() {
 
   // Helper to map history to patient data
   const mapHistoryToPatientData = (visit: any, currentDetails: any): PatientData => {
+    const isLegacy = !visit.stages;
     const stages = visit.stages || {};
     const rd = stages.reception?.data || {};
     const od = stages.opd?.data || {};
     const dd = stages.doctor?.data || {};
+
+    let optometryData = od.optometry || {};
+    let iopData = od.iop || {};
+    let ophthalmologistData = dd.ophthalmologistExamination || {};
+    let specialExamData = dd.specialExamination || {};
+    let medicationData = dd.medicationPrescribed || {};
+
+    if (isLegacy) {
+      if (visit.vision || visit.finalGlass || visit.finalGlasses || visit.autoRefraction) {
+        optometryData = {
+          vision: visit.vision || { unaided: {}, withGlass: {}, nearVision: {} },
+          finalGlasses: visit.finalGlass || visit.finalGlasses || { rightEye: {}, leftEye: {} },
+          autoRefraction: visit.autoRefraction || { ur: {}, dr: {} },
+          currentGlasses: visit.currentGlasses || { rightEye: {}, leftEye: {} },
+          oldGlass: visit.oldGlass || { rightEye: {}, leftEye: {} },
+          additional: visit.additional || { gpAdvisedFor: '', gpAdvisedBy: '', useOfGlass: '', product: '' }
+        };
+      }
+      if (visit.iop && Array.isArray(visit.iop)) {
+        iopData = {
+          iopReadings: visit.iop.map((x: any) => ({
+             type: 'NCT', time: '--:--', od: x.rightEye || '', os: x.leftEye || '', remarks: '' 
+          }))
+        };
+      }
+      if (visit.ophthalmologistExam || visit.ophthalmologistExamination) {
+        ophthalmologistData = visit.ophthalmologistExam || visit.ophthalmologistExamination;
+      }
+      if (visit.diagnosis && Array.isArray(visit.diagnosis)) {
+        specialExamData = { diagnosis: visit.diagnosis };
+      }
+      if (visit.prescription && Array.isArray(visit.prescription)) {
+        medicationData = {
+          items: visit.prescription.map((x: any, i: number) => 
+            typeof x === 'string' ? { id: String(i), name: x } : x
+          )
+        };
+      }
+    }
 
     // Construct data object merging history with defaults
     return {
@@ -208,13 +248,13 @@ export default function App() {
         respiratoryRate: { value: '', unit: 'breaths/min' },
         bloodPressure: { systolic: '', diastolic: '', unit: 'mmHg' }
       },
-      optometry: od.optometry || {},
-      iop: od.iop || {},
+      optometry: optometryData,
+      iop: iopData,
       ophthalmicInvestigations: od.ophthalmicInvestigations || {},
       systemicInvestigations: od.systemicInvestigations || {},
-      ophthalmologistExamination: dd.ophthalmologistExamination || {},
-      specialExamination: dd.specialExamination || {},
-      medicationPrescribed: dd.medicationPrescribed || {},
+      ophthalmologistExamination: ophthalmologistData,
+      specialExamination: specialExamData,
+      medicationPrescribed: medicationData,
       investigationsSurgeries: dd.investigationsSurgeries || {},
       additional: {}
     } as any; // Cast as any to avoid strict interface matching for minor missing fields
@@ -1034,6 +1074,7 @@ export default function App() {
     const contact = (doc && doc.contactInfo) || {};
     const history = (doc && doc.history) || {};
     return {
+      mongoId: doc?._id ? String(doc._id) : doc?.id ? String(doc.id) : undefined,
       patientDetails: {
         name: (doc && doc.name) || '',
         registrationId: (doc && doc.registrationId) || 'Not Assigned',
@@ -1074,16 +1115,74 @@ export default function App() {
         };
       })(),
       medicalHistory: {
-        medical: history.medical || [],
-        surgical: history.surgical || [],
+        medical: Array.isArray(history.medical) ? history.medical.map((m: any, i: number) => typeof m === 'string' ? { id: `m-${i}`, condition: m, status: '', year: '' } : m) : [],
+        surgical: Array.isArray(history.surgical) ? history.surgical.map((s: any, i: number) => typeof s === 'string' ? { id: `s-${i}`, procedure: s, eye: 'Both', year: '' } : s) : [],
         familyHistory: history.family || '',
         socialHistory: { smoking: '', alcohol: '', exercise: '' }
       },
       drugHistory: doc.drugHistory || { allergies: [], currentMeds: [], compliance: { adherenceRate: '', missedDoses: '', lastRefill: '' }, previousMeds: '' },
-      optometry: (doc.optometry || { vision: { unaided: { rightEye: '', leftEye: '' }, withGlass: { rightEye: '', leftEye: '' }, withPinhole: { rightEye: '', leftEye: '' }, bestCorrected: { rightEye: '', leftEye: '' } }, autoRefraction: { ur: { sph: '', cyl: '', axis: '' }, dr: { sph: '', cyl: '', axis: '' } }, finalGlasses: { rightEye: { sph: '', cyl: '', axis: '', prism: '', va: '', nv: '' }, leftEye: { sph: '', cyl: '', axis: '', prism: '', va: '', nv: '' }, add: '', mDist: '' }, oldGlass: { rightEye: { sph: '', cyl: '', axis: '', va: '', add: '' }, leftEye: { sph: '', cyl: '', axis: '', va: '', add: '' } }, additional: { gpAdvisedFor: '', gpAdvisedBy: '', useOfGlass: '', product: '' } }) as any,
-      iop: doc.iop || {} as any,
-      ophthalmicInvestigations: doc.ophthalmicInvestigations || {} as any,
-      systemicInvestigations: doc.systemicInvestigations || doc.systemic || {} as any,
+      optometry: (() => {
+        const opt = doc.optometry || {};
+        const vision = opt.vision || {};
+        return {
+          vision: {
+            unaided: vision.unaided || { rightEye: '', leftEye: '' },
+            withGlass: vision.withGlass || { rightEye: '', leftEye: '' },
+            withPinhole: vision.withPinhole || { rightEye: '', leftEye: '' },
+            bestCorrected: vision.bestCorrected || { rightEye: '', leftEye: '' }
+          },
+          autoRefraction: opt.autoRefraction || { ur: { sph: '', cyl: '', axis: '' }, dr: { sph: '', cyl: '', axis: '' } },
+          finalGlasses: opt.finalGlasses || { rightEye: { sph: '', cyl: '', axis: '', prism: '', va: '', nv: '' }, leftEye: { sph: '', cyl: '', axis: '', prism: '', va: '', nv: '' }, add: '', mDist: '' },
+          oldGlass: opt.oldGlass || { rightEye: { sph: '', cyl: '', axis: '', va: '', add: '' }, leftEye: { sph: '', cyl: '', axis: '', va: '', add: '' } },
+          additional: opt.additional || { gpAdvisedFor: '', gpAdvisedBy: '', useOfGlass: '', product: '' }
+        };
+      })() as any,
+      iop: (() => {
+         const iop = doc.iop || {};
+         let chartData = iop.chartData || [];
+
+         // Fallback: if no chartData, try to build it from legacy visits
+         if (chartData.length === 0 && doc.visits && Array.isArray(doc.visits)) {
+             chartData = doc.visits
+                .filter((v: any) => v.iop && v.iop.length > 0)
+                .map((v: any) => {
+                    const reading = v.iop[0];
+                    return {
+                        date: v.visitDate || 'Unknown',
+                        currentOD: reading.rightEye ? parseFloat(reading.rightEye) : null,
+                        currentOS: reading.leftEye ? parseFloat(reading.leftEye) : null
+                    };
+                })
+                .filter((d: any) => d.currentOD !== null || d.currentOS !== null);
+         }
+
+         return {
+            iopReadings: iop.iopReadings && iop.iopReadings.length > 0 ? iop.iopReadings : [
+              { type: 'NCT', time: '10:15 AM', od: '', os: '', remarks: '' },
+              { type: 'AT', time: '--:--', od: '', os: '', remarks: '' }
+            ],
+            chartData: chartData || []
+         };
+      })() as any,
+      ophthalmicInvestigations: (() => {
+        const oi = doc.ophthalmicInvestigations || {};
+        return {
+           oct: oi.oct || { od: {}, os: {} },
+           biometry: oi.biometry || { od: {}, os: {} },
+           pachymetry: oi.pachymetry || { od: {}, os: {} },
+           colourVision: oi.colourVision || { od: {}, os: {} },
+           ffa: oi.ffa || '',
+           hvf: oi.hvf || '',
+           otherInvestigations: oi.otherInvestigations || []
+        };
+      })() as any,
+      systemicInvestigations: (() => {
+         const sys = doc.systemicInvestigations || doc.systemic || {};
+         return {
+            bloodTests: sys.bloodTests || [],
+            vitals: sys.vitals || { bp: { value: '' }, pulse: { value: '' }, rbs: { value: '' }, rp: { value: '' } }
+         };
+      })() as any,
       ophthalmologistExamination: doc.doctor || {} as any,
       specialExamination: {} as any,
       medicationPrescribed: { items: [] },

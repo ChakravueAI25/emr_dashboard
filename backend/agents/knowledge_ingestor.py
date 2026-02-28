@@ -1,18 +1,20 @@
 """Agent 2 (Part 1): Knowledge ingestion (one-time).
 
 Loads an ophthalmology reference PDF (or .txt), chunks it, embeds chunks,
-and stores them in a persistent Chroma vector DB.
+tags each chunk with an ophthalmic specialty, and stores them in a
+persistent Chroma vector DB.
 
-Run (from repo root):
+Run (from backend/ dir):
+  python agents/knowledge_ingestor.py
+
+Or from repo root:
   python backend/agents/knowledge_ingestor.py
-
-Expected source file (per project docs):
-  data/ophthalmology_reference.pdf
 """
 
 from __future__ import annotations
 
 import os
+import re
 import hashlib
 from pathlib import Path
 from typing import Iterable, List, Tuple
@@ -20,21 +22,104 @@ from typing import Iterable, List, Tuple
 import chromadb
 from pypdf import PdfReader
 from sentence_transformers import SentenceTransformer
-import dnspython
 
 
 # --- Paths / constants ---
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 
-CHROMA_DIR = BACKEND_DIR / "vector_db" / "book_chunks"
+CHROMA_DIR = REPO_ROOT / "vector_db" / "book_chunks"
 COLLECTION_NAME = "ophthal_book"
-MODEL_NAME = os.getenv("EMBED_MODEL", "BAAI/bge-small-en-v1.5")
+# Must match the model used in knowledge_retriever.py for compatible embeddings
+MODEL_NAME = os.getenv("EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
 EMBED_CACHE_DIR = os.getenv("EMBED_CACHE_DIR")
 EMBED_OFFLINE = os.getenv("EMBED_OFFLINE", "0") == "1"
 
-DEFAULT_SOURCE = REPO_ROOT / "data" / "ophthalmology_reference.pdf"
+# Default source PDF
+DEFAULT_SOURCE = Path(r"C:\Users\susha\Downloads\Ophthalmology_Myron_Yanoff_&_Jay.pdf")
 FALLBACK_SOURCE = BACKEND_DIR / "data" / "ophthalmology_reference.pdf"
+
+
+# --- Specialty classifier ---
+# Keywords (lowercased) that map a chunk to an ophthalmic specialty
+_SPECIALTY_KEYWORDS: dict[str, list[str]] = {
+    "glaucoma": [
+        "glaucoma", "iop", "intraocular pressure", "trabeculectomy",
+        "trabecular", "aqueous", "angle closure", "open angle", "optic disc",
+        "cup disc", "cup-to-disc", "visual field", "perimetry", "gonioscopy",
+        "timolol", "latanoprost", "brimonidine", "dorzolamide", "pilocarpine",
+        "tube shunt", "ahmed valve", "bleb", "tonometry", "applanation",
+        "nerve fiber layer", "rnfl", "ganglion cell",
+    ],
+    "retina": [
+        "retina", "retinal", "macula", "macular", "vitreous", "vitrectomy",
+        "detachment", "diabetic retinopathy", "proliferative", "non-proliferative",
+        "npdr", "pdr", "csme", "clinically significant macular edema",
+        "anti-vegf", "vegf", "bevacizumab", "ranibizumab", "aflibercept",
+        "photocoagulation", "laser", "epiretinal membrane", "oct", "fundus",
+        "choroid", "choroidal", "rpe", "retinal pigment", "armd", "amd",
+        "age-related macular", "drusen", "cnv", "retinal vein", "retinal artery",
+        "branch retinal", "central retinal",
+    ],
+    "cornea": [
+        "cornea", "corneal", "keratitis", "keratoconus", "keratoplasty",
+        "endothelium", "epithelium", "stroma", "descemets", "bowmans",
+        "fuchs", "bullous keratopathy", "pterygium", "pinguecula",
+        "dry eye", "tear film", "meibomian", "blepharitis",
+        "conjunctivitis", "conjunctival", "trachoma", "ulcer",
+        "herpetic", "herpes", "acanthamoeba", "fungal keratitis",
+    ],
+    "cataract": [
+        "cataract", "phacoemulsification", "phaco", "lens", "intraocular lens",
+        "iol", "posterior capsule", "anterior capsule", "capsulotomy",
+        "pseudophakia", "aphakia", "aciol", "pciol", "cortical cataract",
+        "nuclear sclerosis", "posterior subcapsular", "mature cataract",
+        "hypermature", "intumescent", "morgagnian",
+    ],
+    "neuro": [
+        "optic nerve", "optic neuritis", "papilledema", "papilloedema",
+        "nystagmus", "cranial nerve", "pupil", "afferent pupillary",
+        "rapd", "visual pathway", "chiasm", "hemianopia",
+        "homonymous", "bitemporal", "diplopia", "strabismus",
+        "esotropia", "exotropia", "sixth nerve", "third nerve",
+        "fourth nerve", "myasthenia", "giant cell arteritis",
+        "temporal arteritis", "ischemic optic neuropathy",
+    ],
+    "oculoplastics": [
+        "eyelid", "ptosis", "ectropion", "entropion", "chalazion",
+        "dacryocystitis", "lacrimal", "nasolacrimal", "orbit",
+        "orbital", "proptosis", "exophthalmos", "enucleation",
+        "evisceration", "thyroid eye", "graves", "blow-out fracture",
+        "dermoid", "hemangioma", "lid", "tarsorrhaphy", "blepharoplasty",
+    ],
+    "uveitis": [
+        "uveitis", "anterior uveitis", "posterior uveitis", "panuveitis",
+        "intermediate uveitis", "iritis", "iridocyclitis", "choroiditis",
+        "vitritis", "hypopyon", "keratic precipitates", "synechiae",
+        "sarcoidosis", "behcet", "vogt-koyanagi", "sympathetic ophthalmia",
+        "toxoplasmosis", "cmv retinitis", "hla-b27",
+    ],
+    "pediatric": [
+        "pediatric", "paediatric", "retinoblastoma", "amblyopia",
+        "congenital", "rop", "retinopathy of prematurity",
+        "infantile", "childhood", "nasolacrimal duct obstruction",
+        "congenital cataract", "congenital glaucoma", "buphthalmos",
+        "leukocoria",
+    ],
+}
+
+
+def _classify_specialty(text: str) -> str:
+    """Classify a text chunk into an ophthalmic specialty based on keyword density."""
+    lower = text.lower()
+    scores: dict[str, int] = {}
+    for specialty, keywords in _SPECIALTY_KEYWORDS.items():
+        count = sum(1 for kw in keywords if kw in lower)
+        if count > 0:
+            scores[specialty] = count
+    if not scores:
+        return "general"
+    return max(scores, key=scores.get)  # type: ignore[arg-type]
 
 
 # --- Lazy singletons (avoid heavy downloads at import time) ---
@@ -66,7 +151,12 @@ def _get_collection():
 
     CHROMA_DIR.mkdir(parents=True, exist_ok=True)
     _chroma_client = chromadb.PersistentClient(path=str(CHROMA_DIR))
-    _collection = _chroma_client.get_or_create_collection(name=COLLECTION_NAME)
+    # We handle embeddings ourselves (SentenceTransformer), so disable
+    # Chroma's built-in default embedding function.
+    _collection = _chroma_client.get_or_create_collection(
+        name=COLLECTION_NAME,
+        embedding_function=None,
+    )
     return _collection
 
 
@@ -176,6 +266,7 @@ def _iter_chunks(source_path: Path) -> Iterable[Tuple[str, dict, str]]:
                     "source": source_path.as_posix(),
                     "page": page_num,
                     "chunk_index": i,
+                    "specialty": _classify_specialty(chunk),
                 }
                 chunk_id = _stable_chunk_id(source_path, page_num, i, chunk)
                 yield chunk, metadata, chunk_id
@@ -188,6 +279,7 @@ def _iter_chunks(source_path: Path) -> Iterable[Tuple[str, dict, str]]:
                 "source": source_path.as_posix(),
                 "page": 0,
                 "chunk_index": i,
+                "specialty": _classify_specialty(chunk),
             }
             chunk_id = _stable_chunk_id(source_path, None, i, chunk)
             yield chunk, metadata, chunk_id
@@ -216,8 +308,14 @@ def ingest_book(source_path: str | Path) -> None:
         print("No text extracted; nothing to ingest.")
         return
 
-    print(f"Chunked into {len(chunks)} segments. Embedding...")
+    # Print specialty distribution
+    from collections import Counter
+    spec_counts = Counter(m.get("specialty", "unknown") for m in metadatas)
+    print(f"Chunked into {len(chunks)} segments. Specialty distribution:")
+    for spec, count in spec_counts.most_common():
+        print(f"  {spec}: {count} chunks")
 
+    print("Embedding...")
     embedder = _get_embedder()
     embeddings = embedder.encode(chunks, show_progress_bar=True)
     embeddings_list = [e.tolist() for e in embeddings]
@@ -245,4 +343,6 @@ def _resolve_default_source() -> Path:
 
 
 if __name__ == "__main__":
-    ingest_book("backend/data/ophthalmology_reference.pdf")
+    source = DEFAULT_SOURCE if DEFAULT_SOURCE.exists() else FALLBACK_SOURCE
+    print(f"Source: {source}")
+    ingest_book(source)

@@ -149,12 +149,10 @@ export interface OptometryData {
 }
 
 export interface IOPReading {
+  type: string; // 'NCT' | 'AT'
   time: string;
-  method: string;
   od: string;
   os: string;
-  pachyOd?: string;
-  pachyOs?: string;
   remarks?: string;
 }
 
@@ -272,6 +270,7 @@ export interface VitalSignsData {
  * The master interface for all patient data, combining all individual card data structures.
  */
 export interface PatientData {
+  mongoId?: string; // Raw MongoDB _id for AI summary & other direct lookups
   patientDetails: PatientDetail;
   presentingComplaints: PresentingComplaints;
   medicalHistory: MedicalHistory;

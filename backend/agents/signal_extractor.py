@@ -95,28 +95,63 @@ def _extract_visits(patient: dict) -> list[dict]:
     # Process visits array (multi-visit structure)
     for v in visits_raw:
         stages = v.get("stages", {})
-        reception = stages.get("reception", {}).get("data", {})
-        opd_data = stages.get("opd", {}).get("data", {})
-        optometry = opd_data.get("optometry", {})
-        doc_data = stages.get("doctor", {}).get("data", {})
 
-        visit = {
-            "visitDate": v.get("visitDate", ""),
-            "vitals": reception.get("vitalSigns", reception.get("vitals", {})),
-            "medicalHistory": reception.get("medicalHistory", {}),
-            "drugHistory": reception.get("drugHistory", {}),
-            "presentingComplaints": reception.get("presentingComplaints", {}),
-            "vision": optometry.get("vision", {}),
-            "iop": opd_data.get("iop", optometry.get("iop", {})),
-            "autoRefraction": optometry.get("autoRefraction", {}),
-            "// system": opd_data.get("systemicInvestigations", {}), # Renamed to avoid key confusion
-            "diagnosis": doc_data.get("diagnosis", ""),
-            "prescription": doc_data.get("prescription", {}).get("items", []) if isinstance(doc_data.get("prescription"), dict) else doc_data.get("prescription", []),
-            "notes": doc_data.get("notes", ""),
-            "followUp": doc_data.get("followUp", ""),
-            "ophthalmologistExam": doc_data.get("ophthalmologistExam", {}),
-            "investigationsSurgeries": doc_data.get("investigationsSurgeries", {}),
-        }
+        # --- NEW encounter-based structure (stages.reception/opd/doctor) ---
+        if stages:
+            reception = stages.get("reception", {}).get("data", {})
+            opd_data = stages.get("opd", {}).get("data", {})
+            optometry = opd_data.get("optometry", {})
+            doc_data = stages.get("doctor", {}).get("data", {})
+
+            visit = {
+                "visitDate": v.get("visitDate", ""),
+                "vitals": reception.get("vitalSigns", reception.get("vitals", {})),
+                "medicalHistory": reception.get("medicalHistory", {}),
+                "drugHistory": reception.get("drugHistory", {}),
+                "presentingComplaints": reception.get("presentingComplaints", {}),
+                "vision": optometry.get("vision", {}),
+                "iop": opd_data.get("iop", optometry.get("iop", {})),
+                "autoRefraction": optometry.get("autoRefraction", {}),
+                "// system": opd_data.get("systemicInvestigations", {}),
+                "diagnosis": doc_data.get("diagnosis", ""),
+                "prescription": doc_data.get("prescription", {}).get("items", []) if isinstance(doc_data.get("prescription"), dict) else doc_data.get("prescription", []),
+                "notes": doc_data.get("notes", ""),
+                "followUp": doc_data.get("followUp", ""),
+                "ophthalmologistExam": doc_data.get("ophthalmologistExam", {}),
+                "investigationsSurgeries": doc_data.get("investigationsSurgeries", {}),
+            }
+        else:
+            # --- LEGACY flat visit structure (data directly on visit object) ---
+            # IOP may be an array of {rightEye, leftEye} dicts — normalise to flat dict
+            raw_iop = v.get("iop", {})
+            if isinstance(raw_iop, list):
+                iop_dict = {}
+                if raw_iop and isinstance(raw_iop[0], dict):
+                    iop_dict = {"re": raw_iop[0].get("rightEye", ""), "le": raw_iop[0].get("leftEye", "")}
+                raw_iop = iop_dict
+
+            # diagnosis may be list — join to string
+            raw_dx = v.get("diagnosis", "")
+            if isinstance(raw_dx, list):
+                raw_dx = ", ".join(str(d.get("diagnosis", d) if isinstance(d, dict) else d) for d in raw_dx if d)
+
+            visit = {
+                "visitDate": v.get("visitDate", ""),
+                "vitals": v.get("vitalSigns", v.get("vitals", {})),
+                "medicalHistory": v.get("medicalHistory", {}),
+                "drugHistory": v.get("drugHistory", {}),
+                "presentingComplaints": v.get("presentingComplaints", {}),
+                "vision": v.get("vision", {}),
+                "iop": raw_iop,
+                "autoRefraction": v.get("autoRefraction", {}),
+                "diagnosis": raw_dx,
+                "prescription": v.get("prescription", []),
+                "notes": v.get("notes", ""),
+                "followUp": v.get("followUp", ""),
+                "ophthalmologistExam": v.get("ophthalmologistExam", {}),
+                "investigationsSurgeries": v.get("investigationsSurgeries", {}),
+            }
+
         extracted.append(visit)
 
     # Fallback: Flat structure (single visit patients)
@@ -157,8 +192,8 @@ def _signals_iop(visits: list[dict]) -> list[dict]:
         iop = v.get("iop", {})
         if not isinstance(iop, dict): continue
         
-        re_v = iop.get("re", iop.get("right", iop.get("RE", "")))
-        le_v = iop.get("le", iop.get("left", iop.get("LE", "")))
+        re_v = iop.get("re", iop.get("right", iop.get("RE", iop.get("rightEye", ""))))
+        le_v = iop.get("le", iop.get("left", iop.get("LE", iop.get("leftEye", ""))))
         
         if re_v: 
             try: iop_re_vals.append(float(re_v))
@@ -206,9 +241,29 @@ def _signals_iop(visits: list[dict]) -> list[dict]:
 def _signals_vision(visits: list[dict]) -> list[dict]:
     """Vision: Only significantly reduced visual acuity."""
     signals = []
-    # Vision thresholds that trigger concern
-    ABNORMAL_VA = {"6/18", "6/24", "6/36", "6/60", "3/60", "1/60", "CF", "HM", "PL", "NPL"}
-    
+    # Vision thresholds that trigger concern (exact match after normalisation)
+    ABNORMAL_VA_EXACT = {"6/18", "6/24", "6/36", "6/60", "3/60", "1/60", "CF", "HM", "PL", "NPL"}
+    # Prefix/substring patterns that indicate poor vision regardless of suffix
+    ABNORMAL_VA_PREFIXES = ("CF", "HM", "PL", "NPL", "1/60", "3/60", "6/60", "6/36", "6/24", "6/18")
+
+    def _is_va_abnormal(va_str: str) -> bool:
+        """Check if a VA string indicates reduced vision, handling legacy formats like Cf3mt, CF @ 3 M, 6/18P."""
+        if not va_str:
+            return False
+        cleaned = va_str.upper().replace(" ", "")
+        # Exact match
+        if cleaned in ABNORMAL_VA_EXACT:
+            return True
+        # Remove trailing letters like P (partial) — "6/18P" → "6/18"
+        stripped = re.sub(r'[A-Z]$', '', cleaned)
+        if stripped in ABNORMAL_VA_EXACT:
+            return True
+        # Prefix check — "CF3MT", "CF@3M" etc. all start with "CF"
+        for prefix in ABNORMAL_VA_PREFIXES:
+            if cleaned.startswith(prefix):
+                return True
+        return False
+
     last_visit = visits[-1] if visits else {}
     vision = last_visit.get("vision", {})
     if not isinstance(vision, dict): return []
@@ -231,8 +286,8 @@ def _signals_vision(visits: list[dict]) -> list[dict]:
     va_re = get_va(["re", "right", "rightEye", "RE"])
     va_le = get_va(["le", "left", "leftEye", "LE"])
 
-    re_bad = va_re in ABNORMAL_VA
-    le_bad = va_le in ABNORMAL_VA
+    re_bad = _is_va_abnormal(va_re)
+    le_bad = _is_va_abnormal(va_le)
 
     if re_bad and le_bad:
         signals.append(_create_signal(
@@ -464,3 +519,277 @@ def extract_signals(patient: dict) -> dict[str, list[dict]]:
 
     # Remove empty keys
     return {k: v for k, v in output.items() if v}
+
+
+# =========================
+# CONTEXT EXTRACTION (for padding & LLM)
+# =========================
+
+# VA ranking for trend analysis (higher number = worse vision)
+_VA_RANK = {
+    "6/6": 1, "6/6P": 2, "6/9": 3, "6/9P": 4, "6/12": 5, "6/12P": 6,
+    "6/18": 7, "6/18P": 8, "6/24": 9, "6/24P": 10, "6/36": 11, "6/36P": 12,
+    "6/60": 13, "3/60": 14, "1/60": 15, "CF": 16, "HM": 17, "PL": 18, "NPL": 19,
+}
+
+
+def _normalize_va(raw: str) -> str:
+    """Normalize legacy VA strings for display: 'Cf3mt' → 'CF', 'CF @ 3 M' → 'CF', '6/18P' → '6/18P'."""
+    if not raw:
+        return ""
+    cleaned = raw.strip().upper().replace(" ", "")
+    # Check if it starts with a known prefix and normalize
+    for prefix in ("NPL", "PL", "HM", "CF"):
+        if cleaned.startswith(prefix):
+            return prefix
+    # Handle Snellen fractions — keep as-is (e.g., "6/18P")
+    if re.match(r"^\d+/\d+", cleaned):
+        return cleaned
+    return raw.strip().upper()
+
+
+def _va_sort_key(va: str) -> int:
+    """Return numeric rank for sorting (higher = worse). Unknown → 0."""
+    norm = _normalize_va(va)
+    # Try exact match first
+    if norm in _VA_RANK:
+        return _VA_RANK[norm]
+    # Try without trailing P
+    stripped = re.sub(r'[A-Z]$', '', norm)
+    if stripped in _VA_RANK:
+        return _VA_RANK[stripped]
+    return 0
+
+
+def _classify_trend(values: list[float]) -> str:
+    """Classify a numeric trend: rising / falling / stable / single."""
+    if len(values) <= 1:
+        return "single"
+    diffs = [values[i+1] - values[i] for i in range(len(values) - 1)]
+    avg_diff = sum(diffs) / len(diffs)
+    if avg_diff > 1.0:
+        return "rising"
+    elif avg_diff < -1.0:
+        return "falling"
+    return "stable"
+
+
+def extract_context(patient: dict) -> dict:
+    """Extract comprehensive clinical context from ALL visits for padding and LLM input.
+
+    Returns dict with keys:
+      - iop_trend_re, iop_trend_le: "14 → 16 → 18 (rising)" or "14 (single visit)"
+      - iop_values_re, iop_values_le: raw float lists
+      - vision_trend_re, vision_trend_le: "6/18 → 6/36 → CF (declining)" 
+      - vision_latest_re, vision_latest_le: latest VA string
+      - medications: list of current medication names
+      - medical_conditions: list of systemic conditions
+      - surgical_history: list of past procedures
+      - diagnoses: list of all diagnoses across visits
+      - demographics: {age, sex}
+      - visit_count: int
+      - context_lines: pre-formatted strings suitable for padding points 1-3
+    """
+    visits = _extract_visits(patient)
+    ctx = {
+        "iop_trend_re": "", "iop_trend_le": "",
+        "iop_values_re": [], "iop_values_le": [],
+        "vision_trend_re": "", "vision_trend_le": "",
+        "vision_latest_re": "", "vision_latest_le": "",
+        "medications": [],
+        "medical_conditions": [],
+        "surgical_history": [],
+        "diagnoses": [],
+        "demographics": {},
+        "visit_count": len(visits),
+        "context_lines": [],
+    }
+
+    if not visits:
+        return ctx
+
+    # ── Demographics ──
+    demo = patient.get("demographics", {})
+    if isinstance(demo, dict):
+        ctx["demographics"] = {
+            "age": demo.get("age", patient.get("age", "")),
+            "sex": demo.get("sex", patient.get("sex", "")),
+        }
+    else:
+        ctx["demographics"] = {"age": patient.get("age", ""), "sex": patient.get("sex", "")}
+
+    # ── IOP across visits ──
+    iop_re_list = []
+    iop_le_list = []
+    for v in visits:
+        iop = v.get("iop", {})
+        if not isinstance(iop, dict):
+            continue
+        re_v = iop.get("re", iop.get("right", iop.get("RE", iop.get("rightEye", ""))))
+        le_v = iop.get("le", iop.get("left", iop.get("LE", iop.get("leftEye", ""))))
+        try:
+            if re_v:
+                iop_re_list.append(float(re_v))
+        except (ValueError, TypeError):
+            pass
+        try:
+            if le_v:
+                iop_le_list.append(float(le_v))
+        except (ValueError, TypeError):
+            pass
+
+    ctx["iop_values_re"] = iop_re_list
+    ctx["iop_values_le"] = iop_le_list
+
+    if iop_re_list:
+        trend = _classify_trend(iop_re_list)
+        arrow_str = " → ".join(str(int(v)) for v in iop_re_list)
+        ctx["iop_trend_re"] = f"{arrow_str} ({trend})" if len(iop_re_list) > 1 else f"{int(iop_re_list[0])} mmHg"
+    if iop_le_list:
+        trend = _classify_trend(iop_le_list)
+        arrow_str = " → ".join(str(int(v)) for v in iop_le_list)
+        ctx["iop_trend_le"] = f"{arrow_str} ({trend})" if len(iop_le_list) > 1 else f"{int(iop_le_list[0])} mmHg"
+
+    # ── Vision across visits ──
+    va_re_list = []
+    va_le_list = []
+    for v in visits:
+        vision = v.get("vision", {})
+        if not isinstance(vision, dict):
+            continue
+        # Check unaided first, then withGlass
+        for mode in ["unaided", "withGlass", "bestCorrected"]:
+            vd = vision.get(mode, {})
+            if isinstance(vd, dict):
+                re_val = vd.get("rightEye", vd.get("re", vd.get("RE", "")))
+                le_val = vd.get("leftEye", vd.get("le", vd.get("LE", "")))
+                if re_val and not va_re_list or (re_val and mode == "unaided"):
+                    norm = _normalize_va(str(re_val))
+                    if norm:
+                        va_re_list.append(norm)
+                if le_val and not va_le_list or (le_val and mode == "unaided"):
+                    norm = _normalize_va(str(le_val))
+                    if norm:
+                        va_le_list.append(norm)
+                if va_re_list and va_le_list:
+                    break
+
+    if va_re_list:
+        ctx["vision_latest_re"] = va_re_list[-1]
+        if len(va_re_list) > 1:
+            ranks = [_va_sort_key(v) for v in va_re_list]
+            non_zero = [r for r in ranks if r > 0]
+            if non_zero and non_zero[-1] > non_zero[0]:
+                trend_label = "declining"
+            elif non_zero and non_zero[-1] < non_zero[0]:
+                trend_label = "improving"
+            else:
+                trend_label = "stable"
+            ctx["vision_trend_re"] = " → ".join(va_re_list) + f" ({trend_label})"
+        else:
+            ctx["vision_trend_re"] = va_re_list[0]
+
+    if va_le_list:
+        ctx["vision_latest_le"] = va_le_list[-1]
+        if len(va_le_list) > 1:
+            ranks = [_va_sort_key(v) for v in va_le_list]
+            non_zero = [r for r in ranks if r > 0]
+            if non_zero and non_zero[-1] > non_zero[0]:
+                trend_label = "declining"
+            elif non_zero and non_zero[-1] < non_zero[0]:
+                trend_label = "improving"
+            else:
+                trend_label = "stable"
+            ctx["vision_trend_le"] = " → ".join(va_le_list) + f" ({trend_label})"
+        else:
+            ctx["vision_trend_le"] = va_le_list[0]
+
+    # ── Medications (from latest visit) ──
+    last = visits[-1]
+    med_sources = [
+        last.get("drugHistory", {}).get("medications", []) if isinstance(last.get("drugHistory"), dict) else [],
+        last.get("prescription", []),
+    ]
+    med_names = []
+    for source in med_sources:
+        if isinstance(source, list):
+            for m in source:
+                name = m.get("medicineName", m.get("name", m.get("medicine", ""))) if isinstance(m, dict) else str(m)
+                if name and name.strip():
+                    med_names.append(name.strip())
+    ctx["medications"] = list(dict.fromkeys(med_names))  # dedupe preserving order
+
+    # ── Medical conditions ──
+    conditions = []
+    for v in visits:
+        mh = v.get("medicalHistory", {})
+        if isinstance(mh, dict):
+            med_list = mh.get("medical", [])
+            if isinstance(med_list, list):
+                for c in med_list:
+                    cname = c.get("condition", c) if isinstance(c, dict) else str(c)
+                    if cname:
+                        conditions.append(str(cname).strip())
+    # Also check top-level
+    mh_top = patient.get("medicalHistory", patient.get("history", {}))
+    if isinstance(mh_top, dict):
+        for c in mh_top.get("medical", []):
+            cname = c.get("condition", c) if isinstance(c, dict) else str(c)
+            if cname:
+                conditions.append(str(cname).strip())
+    ctx["medical_conditions"] = list(dict.fromkeys(conditions))
+
+    # ── Surgical history ──
+    surgicals = []
+    if isinstance(mh_top, dict):
+        for s in mh_top.get("surgical", []):
+            sname = s.get("procedure", s) if isinstance(s, dict) else str(s)
+            if sname:
+                surgicals.append(str(sname).strip())
+    ctx["surgical_history"] = list(dict.fromkeys(surgicals))
+
+    # ── Diagnoses across visits ──
+    dx_list = []
+    for v in visits:
+        dx = v.get("diagnosis", "")
+        if dx and isinstance(dx, str) and dx.strip():
+            dx_list.append(dx.strip())
+    ctx["diagnoses"] = list(dict.fromkeys(dx_list))
+
+    # ── Build context_lines for padding (priority order) ──
+    lines = []
+    if ctx["iop_trend_re"] or ctx["iop_trend_le"]:
+        parts = []
+        if ctx["iop_trend_re"]:
+            parts.append(f"RE: {ctx['iop_trend_re']}")
+        if ctx["iop_trend_le"]:
+            parts.append(f"LE: {ctx['iop_trend_le']}")
+        lines.append(f"IOP Trend — {', '.join(parts)}")
+
+    if ctx["vision_trend_re"] or ctx["vision_trend_le"]:
+        parts = []
+        if ctx["vision_trend_re"]:
+            parts.append(f"RE: {ctx['vision_trend_re']}")
+        if ctx["vision_trend_le"]:
+            parts.append(f"LE: {ctx['vision_trend_le']}")
+        lines.append(f"VA Trend — {', '.join(parts)}")
+
+    if ctx["medications"]:
+        lines.append(f"Current Rx: {', '.join(ctx['medications'][:5])}")
+
+    if ctx["medical_conditions"]:
+        lines.append(f"Systemic: {', '.join(ctx['medical_conditions'])}")
+
+    if ctx["surgical_history"]:
+        lines.append(f"Surgical Hx: {', '.join(ctx['surgical_history'])}")
+
+    if ctx["diagnoses"]:
+        lines.append(f"Past Dx: {', '.join(ctx['diagnoses'][:3])}")
+
+    age = ctx["demographics"].get("age", "")
+    sex = ctx["demographics"].get("sex", "")
+    if age or sex:
+        lines.append(f"Demographics: {age} {sex}".strip())
+
+    ctx["context_lines"] = lines
+    return ctx

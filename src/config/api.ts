@@ -128,6 +128,10 @@ export const API_ENDPOINTS = {
     ORG_USERS: (orgId: string) => `${API_BASE_URL}/organization/${encodeURIComponent(orgId)}/users`,
   },
 
+  // AI Summary endpoints
+  AI_GENERATE_SUMMARY: `${API_BASE_URL}/ai/generate-summary`,
+  AI_SAVE_FEEDBACK: `${API_BASE_URL}/ai/save-feedback`,
+
   // Admin Data Management
   ADMIN: {
     HOSPITALS: `${API_BASE_URL}/admin/hospitals`,
