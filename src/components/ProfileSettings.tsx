@@ -1,9 +1,8 @@
 ﻿import React, { useState } from 'react';
-import { Camera, Save, User, Mail, Phone, Shield, CheckCircle2, Circle, Plus, TrendingUp, Users, Activity, IndianRupee, Pill, Zap, CalendarPlus } from 'lucide-react';
-import { Button } from './ui/button';
+import { User, CheckCircle2, Circle, Plus, TrendingUp, Users, Activity, IndianRupee, Pill, Zap, CalendarPlus } from 'lucide-react';
 import { useIsLightTheme } from '../hooks/useTheme';
-import { UnifiedOperationsHub } from './UnifiedOperationsHub';
-import { AppointmentBookingView } from './AppointmentBookingView';
+
+type PortalView = 'dashboard' | 'booking';
 
 interface ProfileSettingsProps {
    username?: string;
@@ -21,7 +20,7 @@ export function ProfileSettings({ username, role }: ProfileSettingsProps) {
       role: role || 'Clinical Lead',
       department: role === 'doctor' ? 'Cardiology' : 'Operations'
    });
-   
+
    // Calendar state
    const [selectedDate, setSelectedDate] = useState(new Date());
    const [selectedCalendarDate, setSelectedCalendarDate] = useState<number | null>(new Date().getDate());
@@ -36,6 +35,11 @@ export function ProfileSettings({ username, role }: ProfileSettingsProps) {
    ]);
    const [newTodo, setNewTodo] = useState('');
 
+   const [activeTab, setActiveTab] = useState<PortalView>('dashboard');
+   const isLight = useIsLightTheme();
+   const activeCol = isLight ? '#753d3e' : 'var(--theme-accent)';
+   const inactiveCol = isLight ? '#6c757d' : 'var(--theme-text-muted)';
+
    // Update profile when props change
    React.useEffect(() => {
       if (username || role) {
@@ -48,6 +52,10 @@ export function ProfileSettings({ username, role }: ProfileSettingsProps) {
          }));
       }
    }, [username, role]);
+
+   const handleChange = (field: string, value: string) => {
+      setProfile(prev => ({ ...prev, [field]: value }));
+   };
 
    const generateCalendar = () => {
       const year = selectedDate.getFullYear();
@@ -85,6 +93,15 @@ export function ProfileSettings({ username, role }: ProfileSettingsProps) {
       setTodos(todos.map(todo => todo.id === id ? { ...todo, completed: !todo.completed } : todo));
    };
 
+   const navItems = [
+      { id: 'dashboard' as PortalView, label: 'Operations Hub', icon: Zap, desc: 'Overview & Status' },
+      { id: 'booking' as PortalView, label: 'Fix Appointment', icon: CalendarPlus, desc: 'New Patient Booking' },
+   ];
+
+   // DEBUG: Log role for troubleshooting
+   console.log('ProfileSettings - Current role:', role, 'Username:', username);
+
+   // Default Profile Settings for non-receptionist roles
    return (
       <div className="max-w-7xl mx-auto p-8 h-[calc(100vh-5rem)] flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-700">
          {/* Header */}
