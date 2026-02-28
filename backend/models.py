@@ -297,6 +297,12 @@ class PharmacyBilling(BaseModel):
     status: str = "completed"  # completed, pending, cancelled
     paymentMethod: Optional[str] = None
     notes: Optional[str] = None
+    # New fields for structured billing data
+    gstRate: Optional[float] = 0.0
+    gstAmount: Optional[float] = 0.0
+    subTotal: Optional[float] = 0.0
+    isInsuranceClaimed: Optional[bool] = False
+    insuranceDetails: Optional[dict] = None
 
 
 class PharmacyBillingInDB(PharmacyBilling):

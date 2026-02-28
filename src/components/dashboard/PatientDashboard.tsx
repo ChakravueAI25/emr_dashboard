@@ -59,6 +59,67 @@ export const PatientDashboard = ({
 
     const visibleCards = useMemo(() => userRole ? CARD_ACCESS[userRole] : [], [userRole]);
 
+    // Returns true when a card has meaningful saved data → drives the green-tick badge
+    const getCardHasData = (cardName: string): boolean => {
+        const data = activePatientData;
+        if (!data) return false;
+        switch (cardName) {
+            case 'PatientDetailsCard':
+                return !!(data.patientDetails?.name?.trim() && data.patientDetails.name !== 'Not Assigned');
+            case 'VitalSignsCard':
+                return (data.presentingComplaints?.complaints ?? []).some(c => c.complaint?.trim() !== '');
+            case 'AppointmentsCard':
+                return (data.medicalHistory?.medical ?? []).length > 0
+                    || (data.medicalHistory?.surgical ?? []).length > 0
+                    || !!(data.medicalHistory?.familyHistory?.trim());
+            case 'MedicationsCard':
+                return (data.drugHistory?.currentMeds ?? []).length > 0
+                    || (data.drugHistory?.allergies ?? []).length > 0;
+            case 'OptometryCard': {
+                const v = data.optometry?.vision;
+                return !!(v?.unaided?.rightEye || v?.unaided?.leftEye
+                    || v?.withGlass?.rightEye || v?.withGlass?.leftEye
+                    || v?.bestCorrected?.rightEye || v?.bestCorrected?.leftEye);
+            }
+            case 'IOPCard':
+                return (data.iop?.iopReadings ?? []).length > 0;
+            case 'OphthalmicInvestigationsCard': {
+                const inv = data.ophthalmicInvestigations;
+                if (!inv) return false;
+                return !!(inv.oct?.od?.cmt || inv.oct?.od?.rnfl || inv.biometry?.od
+                    || inv.pachymetry?.od || (inv.otherInvestigations ?? []).length > 0
+                    || inv.colourVision?.od || inv.ffa || inv.hvf);
+            }
+            case 'SystemicInvestigationsCard': {
+                const sys = data.systemicInvestigations;
+                if (!sys) return false;
+                return (sys.bloodTests ?? []).length > 0
+                    || !!(sys.vitals?.bp?.value)
+                    || !!(sys.vitals?.pulse?.value)
+                    || !!(sys.vitals?.rbs?.value)
+                    || !!(sys.vitals?.rp?.value);
+            }
+            case 'OphthalmologistExaminationCard': {
+                const ex = data.ophthalmologistExamination;
+                if (!ex) return false;
+                return !!(ex.visualAcuity || ex.lensOD || ex.lensOS || ex.remarks);
+            }
+            case 'SpecialExaminationCard': {
+                const sp = data.specialExamination;
+                return !!(sp && Object.keys(sp).length > 0);
+            }
+            case 'MedicationPrescribedCard':
+                return (data.medicationPrescribed?.items ?? []).length > 0;
+            case 'InvestigationsSurgeriesCard': {
+                const is = data.investigationsSurgeries;
+                if (!is) return false;
+                return (is.investigations ?? []).length > 0 || (is.surgeries ?? []).length > 0;
+            }
+            default:
+                return false;
+        }
+    };
+
     const renderCard = (cardName: string, CardComponent: React.ElementType, props: any) => {
         const isVisible = visibleCards.includes(cardName);
 
@@ -120,8 +181,17 @@ export const PatientDashboard = ({
         // If the card isn't visible for the role, blur/disable it
         if (!isVisible) containerClass += ' blur-sm pointer-events-none opacity-50';
 
+        const hasData = getCardHasData(cardName);
+
         return (
-            <div className={containerClass}>
+            <div className={`${containerClass} relative`}>
+                {/* Green tick badge — always visible when card has saved data */}
+                {hasData && (
+                    <div className="absolute top-2.5 right-10 z-20 pointer-events-none flex items-center gap-1 bg-green-500/20 border border-green-500/40 rounded-full px-2 py-0.5">
+                        <CheckCircle className="w-3 h-3 text-green-400" />
+                        <span className="text-green-400 text-[9px] font-bold uppercase tracking-wide">Done</span>
+                    </div>
+                )}
                 <CardComponent
                     isEditable={isEditableForRole}
                     {...props}

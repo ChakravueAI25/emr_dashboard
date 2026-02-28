@@ -37,26 +37,51 @@ export function PatientsListView() {
 
   // Fetch all patients on mount
   useEffect(() => {
+    // Initial fetch of recent patients (e.g., 50)
     fetchPatients();
   }, []);
 
-  // Apply filters whenever search or date changes
+  // Debounced search effect
   useEffect(() => {
-    applyFilters();
-  }, [patients, searchName, selectedDate]);
+    const timer = setTimeout(() => {
+        fetchPatients(searchName);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchName]);
 
-  const fetchPatients = async () => {
+  // Apply DATE filters locally to the fetched results
+  useEffect(() => {
+    applyDateFilter();
+  }, [patients, selectedDate]);
+
+  const fetchPatients = async (query = '') => {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch(API_ENDPOINTS.PATIENTS_ALL);
+      
+      let url;
+      if (query.trim()) {
+          url = `${API_ENDPOINTS.PATIENTS_SEARCH}?q=${encodeURIComponent(query)}&limit=50`;
+      } else {
+          // Use recent endpoint for initial load to avoid loading 8000 records
+          // Use limit=50 to check recent records.
+          // Note: If you need pagination, that would require more extensive UI changes.
+           url = API_ENDPOINTS.PATIENTS_RECENT(50);
+      }
+
+      const response = await fetch(url);
 
       if (!response.ok) {
         throw new Error('Failed to fetch patients');
       }
 
       const data = await response.json();
-      setPatients(data.patients || (Array.isArray(data) ? data : []));
+      // Handle both formats: { results: [...] } from search or { patients: [...] } from recent
+      const list = data.results || data.patients || (Array.isArray(data) ? data : []);
+      setPatients(list);
+      // We also update filteredPatients immediately with the new list, 
+      // then let the date filter effect refine it if needed.
+      setFilteredPatients(list); 
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
       console.error('Error fetching patients:', err);
@@ -65,16 +90,8 @@ export function PatientsListView() {
     }
   };
 
-  const applyFilters = () => {
+  const applyDateFilter = () => {
     let filtered = [...patients];
-
-    // Filter by name
-    if (searchName.trim()) {
-      filtered = filtered.filter(p =>
-        p.name?.toLowerCase().includes(searchName.toLowerCase()) ||
-        p.registrationId?.toLowerCase().includes(searchName.toLowerCase())
-      );
-    }
 
     // Filter by date only if a date is selected
     if (selectedDate) {
@@ -94,8 +111,7 @@ export function PatientsListView() {
         return patientDateStr === filterDate;
       });
     }
-    // If no date filter, show all patients
-
+    
     setFilteredPatients(filtered);
   };
 

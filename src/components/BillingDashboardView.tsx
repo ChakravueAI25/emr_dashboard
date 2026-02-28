@@ -334,7 +334,6 @@
 import React, { useState, useEffect, Fragment } from 'react';
 import {
   Search,
-  Filter,
   MoreVertical,
   Eye,
   Edit,
@@ -348,14 +347,13 @@ import {
   AlertCircle,
   ChevronRight,
   ArrowRight,
-  Printer,
-  Download,
-  Plus
+  TrendingUp,
 } from 'lucide-react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import API_ENDPOINTS from '../config/api';
+import { BillingAnalyticsView } from './BillingAnalyticsView';
 
 interface BillingRecord {
   id: string;
@@ -394,10 +392,14 @@ export function BillingDashboardView({ onBillingClick }: BillingDashboardViewPro
   const [entriesPerPage, setEntriesPerPage] = useState(10);
   const [dashboardStats, setDashboardStats] = useState({
     totalRevenue: 0,
+    settledRevenue: 0,
+    unsettledRevenue: 0,
     pendingBills: 0,
+    pendingBillsList: [] as any[],
     completedToday: 0,
     totalRecords: 0
   });
+  const [viewMode, setViewMode] = useState<'transactions' | 'analytics'>('transactions');
 
   useEffect(() => {
     fetchBillingRecords();
@@ -414,7 +416,10 @@ export function BillingDashboardView({ onBillingClick }: BillingDashboardViewPro
       if (data.status === 'success') {
         setDashboardStats({
           totalRevenue: data.totalRevenue || 0,
+          settledRevenue: data.settledRevenue || 0,
+          unsettledRevenue: data.unsettledRevenue || 0,
           pendingBills: data.pendingBills || 0,
+          pendingBillsList: data.pendingBillsList || [],
           completedToday: data.completedToday || 0,
           totalRecords: data.totalRecords || 0
         });
@@ -478,6 +483,10 @@ export function BillingDashboardView({ onBillingClick }: BillingDashboardViewPro
     );
   }
 
+  if (viewMode === 'analytics') {
+    return <BillingAnalyticsView onBack={() => setViewMode('transactions')} />;
+  }
+
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white p-6 ml-16">
       {/* Header */}
@@ -487,6 +496,13 @@ export function BillingDashboardView({ onBillingClick }: BillingDashboardViewPro
           <p className="text-[#8B8B8B] text-sm mt-1">Manage all patient billing and transactions</p>
         </div>
         <div className="flex items-center gap-3">
+          <Button 
+            onClick={() => setViewMode('analytics')}
+            className="bg-[#1a1a1a] border border-[#D4A574] text-[#D4A574] hover:bg-[#2a2a2a]"
+          >
+            <TrendingUp className="w-4 h-4 mr-2" />
+            View Analytics
+          </Button>
           <Button
             onClick={fetchBillingRecords}
             disabled={loading}
@@ -497,25 +513,33 @@ export function BillingDashboardView({ onBillingClick }: BillingDashboardViewPro
             </svg>
             Refresh
           </Button>
-          <Button className="bg-[#D4A574] text-[#0a0a0a] hover:bg-[#C9955E] font-bold">
-            <Printer className="w-4 h-4 mr-2" />
-            Print Report
-          </Button>
-          <Button className="bg-[#D4A574] text-[#0a0a0a] hover:bg-[#C9955E]">
-            <Plus className="w-4 h-4 mr-2" />
-            New Transaction
-          </Button>
         </div>
       </div>
 
       {/* Stats */}
       <div className="flex items-center gap-4 mb-8">
         {[
-          { label: 'Total Revenue', value: `₹${dashboardStats.totalRevenue.toLocaleString()}`, icon: IndianRupee, color: 'text-green-500' },
-          { label: 'Pending Bills', value: dashboardStats.pendingBills, icon: Clock, color: 'text-yellow-500' },
+          { 
+            label: 'Total Revenue', 
+            value: `₹${dashboardStats.totalRevenue.toLocaleString()}`, 
+            icon: IndianRupee, 
+            color: 'text-green-500',
+            details: {
+              settled: dashboardStats.settledRevenue,
+              unsettled: dashboardStats.unsettledRevenue
+            }
+          },
+          { 
+            label: 'Pending Bills', 
+            value: dashboardStats.pendingBills, 
+            icon: Clock, 
+            color: 'text-yellow-500',
+            type: 'list',
+            list: dashboardStats.pendingBillsList // Access directly from state
+          },
           { label: 'Completed Today', value: dashboardStats.completedToday, icon: CheckCircle2, color: 'text-blue-500' },
         ].map((stat, i) => (
-          <Card key={i} className="bg-[#0f0f0f] border-[#D4A574] p-4 flex-1">
+          <Card key={i} className="group relative bg-[#0f0f0f] border-[#D4A574] p-4 flex-1 hover:h-auto transition-all duration-300">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-[#8B8B8B] uppercase tracking-wider">{stat.label}</p>
@@ -525,6 +549,43 @@ export function BillingDashboardView({ onBillingClick }: BillingDashboardViewPro
                 <stat.icon className="w-5 h-5" />
               </div>
             </div>
+            
+            {/* Total Revenue Breakdown */}
+            {stat.details && (
+              <div className="mt-0 h-0 opacity-0 overflow-hidden group-hover:h-auto group-hover:mt-4 group-hover:opacity-100 transition-all duration-300">
+                  <div className="pt-4 border-t border-[#D4A574]/20 space-y-2">
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-[#8B8B8B]">Settled</span>
+                      <span className="text-green-500 font-medium">₹{stat.details.settled?.toLocaleString() || 0}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-[#8B8B8B]">Unsettled</span>
+                      <span className="text-yellow-500 font-medium">₹{stat.details.unsettled?.toLocaleString() || 0}</span>
+                    </div>
+                  </div>
+              </div>
+            )}
+            
+            {/* Pending Bills List */}
+            {stat.type === 'list' && stat.list && (
+               <div className="mt-0 h-0 opacity-0 overflow-hidden group-hover:h-auto group-hover:mt-4 group-hover:opacity-100 transition-all duration-300">
+                  <div className="pt-4 border-t border-[#D4A574]/20 space-y-2 max-h-[200px] overflow-y-auto custom-scrollbar">
+                    {stat.list.length > 0 ? (
+                      stat.list.map((bill: any, idx: number) => (
+                        <div key={idx} className="flex justify-between items-center text-xs pb-1 border-b border-[#333] last:border-0 last:pb-0">
+                          <div className="flex flex-col">
+                             <span className="text-white truncate max-w-[120px] font-medium" title={bill.patientName}>{bill.patientName}</span>
+                             <span className="text-[#8B8B8B] text-[10px]">{bill.type}</span>
+                          </div>
+                          <span className="text-yellow-500 font-medium whitespace-nowrap">₹{bill.amount.toLocaleString()}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-xs text-[#8B8B8B] text-center italic">No pending bills</div>
+                    )}
+                  </div>
+              </div>
+            )}
           </Card>
         ))}
       </div>
@@ -563,10 +624,6 @@ export function BillingDashboardView({ onBillingClick }: BillingDashboardViewPro
             <option>Completed</option>
             <option>Cancelled</option>
           </select>
-          <Button className="bg-[#D4A574] text-[#0a0a0a] hover:bg-[#C9955E] font-bold">
-            <Filter className="w-4 h-4 mr-2" />
-            More Filters
-          </Button>
         </div>
       </div>
 

@@ -260,18 +260,24 @@ const COMMON_SERVICES = [
   { id: 'S7', name: 'Refraction', category: 'Investigation', price: 150 },
   { id: 'S8', name: 'Cataract Surgery (Phaco)', category: 'Surgery', price: 45000 },
   { id: 'S9', name: 'LASIK Surgery', category: 'Surgery', price: 65000 },
+  { id: 'S10', name: 'Advance Fee', category: 'Payment', price: 0 },
 ];
 
 export function IndividualBillingView({ registrationId: initialRegistrationId, onBack, currentUser, patientData: initialPatientData }: IndividualBillingViewProps) {
   const [patient, setPatient] = useState<any>(null);
   const [items, setItems] = useState<BillingItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'Card' | 'UPI' | 'Insurance'>('Cash');
+  const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'Card' | 'UPI' | 'Insurance' | 'Free Camp'>('Cash');
   const [loading, setLoading] = useState(true);
   const [selectedDoctor, setSelectedDoctor] = useState<string>('');
   const [showCompanyTpaModal, setShowCompanyTpaModal] = useState(false);
   const [newCompanyName, setNewCompanyName] = useState('');
   const [newTpaNames, setNewTpaNames] = useState('');
+  // New Contact Info State for Modal
+  const [newContactName, setNewContactName] = useState('');
+  const [newContactEmail, setNewContactEmail] = useState('');
+  const [newContactPhone, setNewContactPhone] = useState('');
+  const [newContactAddress, setNewContactAddress] = useState('');
 
   const [currentRegId, setCurrentRegId] = useState<string | undefined>(initialRegistrationId);
   const [patientSearchQuery, setPatientSearchQuery] = useState('');
@@ -291,6 +297,10 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
   const [insuranceCategory, setInsuranceCategory] = useState<InsuranceCategory>(null);
   const [insuranceCompany, setInsuranceCompany] = useState('');
   const [insuranceTPA, setInsuranceTPA] = useState('');
+  const [contactName, setContactName] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
+  const [contactPhone, setContactPhone] = useState('');
+  const [contactAddress, setContactAddress] = useState('');
   const [claimNumber, setClaimNumber] = useState('');
 
   const [insuranceCovered, setInsuranceCovered] = useState(0);
@@ -692,6 +702,21 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
     setItems(items.map(i => i.id === id ? { ...i, quantity: Math.max(1, q), total: Math.max(1, q) * i.price } : i));
   };
 
+  const updatePrice = (id: string, newPrice: number) => {
+    setItems(items.map(i => {
+      if (i.id === id) {
+        const totalGross = newPrice * i.quantity;
+        return { 
+          ...i, 
+          price: newPrice, 
+          totalGrossAmt: i.category === 'Surgery' ? totalGross : i.totalGrossAmt,
+          total: totalGross - (i.mouDiscount || 0)
+        };
+      }
+      return i;
+    }));
+  };
+
   const subtotal = items.reduce((sum, i) => sum + i.total, 0);
   const totalDiscount = items.reduce((sum, i) => sum + i.discount, 0);
   const totalTax = 0; // FIXED: Removed GST calculation
@@ -732,7 +757,15 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
         insuranceType: insuranceCategory,
         insuranceCompany: insuranceCompany,
         insuranceTPA: insuranceTPA,
+        insuranceContactPerson: {
+            name: contactName,
+            email: contactEmail,
+            phone: contactPhone,
+            address: contactAddress
+        },
         claimNumber: claimNumber,
+        dateOfSurgery: dateOfSurgery,
+        dateOfDischarge: dateOfDischarge,
         estimatedInsuranceCoverage: insuranceCovered,
         securityDeposit: securityDeposit,
         securityDepositPaid: true,
@@ -741,8 +774,6 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
         estimatedPatientShare: patientPayable,
         notes: 'Insurance Approval Pending',
         createdBy: currentUser || 'BillingStaff',
-        dateOfSurgery: dateOfSurgery,
-        dateOfDischarge: dateOfDischarge,
         items: surgeryItems.map(item => ({
           description: item.name,
           amount: item.price,
@@ -1105,6 +1136,7 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
       printWindow.document.write(printContent);
       printWindow.document.close();
       printWindow.onload = () => {
+        printWindow.focus();
         printWindow.print();
       };
     }
@@ -1311,6 +1343,7 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
       printWindow.document.write(printContent);
       printWindow.document.close();
       printWindow.onload = () => {
+        printWindow.focus();
         printWindow.print();
       };
     }
@@ -1754,6 +1787,7 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
           couponCode: couponCode,
           appliedBy: currentUser || 'Admin',
           discountAmount: discountAmount + totalDiscount,
+          paymentMethod: paymentMethod, // Explicitly pass payment method
           notes: `Payment via ${paymentMethod}. ${govtInsuranceEnabled ? `Insurance Claim: ${insuranceCompany} - ${insuranceTPA}` : ''}`,
           // New Multi-stage tracking fields
           isSurgeryCase: isSurgery,
@@ -2266,6 +2300,13 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
                           value={insuranceCompany}
                           onChange={(e) => {
                             setInsuranceCompany(e.target.value);
+                            // Clear contact info if company changes (optional, but cleaner)
+                            if (!e.target.value) {
+                                setContactName('');
+                                setContactPhone('');
+                                setContactEmail('');
+                                setContactAddress('');
+                            }
                             setInsuranceTPA('');
                           }}
                           className="w-full bg-[#0a0a0a] border border-[#D4A574]/30 rounded-lg h-10 px-3 text-sm text-white focus:border-[#D4A574]"
@@ -2306,11 +2347,21 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
                           />
                         </div>
                       )}
+                      {/* Added Contact Person Details Display */}
+                      {insuranceCompany && contactName && (
+                        <div className="mt-4 p-3 bg-[#1a1a1a] rounded-lg border border-[#D4A574]/20 space-y-1">
+                          <p className="text-[10px] text-[#D4A574] uppercase font-bold mb-1">Contact Person</p>
+                          <p className="text-xs text-white font-medium">{contactName}</p>
+                          {contactPhone && <p className="text-[10px] text-[#8B8B8B] flex items-center gap-1">📞 {contactPhone}</p>}
+                          {contactEmail && <p className="text-[10px] text-[#8B8B8B] flex items-center gap-1">✉️ {contactEmail}</p>}
+                          {contactAddress && <p className="text-[10px] text-[#8B8B8B] line-clamp-2">📍 {contactAddress}</p>}
+                        </div>
+                      )}
                     </>
                   )}
 
                   {/* Date of Surgery & Discharge */}
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="border-t border-[#D4A574]/20 pt-4 grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <label className="text-xs text-[#8B8B8B] font-medium">Date of Surgery</label>
                       <input
@@ -2515,8 +2566,15 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
                       <div className="w-[50px] flex-shrink-0 text-xs text-[#8B8B8B] text-center font-mono font-bold">
                         {item.quantity}
                       </div>
-                      <div className="w-[80px] flex-shrink-0 text-xs text-white text-right font-bold tracking-tight">
-                        ₹{item.price.toLocaleString('en-IN')}
+                      <div className="w-[80px] flex-shrink-0 flex items-center justify-end">
+                        <span className="text-xs text-[#8B8B8B] mr-1">₹</span>
+                        <input
+                          type="number"
+                          min="0"
+                          className="w-full bg-transparent text-right text-xs font-bold text-white focus:outline-none focus:border-b focus:border-[#D4A574] appearance-none"
+                          value={item.price}
+                          onChange={(e) => updatePrice(item.id, parseFloat(e.target.value) || 0)}
+                        />
                       </div>
                       <div className="w-[50px] flex-shrink-0 text-center">
                         <button
@@ -2570,10 +2628,17 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
             <div className="space-y-3 mb-6">
               <label className="text-[10px] font-bold text-[#5a5a5a] uppercase tracking-widest">Payment Method</label>
               <div className="grid grid-cols-2 gap-2">
-                {['Cash', 'Card', 'UPI', 'Insurance'].map((method) => (
+                {['Cash', 'Card', 'UPI', 'Insurance', 'Free Camp'].map((method) => (
                   <button
                     key={method}
-                    onClick={() => setPaymentMethod(method as any)}
+                    onClick={() => {
+                        setPaymentMethod(method as any);
+                        if (method === 'Free Camp') {
+                            setDiscountAmount(subtotal);
+                        } else if (paymentMethod === 'Free Camp') {
+                            setDiscountAmount(0);
+                        }
+                    }}
                     className={`py-2.5 px-3 rounded-lg border text-xs font-bold transition-all ${paymentMethod === method
                       ? 'bg-[#D4A574] border-[#D4A574] text-[#0a0a0a] shadow-lg shadow-[#D4A574]/20'
                       : 'bg-[#1a1a1a] border-[#D4A574]/20 text-[#8B8B8B] hover:border-[#D4A574]/50'}`}
@@ -2736,7 +2801,8 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
             <div className="bg-[#0f0f0f] border border-[#D4A574] rounded-lg p-8 w-96 shadow-2xl">
               <h3 className="text-xl font-bold text-white mb-4">Add Insurance Company & TPA</h3>
 
-              <div className="space-y-4 mb-6">
+
+              <div className="space-y-4 mb-6 max-h-[70vh] overflow-y-auto pr-2 custom-scrollbar">
                 <div>
                   <label className="block text-sm text-[#D4A574] font-medium mb-2">Company Name</label>
                   <input
@@ -2758,6 +2824,51 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
                   />
                   <p className="text-[10px] text-[#5a5a5a] mt-1">Separate multiple TPA names with commas</p>
                 </div>
+
+                <div className="border-t border-[#D4A574]/20 pt-4 mt-4">
+                  <h4 className="text-sm font-bold text-white mb-2">Contact Person Details</h4>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs text-[#8B8B8B] font-medium mb-1">Name</label>
+                      <input
+                        type="text"
+                        value={newContactName}
+                        onChange={(e) => setNewContactName(e.target.value)}
+                        placeholder="Contact Person Name"
+                        className="w-full px-3 py-1.5 bg-[#1a1a1a] border border-[#D4A574]/50 rounded text-sm text-white placeholder-[#5a5a5a] focus:outline-none focus:border-[#D4A574]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-[#8B8B8B] font-medium mb-1">Phone Number</label>
+                      <input
+                        type="tel"
+                        value={newContactPhone}
+                        onChange={(e) => setNewContactPhone(e.target.value)}
+                        placeholder="Phone Number"
+                        className="w-full px-3 py-1.5 bg-[#1a1a1a] border border-[#D4A574]/50 rounded text-sm text-white placeholder-[#5a5a5a] focus:outline-none focus:border-[#D4A574]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-[#8B8B8B] font-medium mb-1">Email</label>
+                      <input
+                        type="email"
+                        value={newContactEmail}
+                        onChange={(e) => setNewContactEmail(e.target.value)}
+                        placeholder="Email Address"
+                        className="w-full px-3 py-1.5 bg-[#1a1a1a] border border-[#D4A574]/50 rounded text-sm text-white placeholder-[#5a5a5a] focus:outline-none focus:border-[#D4A574]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-[#8B8B8B] font-medium mb-1">Address</label>
+                      <textarea
+                        value={newContactAddress}
+                        onChange={(e) => setNewContactAddress(e.target.value)}
+                        placeholder="Full Address"
+                        className="w-full px-3 py-1.5 bg-[#1a1a1a] border border-[#D4A574]/50 rounded text-sm text-white placeholder-[#5a5a5a] focus:outline-none focus:border-[#D4A574] h-16 resize-none"
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div className="flex gap-3">
@@ -2768,23 +2879,37 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
                       if (newTpaNames.trim()) {
                         setInsuranceTPA(newTpaNames.split(',')[0].trim());
                       }
+                      // Set Contact Info
+                      setContactName(newContactName);
+                      setContactEmail(newContactEmail);
+                      setContactPhone(newContactPhone);
+                      setContactAddress(newContactAddress);
+
                       setShowCompanyTpaModal(false);
                       setNewCompanyName('');
                       setNewTpaNames('');
-                      showAlert('Company and TPA added successfully!');
+                      setNewContactName('');
+                      setNewContactEmail('');
+                      setNewContactPhone('');
+                      setNewContactAddress('');
+                      showAlert('Company and Contact Details added successfully!');
                     } else {
                       showAlert('Please enter a company name');
                     }
                   }}
                   className="flex-1 bg-[#D4A574] text-[#0a0a0a] py-2 rounded-lg hover:bg-[#C9955E] font-medium"
                 >
-                  Add Company
+                  Add Details
                 </button>
                 <button
                   onClick={() => {
                     setShowCompanyTpaModal(false);
                     setNewCompanyName('');
                     setNewTpaNames('');
+                    setNewContactName('');
+                    setNewContactEmail('');
+                    setNewContactPhone('');
+                    setNewContactAddress('');
                   }}
                   className="flex-1 bg-[#2a2a2a] text-[#D4A574] py-2 rounded-lg hover:bg-[#3a3a3a] font-medium"
                 >

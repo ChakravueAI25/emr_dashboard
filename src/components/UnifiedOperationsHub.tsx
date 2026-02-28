@@ -157,10 +157,56 @@ export function UnifiedOperationsHub({ username, userRole, onPatientSelected, on
 
     const handleCheckIn = async (patient: any) => {
         try {
-            if (onPatientSelected) {
-                onPatientSelected(patient);
+            // Enrich appointment with registrationId from queue items if missing.
+            // Appointments booked by name may not have patientRegistrationId set,
+            // but by the time they reach Doctor/OPD queue the registrationId is known.
+            let enriched = { ...patient };
+            if (!enriched.patientRegistrationId && !enriched.registrationId) {
+                const apptId = patient.appointmentId || patient._id || patient.id;
+                const fromDoctorQ = allDoctorQueue.find((q: any) =>
+                    q.appointmentId === apptId && q.registrationId
+                );
+                const fromOpdQ = !fromDoctorQ && allOpdQueue.find((q: any) =>
+                    q.appointmentId === apptId && q.registrationId
+                );
+                const match = fromDoctorQ || fromOpdQ;
+                if (match) {
+                    enriched.patientRegistrationId = match.registrationId;
+                    // Also carry along the queue item's embedded data so the portal
+                    // can load OPD-filled cards without an extra DB round-trip.
+                    enriched._queueItem = match;
+                }
             }
-            // Don't navigate away - DoctorPortal handles showing patient inline
+
+            // Final fallback: search patients by name if registrationId is still missing.
+            // This handles RESERVED appointments booked before patient registration,
+            // and cleans up the Python 'None' serialization artifact in names.
+            if (!enriched.patientRegistrationId && !enriched.registrationId) {
+                const rawName = patient.patientName || patient.name || '';
+                // Strip Python 'None' serialization artifact, e.g. "Abhinaya None" → "Abhinaya"
+                const cleanName = rawName.replace(/\bNone\b/g, '').trim();
+                // Update the displayed name so 'None' doesn't appear in the portal
+                if (cleanName && cleanName !== rawName) enriched.patientName = cleanName;
+                if (cleanName) {
+                    try {
+                        const resp = await fetch(
+                            `${API_ENDPOINTS.PATIENTS_SEARCH}?q=${encodeURIComponent(cleanName)}&limit=5`
+                        );
+                        if (resp.ok) {
+                            const data = await resp.json();
+                            const found = (data.patients || data)?.[0];
+                            if (found?.registrationId) {
+                                enriched.registrationId = found.registrationId;
+                                enriched.patientName = found.name || cleanName;
+                            }
+                        }
+                    } catch (_) { /* name search failed, proceed without registrationId */ }
+                }
+            }
+
+            if (onPatientSelected) {
+                onPatientSelected(enriched);
+            }
         } catch (e) {
             console.error('Check-in failed:', e);
         }

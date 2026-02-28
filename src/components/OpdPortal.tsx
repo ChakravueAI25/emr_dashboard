@@ -1,7 +1,9 @@
 ﻿import { useState, useEffect } from 'react';
-import { User, Activity, Zap } from 'lucide-react';
+import { User, Activity, Zap, ArrowLeft } from 'lucide-react';
 import { UnifiedOperationsHub } from './UnifiedOperationsHub';
 import { OpdQueueView } from './OpdQueueView';
+import { PatientDashboard } from './dashboard/PatientDashboard';
+import { PatientData, UserRole, ROLES } from './patient';
 import API_ENDPOINTS from '../config/api';
 import { useIsLightTheme } from '../hooks/useTheme';
 
@@ -11,12 +13,36 @@ interface OpdPortalProps {
   onLogout: () => void;
   onViewChange: (view: any) => void;
   onPatientSelected?: (patient: any) => void;
+  activePatientData?: PatientData | null;
+  onClearPatient?: () => void;
+  handleOPDSave?: () => Promise<void>;
+  handleReceptionCompleteCheckIn?: () => Promise<void>;
+  updateActivePatientData?: (path: (string | number)[], value: any) => void;
+  setActivePatientData?: (data: PatientData | null) => void;
+  isPatientDischarged?: boolean;
+  setIsPatientDischarged?: (v: boolean) => void;
+  visitIndex?: number;
+  totalVisits?: number;
+  setVisitIndex?: React.Dispatch<React.SetStateAction<number>>;
+  handlePrevVisit?: () => void;
+  handleNextVisit?: () => void;
+  newVisit?: boolean;
 }
 
 type PortalView = 'dashboard' | 'queue';
 
-export function OpdPortal({ username, userRole, onLogout, onViewChange, onPatientSelected }: OpdPortalProps) {
+export function OpdPortal({
+  username, userRole, onLogout, onViewChange, onPatientSelected,
+  activePatientData, onClearPatient, handleOPDSave, handleReceptionCompleteCheckIn,
+  updateActivePatientData, setActivePatientData, isPatientDischarged, setIsPatientDischarged,
+  visitIndex = 0, totalVisits = 1, setVisitIndex, handlePrevVisit, handleNextVisit, newVisit = false
+}: OpdPortalProps) {
   const [activeTab, setActiveTab] = useState<PortalView>('dashboard');
+
+  const handleBackToDashboard = () => {
+    if (onClearPatient) onClearPatient();
+    setActiveTab('dashboard');
+  };
   const [stats, setStats] = useState({ opdWaiting: 0, doctorConsulting: 0, status: 'Live' });
   const isLight = useIsLightTheme();
   const activeCol = isLight ? '#753d3e' : '#e07b7c'; // Explicit color for dark theme active
@@ -118,25 +144,53 @@ export function OpdPortal({ username, userRole, onLogout, onViewChange, onPatien
 
       {/* Main Content Workspace */}
       <div className="flex-1 flex flex-col bg-gradient-to-br from-[var(--theme-bg-gradient-from)] to-[var(--theme-bg-gradient-to)] overflow-hidden">
-
-
-        {/* Dynamic Content Area */}
-        <div className={`flex-1 scrollbar-hide px-12 pb-12 pt-0 overflow-y-auto`}>
-          {activeTab === 'dashboard' && (
-            <UnifiedOperationsHub
-              username={username}
-              userRole="opd"
-              onPatientSelected={onPatientSelected}
-              onNavigate={(tab) => setActiveTab(tab as PortalView)}
-            />
-          )}
-
-          {activeTab === 'queue' && (
-            <div className="h-full pt-6">
-              <OpdQueueView onPatientSelected={onPatientSelected} />
+        {activePatientData ? (
+          <div className="flex-1 p-8 overflow-y-auto scrollbar-hide">
+            <div className="mb-6">
+              <button
+                onClick={handleBackToDashboard}
+                className="flex items-center gap-2.5 px-6 py-3 bg-[var(--theme-accent)] text-white force-text-white rounded-xl shadow-lg hover:opacity-90 transition-all font-bold text-sm group"
+              >
+                <ArrowLeft className="w-5 h-5 transition-transform duration-300 group-hover:-translate-x-1.5" />
+                Back to Dashboard
+              </button>
             </div>
-          )}
-        </div>
+            <PatientDashboard
+              activePatientData={activePatientData}
+              userRole={'opd' as UserRole}
+              updateActivePatientData={updateActivePatientData || (() => {})}
+              visitIndex={visitIndex}
+              totalVisits={totalVisits}
+              setVisitIndex={setVisitIndex || (() => {})}
+              handlePrevVisit={handlePrevVisit || (() => {})}
+              handleNextVisit={handleNextVisit || (() => {})}
+              isPatientDischarged={isPatientDischarged || false}
+              handleReceptionCompleteCheckIn={handleReceptionCompleteCheckIn || (async () => {})}
+              handleOPDSave={handleOPDSave || (async () => {})}
+              handleDoctorSave={async () => {}}
+              setActivePatientData={setActivePatientData || (() => {})}
+              setIsPatientDischarged={setIsPatientDischarged || (() => {})}
+              setCurrentView={onViewChange}
+              newVisit={newVisit}
+            />
+          </div>
+        ) : (
+          <div className="flex-1 scrollbar-hide px-12 pb-12 pt-0 overflow-y-auto">
+            {activeTab === 'dashboard' && (
+              <UnifiedOperationsHub
+                username={username}
+                userRole="opd"
+                onPatientSelected={onPatientSelected}
+                onNavigate={(tab) => setActiveTab(tab as PortalView)}
+              />
+            )}
+            {activeTab === 'queue' && (
+              <div className="h-full pt-6">
+                <OpdQueueView onPatientSelected={onPatientSelected} />
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
