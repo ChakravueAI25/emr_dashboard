@@ -592,10 +592,10 @@ export function PharmacyBillingView({
         </div>
       </div>
 
-      {/* Main Content - Split Screen 50/50 */}
+      {/* Main Content - Split Screen */}
       <div className="flex-1 flex flex-row overflow-hidden">
-        {/* Left Side - Medicines Grid */}
-        <div className="w-1/2 flex flex-col min-w-0 border-r border-[#D4A574]">
+        {/* Left Side - Medicines Grid (Increased width) */}
+        <div className="w-2/3 flex flex-col min-w-0 border-r border-[#D4A574]">
           {/* Fixed Header Section */}
           <div className="shrink-0 p-6 border-b border-[#D4A574]">
             {/* Category Filter */}
@@ -649,45 +649,57 @@ export function PharmacyBillingView({
 
               {/* Medicine Grid - 4 columns for clean layout */}
             {!loading && (
-              <div className="grid grid-cols-5 gap-4 p-4">
-                {filteredMedicines.map(medicine => (
+              <div className="grid grid-cols-4 gap-4 p-4">
+                {filteredMedicines.slice(0, currentPage * ITEMS_PER_PAGE).map(medicine => (
                 <div
                   key={medicine.id}
-                  className="bg-[#121212] border border-[#D4A574] rounded-lg p-2 hover:border-[#D4A574] transition-all hover:shadow-lg hover:shadow-[#D4A574]/20"
+                  className="bg-[#121212] border border-[#D4A574] rounded-lg p-4 flex flex-col justify-between hover:border-[#D4A574] transition-all hover:shadow-lg hover:shadow-[#D4A574]/20"
                 >
-                  {/* Icon */}
-                  <div className="w-full h-12 bg-[#1a1a1a] border border-[#D4A574] rounded flex items-center justify-center mb-3 shrink-0">
-                    <Eye className="w-6 h-6 text-[#D4A574]" />
-                  </div>
-
-                  {/* Name and Price - Clearly separated */}
-                  <div className="mb-2">
-                    <h3 className="text-white font-semibold text-sm line-clamp-2 mb-1">{medicine.name}</h3>
-                    <div className="flex items-baseline justify-between mb-1">
-                      <p className="text-[#D4A574] font-bold text-lg">₹{medicine.price}</p>
+                  <div className="flex-1">
+                    {/* Name and Price - Clearly separated */}
+                    <div className="mb-2">
+                      <h3 className="text-white font-bold text-base line-clamp-2 mb-2 leading-tight">{medicine.name}</h3>
+                      <div className="flex items-baseline justify-between mb-1">
+                        <p className="text-[#D4A574] font-bold text-xl">₹{medicine.price}</p>
+                      </div>
                     </div>
+
+                    {/* Description */}
+                    {medicine.description && (
+                      <p className="text-[#8B8B8B] text-sm mb-2 line-clamp-2">{medicine.description}</p>
+                    )}
                   </div>
 
-                  {/* Description */}
-                  <p className="text-[#8B8B8B] text-xs mb-2 line-clamp-2 h-8">{medicine.description}</p>
+                  <div className="mt-auto shrink-0">
+                    {/* Stock Info */}
+                    <div className="mb-3 pb-2 border-t border-[#D4A574]/50 pt-3">
+                      <p className="text-[#8B8B8B] text-sm">
+                        Available: <span className="text-[#D4A574] font-bold text-base ml-1">{availableStock[medicine.id] || medicine.stock}</span>
+                      </p>
+                    </div>
 
-                  {/* Stock Info */}
-                  <div className="mb-3 pb-2 border-t border-[#D4A574] pt-2">
-                    <p className="text-[#8B8B8B] text-xs">
-                      Available: <span className="text-[#D4A574] font-semibold">{availableStock[medicine.id] || medicine.stock}</span>
-                    </p>
+                    {/* Add to Cart Button */}
+                    <button
+                      onClick={() => addToCart(medicine)}
+                      disabled={(availableStock[medicine.id] || medicine.stock) === 0}
+                      className="w-full py-2 bg-[#D4A574] text-[#0a0a0a] rounded hover:bg-[#C9955E] disabled:opacity-50 disabled:cursor-not-allowed transition-all font-bold flex items-center justify-center gap-2 text-sm"
+                    >
+                      <Plus className="w-4 h-4" /> Add to Cart
+                    </button>
                   </div>
-
-                  {/* Add to Cart Button */}
-                  <button
-                    onClick={() => addToCart(medicine)}
-                    disabled={(availableStock[medicine.id] || medicine.stock) === 0}
-                    className="w-full py-2 bg-[#D4A574] text-[#0a0a0a] rounded hover:bg-[#C9955E] disabled:opacity-50 disabled:cursor-not-allowed transition-all font-semibold flex items-center justify-center gap-1 text-xs"
-                  >
-                    <Plus className="w-3 h-3" /> Add to Cart
-                  </button>
                 </div>
                 ))}
+              </div>
+            )}
+
+            {!loading && filteredMedicines.length > currentPage * ITEMS_PER_PAGE && selectedCategory === 'All' && (
+              <div className="flex justify-center p-4">
+                <button
+                  onClick={() => setCurrentPage(prev => prev + 1)}
+                  className="px-6 py-2 bg-[#1a1a1a] border border-[#D4A574] text-[#D4A574] rounded hover:bg-[#D4A574] hover:text-[#0a0a0a] transition-colors text-sm font-semibold"
+                >
+                  Load More Medicines
+                </button>
               </div>
             )}
 
@@ -699,17 +711,27 @@ export function PharmacyBillingView({
           </div>
         </div>
 
-        {/* Right Side - Order Summary */}
-        <div className="w-1/2 flex flex-col overflow-hidden border-l border-[#D4A574]">
+        {/* Right Side - Order Summary (Decreased width) */}
+        <div className="w-1/3 flex flex-col overflow-hidden border-l border-[#D4A574]">
           <Card className="bg-[#121212] border border-[#D4A574] flex flex-col h-full rounded-none">
             {/* Header */}
             <div className="p-4 border-b border-[#D4A574] flex items-center justify-between shrink-0">
               <h2 className="text-white font-bold text-base">Order Summary</h2>
-              {cart.length > 0 && (
-                <button className="text-[#D4A574] text-xs font-semibold hover:text-[#C9955E] transition-colors">
-                  Edit
-                </button>
-              )}
+              <div className="flex gap-3 items-center">
+                {cart.length > 0 && (
+                  <button
+                    onClick={handleCheckout}
+                    className="px-4 py-1.5 bg-[#D4A574] text-[#0a0a0a] rounded hover:bg-[#C9955E] transition-colors font-bold text-xs"
+                  >
+                    Checkout
+                  </button>
+                )}
+                {cart.length > 0 && (
+                  <button className="text-[#D4A574] text-xs font-semibold hover:text-[#C9955E] transition-colors">
+                    Edit
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Main Content */}
@@ -890,18 +912,6 @@ export function PharmacyBillingView({
                 </div>
               )}
             </div>
-
-            {/* Checkout Button */}
-            {cart.length > 0 && (
-              <div className="border-t border-[#D4A574] p-3 shrink-0">
-                <button
-                  onClick={handleCheckout}
-                  className="w-full py-2 bg-[#D4A574] text-[#0a0a0a] rounded hover:bg-[#C9955E] transition-colors font-bold text-sm"
-                >
-                  Checkout
-                </button>
-              </div>
-            )}
           </Card>
         </div>
       </div>
