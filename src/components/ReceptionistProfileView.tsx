@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, Zap, CalendarPlus, Search, Filter, Users, UserCheck, UserX, FileText, CheckCircle2, TrendingUp, ListTodo, Trash2, Check, Plus, DollarSign, Activity, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
+import { User, Zap, CalendarPlus, Search, Filter, Users, UserCheck, UserX, FileText, CheckCircle2, TrendingUp, ListTodo, Trash2, Check, Plus, IndianRupee, Activity, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
 import { UnifiedOperationsHub } from './UnifiedOperationsHub';
 import { AppointmentBookingView } from './AppointmentBookingView';
 import API_ENDPOINTS from '../config/api';
@@ -432,7 +432,7 @@ export function ReceptionistProfileView({ username, onPatientSelected }: Recepti
                         {/* Card 1: Total Revenue - Donut Pie Chart - Full Width */}
                         <div className="bg-[var(--theme-bg-secondary)] border border-[var(--theme-accent)]/20 rounded-2xl p-6 shadow-xl">
                             <div className="flex items-center gap-2 mb-3 border-b border-[var(--theme-accent)]/10 pb-2">
-                                <DollarSign className="w-4 h-4 text-[var(--theme-accent)]" />
+                                <IndianRupee className="w-4 h-4 text-[var(--theme-accent)]" />
                                 <h3 className="text-sm font-bold text-[var(--theme-text)] uppercase tracking-wider">Total Revenue</h3>
                                 <span className="ml-auto text-[10px] font-bold text-[var(--theme-text-muted)] uppercase tracking-widest">{periodLabel}</span>
                             </div>
