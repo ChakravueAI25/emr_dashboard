@@ -169,7 +169,7 @@ export function ReceptionistDashboardView({ username, userRole = 'receptionist',
                     {/* Left Section */}
                     <div className="flex items-center gap-4">
                         <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${isLight ? 'bg-[#1a1a1a]' : 'bg-[#2A241D]'}`}>
-                            <User className={`w-6 h-6 ${isLight ? 'text-[#444444]' : 'text-[#D4A574]'}`} />
+                            <User className={`w-6 h-6 ${isLight ? 'text-white' : 'text-[#D4A574]'}`} />
                         </div>
                         <div className="flex flex-col">
                             <span className={`text-[10px] font-black uppercase tracking-[0.25em] mb-1 ${isLight ? 'text-[#666666]' : 'text-[#C0C0C0]'}`}>RECEPTIONIST VIEW</span>

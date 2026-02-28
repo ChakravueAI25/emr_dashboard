@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, Zap, CalendarPlus, Search, Filter, Users, UserCheck, UserX, FileText, CheckCircle2, TrendingUp, ListTodo, Trash2, Check, Plus, DollarSign, Activity, Clock } from 'lucide-react';
+import { User, Zap, CalendarPlus, Search, Filter, Users, UserCheck, UserX, FileText, CheckCircle2, TrendingUp, ListTodo, Trash2, Check, Plus, DollarSign, Activity, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
 import { UnifiedOperationsHub } from './UnifiedOperationsHub';
 import { AppointmentBookingView } from './AppointmentBookingView';
 import API_ENDPOINTS from '../config/api';
@@ -34,6 +34,7 @@ export function ReceptionistProfileView({ username, onPatientSelected }: Recepti
     const [billingStats, setBillingStats] = useState({ pendingBills: 0, totalRevenue: 0, completedToday: 0 });
     const [todoList, setTodoList] = useState<{id: string, text: string, completed: boolean}[]>([]);
     const [todoInput, setTodoInput] = useState('');
+    const [statsPeriod, setStatsPeriod] = useState<'day' | 'week' | 'month' | 'year'>('day');
 
     useEffect(() => {
         const fetchStats = async () => {
@@ -109,17 +110,6 @@ export function ReceptionistProfileView({ username, onPatientSelected }: Recepti
         setTodoList(todoList.filter(t => t.id !== id));
     };
 
-    const getCompletedConsultations = () => {
-        // Filter based on status if available, otherwise just mock logic or use appointments with past dates/times
-        // Since we don't have explicit completed status in appointment list usually, checking if we can infer
-        // But the prompt says "Pull from existing consultation data"
-        // We'll use allAppointments.
-         return allAppointments
-            .filter((a: any) => a.appointmentDate && new Date(a.appointmentDate) <= new Date())
-            .slice(0, 3);
-    };
-    const completedConsultations = getCompletedConsultations();
-
     useEffect(() => {
         if (allAppointments.length > 0 && selectedCalendarDate) {
             const year = selectedDate.getFullYear();
@@ -154,6 +144,67 @@ export function ReceptionistProfileView({ username, onPatientSelected }: Recepti
     const handleDateClick = (day: number) => {
         if (day) setSelectedCalendarDate(day);
     };
+
+    const prevMonth = () => {
+        setSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth() - 1, 1));
+        setSelectedCalendarDate(null);
+    };
+
+    const nextMonth = () => {
+        setSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 1));
+        setSelectedCalendarDate(null);
+    };
+
+    // ── Period filtering ──────────────────────────────────────────────────────
+    const getPeriodBounds = () => {
+        const ref = selectedDate;
+        if (statsPeriod === 'day') {
+            return {
+                start: new Date(ref.getFullYear(), ref.getMonth(), ref.getDate()),
+                end:   new Date(ref.getFullYear(), ref.getMonth(), ref.getDate(), 23, 59, 59),
+            };
+        } else if (statsPeriod === 'week') {
+            const dow = ref.getDay();
+            return {
+                start: new Date(ref.getFullYear(), ref.getMonth(), ref.getDate() - dow),
+                end:   new Date(ref.getFullYear(), ref.getMonth(), ref.getDate() + (6 - dow), 23, 59, 59),
+            };
+        } else if (statsPeriod === 'month') {
+            return {
+                start: new Date(ref.getFullYear(), ref.getMonth(), 1),
+                end:   new Date(ref.getFullYear(), ref.getMonth() + 1, 0, 23, 59, 59),
+            };
+        } else {
+            return {
+                start: new Date(ref.getFullYear(), 0, 1),
+                end:   new Date(ref.getFullYear(), 11, 31, 23, 59, 59),
+            };
+        }
+    };
+
+    const periodFilteredAppointments = allAppointments.filter((apt: any) => {
+        const aptDate = apt.appointmentDate;
+        if (!aptDate) return false;
+        const { start, end } = getPeriodBounds();
+        if (statsPeriod === 'day') {
+            const dateKey = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
+            return aptDate === dateKey || aptDate?.startsWith(dateKey);
+        }
+        try { const d = new Date(aptDate); return d >= start && d <= end; } catch { return false; }
+    });
+
+    const periodRevenue = allAppointments.length > 0
+        ? billingStats.totalRevenue * (periodFilteredAppointments.length / allAppointments.length)
+        : 0;
+
+    const periodPatientCount = new Set(periodFilteredAppointments.map((a: any) => a.patientId || a.patientName)).size;
+
+    const periodLabel = statsPeriod === 'day' ? 'Today'
+        : statsPeriod === 'week' ? 'This Week'
+        : statsPeriod === 'month' ? 'This Month'
+        : 'This Year';
+
+    const completedConsultations = periodFilteredAppointments.slice(0, 8);
 
     const getFilteredPatients = () => {
         let filtered = scheduledPatients;
@@ -227,7 +278,7 @@ export function ReceptionistProfileView({ username, onPatientSelected }: Recepti
             {/* Main Content Workspace */}
             <div className="flex-1 flex bg-[var(--theme-bg)] overflow-hidden">
                 {/* Left Sidebar - Static Calendar */}
-                <div className="w-[320px] flex-shrink-0 border-r border-[var(--theme-accent)]/20 p-6 flex flex-col gap-6 overflow-y-auto scrollbar-hide">
+                <div className="w-[420px] flex-shrink-0 border-r border-[var(--theme-accent)]/20 p-6 flex flex-col gap-6 overflow-hidden">
                     {/* Search */}
                     <div className="bg-[var(--theme-bg-secondary)] border border-[var(--theme-accent)]/20 rounded-xl p-2 shadow-sm">
                         <div className="relative">
@@ -243,73 +294,86 @@ export function ReceptionistProfileView({ username, onPatientSelected }: Recepti
                     </div>
 
                     {/* Calendar */}
-                    <div className="bg-[var(--theme-bg-secondary)] border border-[var(--theme-accent)]/20 rounded-2xl p-4 shadow-sm">
-                        <div className="flex items-center justify-center gap-2 mb-4">
-                            {/* Month Dropdown */}
-                            <div className="relative">
-                        <button
-                                    onClick={() => setShowMonthDropdown(!showMonthDropdown)}
-                                    className="text-sm font-bold text-[var(--theme-text)] hover:text-[var(--theme-accent)] transition-colors px-2 py-1 rounded hover:bg-[var(--theme-bg-tertiary)]"
-                                >
-                                    {monthNames[selectedDate.getMonth()]}
-                                </button>
-                                {showMonthDropdown && (
-                                    <div className="absolute top-full left-0 mt-1 bg-[var(--theme-bg-secondary)] border border-[var(--theme-accent)] rounded-xl overflow-hidden shadow-2xl z-50 max-h-48 overflow-y-auto">
-                                        {monthNames.map((month, idx) => (
-                                            <button
-                                                key={idx}
-                                                onClick={() => {
-                                                    setSelectedDate(new Date(selectedDate.getFullYear(), idx, 1));
-                                                    setSelectedCalendarDate(null);
-                                                    setShowMonthDropdown(false);
-                                                }}
-                                                className={`w-full px-4 py-2 text-xs font-bold text-left transition-colors whitespace-nowrap ${selectedDate.getMonth() === idx
-                                                    ? 'bg-[var(--theme-accent)] text-white'
-                                                    : 'text-[var(--theme-text)] hover:bg-[var(--theme-accent)]/10'
+                    <div className="p-6 rounded-2xl bg-[var(--theme-bg)] border border-[var(--theme-accent)]/20 flex flex-col group hover:border-[var(--theme-accent)] transition-all duration-500">
+                        {/* Header: < Month Year > */}
+                        <div className="flex items-center justify-between mb-5">
+                            <button onClick={prevMonth} className="p-1.5 hover:bg-[var(--theme-accent)]/10 rounded-lg text-[var(--theme-text-muted)] hover:text-[var(--theme-accent)] transition-colors">
+                                <ChevronLeft className="w-5 h-5" />
+                            </button>
+                            <div className="flex items-center gap-2">
+                                {/* Month — clickable dropdown */}
+                                <div className="relative">
+                                    <button
+                                        onClick={() => setShowMonthDropdown(!showMonthDropdown)}
+                                        className="text-base font-bold text-[var(--theme-text)] hover:text-[var(--theme-accent)] transition-colors px-1 rounded"
+                                    >
+                                        {monthNames[selectedDate.getMonth()]}
+                                    </button>
+                                    {showMonthDropdown && (
+                                        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 bg-[var(--theme-bg-secondary)] border border-[var(--theme-accent)] rounded-xl overflow-hidden shadow-2xl z-50 max-h-48 overflow-y-auto">
+                                            {monthNames.map((month, idx) => (
+                                                <button
+                                                    key={idx}
+                                                    onClick={() => {
+                                                        setSelectedDate(new Date(selectedDate.getFullYear(), idx, 1));
+                                                        setSelectedCalendarDate(null);
+                                                        setShowMonthDropdown(false);
+                                                    }}
+                                                    className={`w-full px-4 py-2 text-xs font-bold text-left transition-colors whitespace-nowrap ${selectedDate.getMonth() === idx
+                                                        ? 'bg-[var(--theme-accent)] text-white'
+                                                        : 'text-[var(--theme-text)] hover:bg-[var(--theme-accent)]/10'
                                                     }`}
-                                            >
-                                                {month}
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                            {/* Year Dropdown */}
-                            <div className="relative">
-                        <button
-                                    onClick={() => setShowYearDropdown(!showYearDropdown)}
-                                    className="text-sm font-bold text-[var(--theme-text)] hover:text-[var(--theme-accent)] transition-colors px-2 py-1 rounded hover:bg-[var(--theme-bg-tertiary)]"
-                                >
-                                    {selectedDate.getFullYear()}
-                                </button>
-                                {showYearDropdown && (
-                                    <div className="absolute top-full left-0 mt-1 bg-[var(--theme-bg-secondary)] border border-[var(--theme-accent)] rounded-xl overflow-hidden shadow-2xl z-50 max-h-48 overflow-y-auto">
-                                        {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i).map((year) => (
-                                            <button
-                                                key={year}
-                                                onClick={() => {
-                                                    setSelectedDate(new Date(year, selectedDate.getMonth(), 1));
-                                                    setSelectedCalendarDate(null);
-                                                    setShowYearDropdown(false);
-                                                }}
-                                                className={`w-full px-4 py-2 text-xs font-bold text-left transition-colors ${selectedDate.getFullYear() === year
-                                                    ? 'bg-[var(--theme-accent)] text-white'
-                                                    : 'text-[var(--theme-text)] hover:bg-[var(--theme-accent)]/10'
-                                                    }`}
-                                            >
-                                                {year}
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                        <div className="grid grid-cols-7 gap-1">
-                            {dayNames.map((day, i) => (
-                                <div key={i} className="text-center text-[10px] font-black text-[var(--theme-text-muted)] uppercase py-1 opacity-60">
-                                    {day}
+                                                >
+                                                    {month}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
+                                {/* Year — clickable dropdown */}
+                                <div className="relative">
+                                    <button
+                                        onClick={() => setShowYearDropdown(!showYearDropdown)}
+                                        className="text-base font-bold text-[var(--theme-accent)] hover:opacity-80 transition-opacity px-1 rounded"
+                                    >
+                                        {selectedDate.getFullYear()}
+                                    </button>
+                                    {showYearDropdown && (
+                                        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 bg-[var(--theme-bg-secondary)] border border-[var(--theme-accent)] rounded-xl overflow-hidden shadow-2xl z-50 max-h-48 overflow-y-auto">
+                                            {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i).map((year) => (
+                                                <button
+                                                    key={year}
+                                                    onClick={() => {
+                                                        setSelectedDate(new Date(year, selectedDate.getMonth(), 1));
+                                                        setSelectedCalendarDate(null);
+                                                        setShowYearDropdown(false);
+                                                    }}
+                                                    className={`w-full px-4 py-2 text-xs font-bold text-left transition-colors ${selectedDate.getFullYear() === year
+                                                        ? 'bg-[var(--theme-accent)] text-white'
+                                                        : 'text-[var(--theme-text)] hover:bg-[var(--theme-accent)]/10'
+                                                    }`}
+                                                >
+                                                    {year}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                            <button onClick={nextMonth} className="p-1.5 hover:bg-[var(--theme-accent)]/10 rounded-lg text-[var(--theme-text-muted)] hover:text-[var(--theme-accent)] transition-colors">
+                                <ChevronRight className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Day labels */}
+                        <div className="grid grid-cols-7 text-center mb-2">
+                            {dayNames.map((day, i) => (
+                                <span key={i} className="text-xs font-bold py-1 text-[var(--theme-text-muted)]">{day}</span>
                             ))}
+                        </div>
+
+                        {/* Date grid */}
+                        <div className="grid grid-cols-7 gap-y-1">
                             {generateCalendar().map((dayObj, i) => {
                                 const isToday = dayObj.day === new Date().getDate() &&
                                     selectedDate.getMonth() === new Date().getMonth() &&
@@ -320,14 +384,16 @@ export function ReceptionistProfileView({ username, onPatientSelected }: Recepti
                                         key={i}
                                         onClick={() => handleDateClick(dayObj.day as number)}
                                         disabled={!dayObj.isCurrentMonth}
-                                        className={`aspect-square rounded-lg text-xs transition-all ${!dayObj.isCurrentMonth
-                                            ? 'text-[var(--theme-text-muted)] opacity-20 cursor-default'
-                                            : isSelected
-                                                ? 'bg-[var(--theme-accent)] text-white font-bold shadow-md scale-110 z-10'
-                                                : isToday
-                                                    ? 'border border-[var(--theme-accent)] text-[var(--theme-accent)] font-medium'
-                                                    : 'text-[var(--theme-text)] hover:bg-[var(--theme-bg-tertiary)] font-normal'
-                                            }`}
+                                        className="aspect-square flex items-center justify-center text-sm font-semibold rounded-xl transition-all hover:bg-[var(--theme-accent)]/10"
+                                        style={{
+                                            backgroundColor: !dayObj.isCurrentMonth ? 'transparent' : isSelected ? 'var(--theme-accent)' : undefined,
+                                            color: !dayObj.isCurrentMonth ? 'var(--theme-text-muted)' : isSelected ? '#ffffff' : isToday ? 'var(--theme-accent)' : 'var(--theme-text)',
+                                            opacity: !dayObj.isCurrentMonth ? 0.2 : 1,
+                                            fontWeight: isSelected || isToday ? 900 : 600,
+                                            boxShadow: isSelected ? '0 0 12px rgba(117,61,62,0.35)' : undefined,
+                                            transform: isSelected ? 'scale(1.05)' : undefined,
+                                            cursor: !dayObj.isCurrentMonth ? 'default' : 'pointer',
+                                        }}
                                     >
                                         {dayObj.day}
                                     </button>
@@ -341,144 +407,180 @@ export function ReceptionistProfileView({ username, onPatientSelected }: Recepti
                {/* Dynamic Content Area (Scrollable) */}
                <div className={`flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-[#222] p-8`}>
                   {activeTab === 'dashboard' && (
-                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {/* Card 1: Doctor Availability */}
-                        <div className="bg-[var(--theme-bg-secondary)] border border-[var(--theme-accent)]/20 rounded-2xl p-4 shadow-xl flex flex-col h-[150px]">
-                            <div className="flex items-center gap-2 mb-2 border-b border-[var(--theme-accent)]/10 pb-1">
-                                <Users className="w-4 h-4 text-[var(--theme-accent)]" />
-                                <h3 className="text-sm font-bold text-[var(--theme-text)] uppercase tracking-wider">Doctor Availability</h3>
-                            </div>
-                            <div className="flex-1 overflow-y-auto scrollbar-hide space-y-1.5 pr-2">
-                                {(doctors.length > 0 ? doctors : [
-                                    {name: 'Dr. John Doe', available: true}, 
-                                    {name: 'Dr. Jane Smith', available: false},
-                                    {name: 'Dr. Robert Brown', available: true}
-                                ]).map((doc, i) => (
-                                    <div key={i} className="flex items-center justify-between bg-[var(--theme-bg-tertiary)] p-2 rounded-lg border border-[var(--theme-accent)]/10 hover:border-[var(--theme-accent)]/30 transition-colors">
-                                        <span className="text-[var(--theme-text)] text-sm font-medium">{doc.name}</span>
-                                        <div className={`w-2 h-2 rounded-full ${doc.available ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]'}`}></div>
-                                    </div>
+                     <div className="flex flex-col gap-6">
+
+                        {/* Period Filter Row */}
+                        <div className="flex items-center justify-between">
+                            <h2 className="text-lg font-semibold text-[var(--theme-text)]">Reception Overview</h2>
+                            <div className="flex items-center gap-1 bg-[var(--theme-bg)] border border-[var(--theme-accent)]/20 rounded-xl p-1">
+                                {(['day', 'week', 'month', 'year'] as const).map((period) => (
+                                    <button
+                                        key={period}
+                                        onClick={() => setStatsPeriod(period)}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 capitalize ${
+                                            statsPeriod === period
+                                                ? 'bg-[var(--theme-accent)] text-white shadow'
+                                                : 'text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] hover:bg-[var(--theme-bg-secondary)]'
+                                        }`}
+                                    >
+                                        {period.charAt(0).toUpperCase() + period.slice(1)}
+                                    </button>
                                 ))}
                             </div>
                         </div>
 
-                        {/* Card 2: Bill Drafts */}
-                        <div className="bg-[var(--theme-bg-secondary)] border border-[var(--theme-accent)]/20 rounded-2xl p-4 shadow-xl flex flex-col h-[150px] justify-center items-center relative overflow-hidden group">
-                             <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-                                <FileText className="w-16 h-16 text-[var(--theme-accent)]" />
-                             </div>
-                             <h3 className="text-sm font-extrabold text-[var(--theme-text-muted)] uppercase tracking-wider mb-1 z-10">Bill Drafts</h3>
-                             <div className="text-xl font-bold text-[#FF9D00] z-10 drop-shadow-lg">{billingStats.pendingBills}</div>
-                             <div className="text-sm text-[var(--theme-text-muted)] mt-1 uppercase tracking-widest z-10 font-medium">Pending Actions</div>
-                        </div>
-
-                        {/* Card 3: Follow Ups / Completed Consultations */}
-                        <div className="bg-[var(--theme-bg-secondary)] border border-[var(--theme-accent)]/20 rounded-2xl p-4 shadow-xl flex flex-col h-[150px]">
-                            <div className="flex items-center gap-2 mb-2 border-b border-[var(--theme-accent)]/10 pb-1">
-                                <CheckCircle2 className="w-4 h-4 text-[var(--theme-accent)]" />
-                                <h3 className="text-sm font-bold text-[var(--theme-text)] uppercase tracking-wider">Follow Ups</h3>
-                            </div>
-                            <div className="flex-1 space-y-1 overflow-y-auto scrollbar-hide">
-                                {completedConsultations.length > 0 ? completedConsultations.map((appt: any, i: number) => (
-                                    <div key={i} className="flex flex-col bg-[var(--theme-bg-tertiary)] p-2 rounded-lg border border-[var(--theme-accent)]/10">
-                                        <span className="text-[var(--theme-text)] text-sm font-medium">{appt.patientName || 'Unknown Patient'}</span>
-                                        <span className="text-[var(--theme-text-muted)] text-[10px] font-mono">{new Date(appt.appointmentDate).toLocaleDateString()} • {appt.appointmentTime || 'Completed'}</span>
-                                    </div>
-                                )) : (
-                                    <div className="h-full flex flex-col items-center justify-center text-[var(--theme-text-muted)]">
-                                        <Activity className="w-6 h-6 mb-1 opacity-20" />
-                                        <span className="text-[10px] font-medium">No recent completions</span>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Card 4: Total Patients Today */}
-                        <div className="bg-[var(--theme-bg-secondary)] border border-[var(--theme-accent)]/20 rounded-2xl p-4 shadow-xl flex flex-col h-[150px] justify-center items-center relative overflow-hidden group">
-                             <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-                                <Users className="w-16 h-16 text-[var(--theme-accent)]" />
-                             </div>
-                             <h3 className="text-sm font-extrabold text-[var(--theme-text-muted)] uppercase tracking-wider mb-1 z-10">Patients Today</h3>
-                             <div className="text-xl font-bold text-[#FF9D00] z-10 drop-shadow-lg">{stats.scheduled}</div>
-                             <div className="text-sm text-[var(--theme-text-muted)] mt-1 uppercase tracking-widest z-10 font-medium">{new Date().toLocaleDateString('en-US', {weekday:'long', month:'short', day:'numeric'})}</div>
-                        </div>
-
-                        {/* Card 5: To Do List */}
-                        <div className="bg-[var(--theme-bg-secondary)] border border-[var(--theme-accent)]/20 rounded-2xl p-4 shadow-xl flex flex-col h-[150px]">
-                            <div className="flex items-center gap-2 mb-2 border-b border-[var(--theme-accent)]/10 pb-1">
-                                <ListTodo className="w-4 h-4 text-[var(--theme-accent)]" />
-                                <h3 className="text-sm font-bold text-[var(--theme-text)] uppercase tracking-wider">To Do List</h3>
-                            </div>
-                            <div className="flex gap-2 mb-2">
-                                <input 
-                                    type="text" 
-                                    value={todoInput}
-                                    onChange={(e) => setTodoInput(e.target.value)}
-                                    onKeyDown={(e) => e.key === 'Enter' && addTodo()}
-                                    placeholder="Add task..."
-                                    className="flex-1 bg-[var(--theme-bg-tertiary)] border border-[var(--theme-accent)]/30 rounded px-3 py-1.5 text-xs text-[var(--theme-text)] focus:border-[var(--theme-accent)] focus:outline-none placeholder:text-[var(--theme-text-muted)]"
-                                />
-                                <button onClick={addTodo} className="bg-[var(--theme-accent)] text-white rounded px-2 hover:opacity-80 transition-colors flex items-center justify-center">
-                                    <Plus className="w-4 h-4" />
-                                </button>
-                            </div>
-                            <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-[#222] space-y-1.5 pr-1">
-                                {todoList.map(todo => (
-                                    <div key={todo.id} className="flex items-center justify-between bg-[var(--theme-bg-tertiary)] p-1 rounded border border-[var(--theme-accent)]/10 group hover:border-[var(--theme-accent)]/30 transition-all">
-                                        <div className="flex items-center gap-1.5 overflow-hidden">
-                                            <button 
-                                                onClick={() => toggleTodo(todo.id)}
-                                                className={`w-3 h-3 rounded border flex items-center justify-center transition-colors ${todo.completed ? 'bg-[var(--theme-accent)] border-[var(--theme-accent)]' : 'border-[var(--theme-text-muted)] hover:border-[var(--theme-accent)]'}`}
-                                            >
-                                                {todo.completed && <Check className="w-2 h-2 text-white" />}
-                                            </button>
-                                            <span className={`text-xs truncate ${todo.completed ? 'text-[var(--theme-text-muted)] line-through' : 'text-[var(--theme-text)]'}`}>{todo.text}</span>
-                                        </div>
-                                        <button onClick={() => removeTodo(todo.id)} className="opacity-0 group-hover:opacity-100 text-[var(--theme-text-muted)] hover:text-red-500 transition-all">
-                                            <Trash2 className="w-2.5 h-2.5" />
-                                        </button>
-                                    </div>
-                                ))}
-                                {todoList.length === 0 && <div className="text-center text-[var(--theme-text-muted)] text-[10px] italic mt-4">No tasks pending</div>}
-                            </div>
-                        </div>
-
-                        {/* Card 6: Total Revenue */}
-                        <div className="bg-[var(--theme-bg-secondary)] border border-[var(--theme-accent)]/20 rounded-2xl p-4 shadow-xl flex flex-col h-[150px] overflow-hidden">
-                            <div className="flex items-center gap-2 mb-1 border-b border-[var(--theme-accent)]/10 pb-1">
+                        {/* Card 1: Total Revenue - Donut Pie Chart - Full Width */}
+                        <div className="bg-[var(--theme-bg-secondary)] border border-[var(--theme-accent)]/20 rounded-2xl p-6 shadow-xl">
+                            <div className="flex items-center gap-2 mb-3 border-b border-[var(--theme-accent)]/10 pb-2">
                                 <DollarSign className="w-4 h-4 text-[var(--theme-accent)]" />
                                 <h3 className="text-sm font-bold text-[var(--theme-text)] uppercase tracking-wider">Total Revenue</h3>
+                                <span className="ml-auto text-[10px] font-bold text-[var(--theme-text-muted)] uppercase tracking-widest">{periodLabel}</span>
                             </div>
-                            <div className="flex-1 flex flex-col items-center justify-between pb-0">
-                                <div className="text-center flex-1 flex flex-col justify-center mb-1">
-                                     <div className="text-xl font-bold text-[#FF9D00] leading-none mb-0.5">₹{(billingStats.totalRevenue || 0).toLocaleString()}</div>
-                                     <div className="text-[10px] text-[var(--theme-text-muted)] uppercase tracking-widest font-medium leading-none">Overall Total</div>
+                            <div className="flex items-center justify-center gap-12 py-2">
+                                {/* Donut Chart */}
+                                <div className="relative flex items-center justify-center">
+                                    <svg width="160" height="160" viewBox="0 0 100 100">
+                                        <circle cx="50" cy="50" r="35" fill="none" stroke="var(--theme-bg-tertiary)" strokeWidth="12" />
+                                        {billingStats.totalRevenue > 0 ? (
+                                            <>
+                                                <circle cx="50" cy="50" r="35" fill="none" stroke="#3b82f6" strokeWidth="12"
+                                                    strokeDasharray={`${219.91 * 0.7} ${219.91 * 0.3}`}
+                                                    strokeDashoffset="0"
+                                                    transform="rotate(-90 50 50)"
+                                                />
+                                                <circle cx="50" cy="50" r="35" fill="none" stroke="#FF9D00" strokeWidth="12"
+                                                    strokeDasharray={`${219.91 * 0.3} ${219.91 * 0.7}`}
+                                                    strokeDashoffset={`${-(219.91 * 0.7)}`}
+                                                    transform="rotate(-90 50 50)"
+                                                />
+                                            </>
+                                        ) : null}
+                                    </svg>
                                 </div>
-                                <div className="grid grid-cols-2 gap-3 w-full mt-auto">
-                                    <div className="bg-[var(--theme-bg-tertiary)] rounded-xl py-1.5 px-1 border border-[var(--theme-accent)]/20 text-center flex flex-col justify-center shadow-inner h-[45px]">
-                                        <div className="text-[10px] font-medium text-[var(--theme-text-muted)] mb-0.5 leading-none">Surgical</div>
-                                        <div className="text-xs font-bold text-[var(--theme-text)] leading-none">₹{(billingStats.totalRevenue * 0.7).toLocaleString()}</div>
+                                {/* Revenue Details */}
+                                <div className="flex flex-col gap-3">
+                                    <div>
+                                        <div className="text-3xl font-bold text-[#FF9D00] leading-none">₹{periodRevenue.toLocaleString(undefined, {maximumFractionDigits: 2})}</div>
+                                        <div className="text-[10px] text-[var(--theme-text-muted)] uppercase tracking-widest font-medium mt-1">Overall Total</div>
                                     </div>
-                                    <div className="bg-[var(--theme-bg-tertiary)] rounded-xl py-1.5 px-1 border border-[var(--theme-accent)]/20 text-center flex flex-col justify-center shadow-inner h-[45px]">
-                                        <div className="text-[10px] font-medium text-[var(--theme-text-muted)] mb-0.5 leading-none">Consultation</div>
-                                        <div className="text-xs font-bold text-[var(--theme-text)] leading-none">₹{(billingStats.totalRevenue * 0.3).toLocaleString()}</div>
+                                    <div className="flex flex-col gap-2">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-3 h-3 rounded-full bg-blue-500 flex-shrink-0"></div>
+                                            <div>
+                                                <div className="text-sm font-bold text-[var(--theme-text)]">₹{(periodRevenue * 0.7).toLocaleString(undefined, {maximumFractionDigits: 2})}</div>
+                                                <div className="text-[9px] text-[var(--theme-text-muted)] uppercase tracking-wider">Surgical</div>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-3 h-3 rounded-full bg-[#FF9D00] flex-shrink-0"></div>
+                                            <div>
+                                                <div className="text-sm font-bold text-[var(--theme-text)]">₹{(periodRevenue * 0.3).toLocaleString(undefined, {maximumFractionDigits: 2})}</div>
+                                                <div className="text-[9px] text-[var(--theme-text-muted)] uppercase tracking-wider">Consultation</div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Card 7: OT Availability */}
-                        <div className="bg-[var(--theme-bg-secondary)] border border-[var(--theme-accent)]/20 rounded-2xl p-4 shadow-xl flex flex-col h-[150px] justify-center items-center relative overflow-hidden group">
-                             <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-                                <Activity className="w-16 h-16 text-green-500" />
-                             </div>
-                             <h3 className="text-sm font-extrabold text-[var(--theme-text-muted)] uppercase tracking-wider mb-2 z-10">OT Availability</h3>
-                             <div className="flex items-center gap-1.5 bg-[var(--theme-bg-tertiary)] px-4 py-1.5 rounded-full border border-green-500/20 shadow-[0_0_20px_rgba(34,197,94,0.1)] z-10">
-                                 <div className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse shadow-[0_0_10px_rgba(34,197,94,0.6)]"></div>
-                                 <span className="text-sm font-bold text-[var(--theme-text)] tracking-wide">Available</span>
-                             </div>
-                             <div className="text-sm text-[var(--theme-text-muted)] mt-2 uppercase tracking-widest z-10 font-medium">Operation Theatre 1</div>
+                        {/* Row 2: Doctor Availability + Patients Today */}
+                        <div className="grid grid-cols-2 gap-6">
+                            {/* Card 2: Doctor Availability */}
+                            <div className="bg-[var(--theme-bg-secondary)] border border-[var(--theme-accent)]/20 rounded-2xl p-6 shadow-xl flex flex-col h-[220px]">
+                                <div className="flex items-center gap-2 mb-2 border-b border-[var(--theme-accent)]/10 pb-1">
+                                    <Users className="w-4 h-4 text-[var(--theme-accent)]" />
+                                    <h3 className="text-sm font-bold text-[var(--theme-text)] uppercase tracking-wider">Doctor Availability</h3>
+                                </div>
+                                <div className="flex-1 overflow-y-auto scrollbar-hide space-y-1.5 pr-2">
+                                    {(doctors.length > 0 ? doctors : [
+                                        {name: 'Dr. John Doe', available: true}, 
+                                        {name: 'Dr. Jane Smith', available: false},
+                                        {name: 'Dr. Robert Brown', available: true}
+                                    ]).map((doc, i) => (
+                                        <div key={i} className="flex items-center justify-between bg-[var(--theme-bg-tertiary)] p-2 rounded-lg border border-[var(--theme-accent)]/10 hover:border-[var(--theme-accent)]/30 transition-colors">
+                                            <span className="text-[var(--theme-text)] text-sm font-medium">{doc.name}</span>
+                                            <div className={`w-2 h-2 rounded-full ${doc.available ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]'}`}></div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Card 3: Total Patients Today */}
+                            <div className="bg-[var(--theme-bg-secondary)] border border-[var(--theme-accent)]/20 rounded-2xl p-6 shadow-xl flex flex-col h-[220px] justify-center items-center relative overflow-hidden group">
+                                <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+                                    <Users className="w-20 h-20 text-[var(--theme-accent)]" />
+                                </div>
+                                <h3 className="text-sm font-extrabold text-[var(--theme-text-muted)] uppercase tracking-wider mb-3 z-10">Patients {periodLabel}</h3>
+                                <div className="text-5xl font-bold text-[#FF9D00] z-10 drop-shadow-lg">{statsPeriod === 'day' ? stats.scheduled : periodPatientCount}</div>
+                                <div className="text-xs text-[var(--theme-text-muted)] mt-2 uppercase tracking-widest z-10 font-medium">{periodFilteredAppointments.length} appointment{periodFilteredAppointments.length !== 1 ? 's' : ''}</div>
+                            </div>
                         </div>
+
+                        {/* Row 3: Follow Ups + To Do List (taller, scrollable) */}
+                        <div className="grid grid-cols-2 gap-6">
+                            {/* Card 4: Follow Ups */}
+                            <div className="bg-[var(--theme-bg-secondary)] border border-[var(--theme-accent)]/20 rounded-2xl p-6 shadow-xl flex flex-col h-[320px]">
+                                <div className="flex items-center gap-2 mb-2 border-b border-[var(--theme-accent)]/10 pb-1">
+                                    <CheckCircle2 className="w-4 h-4 text-[var(--theme-accent)]" />
+                                    <h3 className="text-sm font-bold text-[var(--theme-text)] uppercase tracking-wider">Follow Ups</h3>
+                                    <span className="ml-auto text-[10px] text-[var(--theme-text-muted)] font-medium">{periodLabel}</span>
+                                </div>
+                                <div className="flex-1 space-y-1.5 overflow-y-auto scrollbar-hide">
+                                    {completedConsultations.length > 0 ? completedConsultations.map((appt: any, i: number) => (
+                                        <div key={i} className="flex flex-col bg-[var(--theme-bg-tertiary)] p-2 rounded-lg border border-[var(--theme-accent)]/10">
+                                            <span className="text-[var(--theme-text)] text-sm font-medium">{appt.patientName || 'Unknown Patient'}</span>
+                                            <span className="text-[var(--theme-text-muted)] text-[10px] font-mono">{new Date(appt.appointmentDate).toLocaleDateString()} • {appt.appointmentTime || 'Completed'}</span>
+                                        </div>
+                                    )) : (
+                                        <div className="h-full flex flex-col items-center justify-center text-[var(--theme-text-muted)]">
+                                            <Activity className="w-6 h-6 mb-1 opacity-20" />
+                                            <span className="text-[10px] font-medium">No recent completions</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Card 5: To Do List */}
+                            <div className="bg-[var(--theme-bg-secondary)] border border-[var(--theme-accent)]/20 rounded-2xl p-6 shadow-xl flex flex-col h-[320px]">
+                                <div className="flex items-center gap-2 mb-2 border-b border-[var(--theme-accent)]/10 pb-1">
+                                    <ListTodo className="w-4 h-4 text-[var(--theme-accent)]" />
+                                    <h3 className="text-sm font-bold text-[var(--theme-text)] uppercase tracking-wider">To Do List</h3>
+                                </div>
+                                <div className="flex gap-2 mb-2">
+                                    <input 
+                                        type="text" 
+                                        value={todoInput}
+                                        onChange={(e) => setTodoInput(e.target.value)}
+                                        onKeyDown={(e) => e.key === 'Enter' && addTodo()}
+                                        placeholder="Add task..."
+                                        className="flex-1 bg-[var(--theme-bg-tertiary)] border border-[var(--theme-accent)]/30 rounded px-3 py-1.5 text-xs text-[var(--theme-text)] focus:border-[var(--theme-accent)] focus:outline-none placeholder:text-[var(--theme-text-muted)]"
+                                    />
+                                    <button onClick={addTodo} className="bg-[var(--theme-accent)] text-white rounded px-2 hover:opacity-80 transition-colors flex items-center justify-center">
+                                        <Plus className="w-4 h-4" />
+                                    </button>
+                                </div>
+                                <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-[#222] space-y-1.5 pr-1">
+                                    {todoList.map(todo => (
+                                        <div key={todo.id} className="flex items-center justify-between bg-[var(--theme-bg-tertiary)] p-1 rounded border border-[var(--theme-accent)]/10 group hover:border-[var(--theme-accent)]/30 transition-all">
+                                            <div className="flex items-center gap-1.5 overflow-hidden">
+                                                <button 
+                                                    onClick={() => toggleTodo(todo.id)}
+                                                    className={`w-3 h-3 rounded border flex items-center justify-center transition-colors ${todo.completed ? 'bg-[var(--theme-accent)] border-[var(--theme-accent)]' : 'border-[var(--theme-text-muted)] hover:border-[var(--theme-accent)]'}`}
+                                                >
+                                                    {todo.completed && <Check className="w-2 h-2 text-white" />}
+                                                </button>
+                                                <span className={`text-xs truncate ${todo.completed ? 'text-[var(--theme-text-muted)] line-through' : 'text-[var(--theme-text)]'}`}>{todo.text}</span>
+                                            </div>
+                                            <button onClick={() => removeTodo(todo.id)} className="opacity-0 group-hover:opacity-100 text-[var(--theme-text-muted)] hover:text-red-500 transition-all">
+                                                <Trash2 className="w-2.5 h-2.5" />
+                                            </button>
+                                        </div>
+                                    ))}
+                                    {todoList.length === 0 && <div className="text-center text-[var(--theme-text-muted)] text-[10px] italic mt-4">No tasks pending</div>}
+                                </div>
+                            </div>
+                        </div>
+
                      </div>
                   )}
                   {activeTab === 'booking' && (
