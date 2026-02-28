@@ -1296,18 +1296,18 @@ async def create_appointment(appointment_data: dict = Body(...)):
         appt_date_str = appointment_data.get("appointmentDate")
         appt_time_str = appointment_data.get("appointmentTime")
 
-        if not all([doctor_id, appt_date_str, appt_time_str]):
+        if not all([doctor_id, appt_date_str]):
             raise HTTPException(status_code=400, detail="Missing required booking information")
 
-        # 1. Check for past date/time
-        try:
-            # Parse date and time to compare with current time
-            appt_datetime = datetime.strptime(f"{appt_date_str} {appt_time_str}", "%Y-%m-%d %H:%M")
-            if appt_datetime < datetime.now():
-                raise HTTPException(status_code=400, detail="Cannot book appointments in the past. Please select a future time.")
-        except ValueError as ve:
-            print(f"Date parsing error: {str(ve)}")
-            raise HTTPException(status_code=400, detail="Invalid date or time format. Use YYYY-MM-DD and HH:MM")
+        # 1. Check for past date/time (only when a real time is provided)
+        if appt_time_str and appt_time_str != 'N/A':
+            try:
+                appt_datetime = datetime.strptime(f"{appt_date_str} {appt_time_str}", "%Y-%m-%d %H:%M")
+                if appt_datetime < datetime.now():
+                    raise HTTPException(status_code=400, detail="Cannot book appointments in the past. Please select a future time.")
+            except ValueError as ve:
+                print(f"Date parsing error: {str(ve)}")
+                raise HTTPException(status_code=400, detail="Invalid date or time format. Use YYYY-MM-DD and HH:MM")
 
         # Ensure appointments collection exists
         if "appointments" not in db.list_collection_names():
@@ -1315,17 +1315,17 @@ async def create_appointment(appointment_data: dict = Body(...)):
         
         appointments_collection = db["appointments"]
 
-        # 2. Check for slot exclusivity for the doctor
-        # We check for the same doctor, same date, and same time slot
-        existing_appointment = appointments_collection.find_one({
-            "doctorId": doctor_id,
-            "appointmentDate": appt_date_str,
-            "appointmentTime": appt_time_str,
-            "status": {"$ne": "cancelled"}
-        })
-        
-        if existing_appointment:
-            raise HTTPException(status_code=400, detail=f"The {appt_time_str} slot is already booked for {doctor_name or 'the selected doctor'}")
+        # 2. Check for slot exclusivity for the doctor (only when a real time is provided)
+        if appt_time_str and appt_time_str != 'N/A':
+            existing_appointment = appointments_collection.find_one({
+                "doctorId": doctor_id,
+                "appointmentDate": appt_date_str,
+                "appointmentTime": appt_time_str,
+                "status": {"$ne": "cancelled"}
+            })
+            
+            if existing_appointment:
+                raise HTTPException(status_code=400, detail=f"The {appt_time_str} slot is already booked for {doctor_name or 'the selected doctor'}")
 
         # Extract appointment details
         appointment = {

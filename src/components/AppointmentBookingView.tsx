@@ -262,15 +262,7 @@ export function AppointmentBookingView(props: AppointmentBookingViewProps) {
       setError('Please select a date');
       return;
     }
-    if (!selectedTime) {
-      setError('Please select a time slot');
-      return;
-    }
 
-    if (!isTimeSlotAvailable(selectedTime)) {
-      setError('Selected time slot is no longer available');
-      return;
-    }
 
     setLoading(true);
     setError(null);
@@ -351,7 +343,7 @@ export function AppointmentBookingView(props: AppointmentBookingViewProps) {
         doctorId: selectedDoctor.id,
         doctorName: selectedDoctor.name,
         appointmentDate,
-        appointmentTime: selectedTime,
+        appointmentTime: selectedTime || 'N/A',
         status: 'booked' as const,
         receptionQueuePosition: undefined,
         opdQueuePosition: undefined,
@@ -797,8 +789,8 @@ export function AppointmentBookingView(props: AppointmentBookingViewProps) {
                   <div className="pt-6 border-t border-[var(--theme-accent)]">
                     <Button
                       onClick={handleBookAppointment}
-                      disabled={loading || !selectedPatient || !selectedDoctor || !appointmentDate || !selectedTime}
-                      className={`w-full h-16 rounded-2xl font-bold uppercase tracking-widest transition-all shadow-xl ${!selectedPatient || !selectedDoctor || !appointmentDate || !selectedTime
+                      disabled={loading || !selectedPatient || !selectedDoctor || !appointmentDate}
+                      className={`w-full h-16 rounded-2xl font-bold uppercase tracking-widest transition-all shadow-xl ${!selectedPatient || !selectedDoctor || !appointmentDate
                         ? 'bg-[var(--theme-bg-tertiary)] text-[var(--theme-text-muted)] border border-[var(--theme-accent)] cursor-not-allowed'
                         : 'bg-gradient-to-r from-[var(--theme-accent)] to-[var(--theme-accent-hover)] force-text-white hover:scale-[1.02] active:scale-[0.98]'
                         }`}

@@ -978,6 +978,30 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
     return result + ' Only';
   };
 
+  // ============ IFRAME PRINT HELPER (non-blocking, no focus loss) ============
+  const printViaIframe = (htmlContent: string) => {
+    const existingFrame = document.getElementById('__print_frame__');
+    if (existingFrame) existingFrame.remove();
+
+    const iframe = document.createElement('iframe');
+    iframe.id = '__print_frame__';
+    iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:0;height:0;border:0;';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document;
+    if (!doc) return;
+    doc.open();
+    doc.write(htmlContent);
+    doc.close();
+
+    iframe.onload = () => {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+      // Remove after a delay to let the browser send the print job
+      setTimeout(() => iframe.remove(), 1000);
+    };
+  };
+
   // ============ PRINT INITIAL SURGERY BILL ============
   const handlePrintInitialBill = (billData: any, billId: string) => {
     const today = new Date();
@@ -1131,15 +1155,7 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
       </html>
     `;
 
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.write(printContent);
-      printWindow.document.close();
-      printWindow.onload = () => {
-        printWindow.focus();
-        printWindow.print();
-      };
-    }
+    printViaIframe(printContent);
   };
 
   // ============ PRINT FINAL SURGERY BILL ============
@@ -1338,15 +1354,7 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
       </html>
     `;
 
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.write(printContent);
-      printWindow.document.close();
-      printWindow.onload = () => {
-        printWindow.focus();
-        printWindow.print();
-      };
-    }
+    printViaIframe(printContent);
   };
 
   const handlePrint = () => {
@@ -1722,20 +1730,7 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
       </html>
     `;
 
-    // Open print window
-    const printWindow = window.open('', '_blank', 'width=900,height=700');
-    if (printWindow) {
-      printWindow.document.write(printContent);
-      printWindow.document.close();
-
-      // Wait for content to load then print
-      printWindow.onload = () => {
-        printWindow.focus();
-        printWindow.print();
-      };
-    } else {
-      alert('Please allow popups to print the invoice');
-    }
+    printViaIframe(printContent);
   };
 
   const handleSaveBill = async (status: 'paid' | 'pending' | 'draft' = 'paid') => {
@@ -2529,23 +2524,24 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
                 <div className="w-14 h-14 rounded-full bg-[#0a0a0a] flex items-center justify-center border border-[#D4A574] flex-shrink-0">
                   <User className="w-8 h-8 text-[#D4A574]" />
                 </div>
-                <div className="flex-1 flex gap-2 items-start">
-                  <div className="flex-1 min-w-0">
-                    <h2 className="text-xl font-bold text-white truncate leading-tight">
-                      {patient?.name || 'Select Patient'}
-                    </h2>
-                    <p className="text-[10px] text-[#8B8B8B] font-mono tracking-wider mt-0.5 uppercase">
-                      REG: {patient?.registrationId || 'N/A'}
-                      REG: {patient?.registrationId || 'N/A'}
-                    </p>
-                    <p className="text-[11px] text-[#D4A574] font-medium mt-1">
-                      {patient ? `${patient.demographics?.age || 'N/A'} / ${patient.demographics?.sex || 'N/A'}` : 'N/A / N/A'} / {patient?.contactInfo?.phone || 'N/A'}
-                    </p>
-                  </div>
-                  <div className="w-[50px] flex-shrink-0 text-[10px] font-black text-[#5a5a5a] uppercase tracking-widest text-center mt-2.5">Qty</div>
-                  <div className="w-[80px] flex-shrink-0 text-[10px] font-black text-[#5a5a5a] uppercase tracking-widest text-right mt-2.5">Price</div>
-                  <div className="w-[50px] flex-shrink-0 text-[10px] font-black text-[#5a5a5a] uppercase tracking-widest text-center mt-2.5">Action</div>
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-xl font-bold text-white truncate leading-tight">
+                    {patient?.name || 'Select Patient'}
+                  </h2>
+                  <p className="text-[10px] text-[#8B8B8B] font-mono tracking-wider mt-0.5 uppercase truncate">
+                    REG: {patient?.registrationId || 'N/A'}
+                  </p>
+                  <p className="text-[11px] text-[#D4A574] font-medium mt-1 truncate">
+                    {patient ? `${patient.demographics?.age || 'N/A'} / ${patient.demographics?.sex || 'N/A'} / ${patient?.contactInfo?.phone || 'N/A'}` : 'N/A'}
+                  </p>
                 </div>
+              </div>
+              {/* Column headers for items */}
+              <div className="flex gap-2 px-2 mb-1">
+                <div className="flex-1 min-w-0" />
+                <div className="w-[50px] flex-shrink-0 text-[10px] font-black text-[#5a5a5a] uppercase tracking-widest text-center">Qty</div>
+                <div className="w-[80px] flex-shrink-0 text-[10px] font-black text-[#5a5a5a] uppercase tracking-widest text-right">Price</div>
+                <div className="w-[50px] flex-shrink-0 text-[10px] font-black text-[#5a5a5a] uppercase tracking-widest text-center">Action</div>
               </div>
 
               {/* Compact Items List */}
