@@ -34,6 +34,7 @@ export function ReceptionistProfileView({ username, onPatientSelected }: Recepti
     const [billingStats, setBillingStats] = useState({ pendingBills: 0, totalRevenue: 0, completedToday: 0 });
     const [todoList, setTodoList] = useState<{id: string, text: string, completed: boolean}[]>([]);
     const [todoInput, setTodoInput] = useState('');
+    const [statsPeriod, setStatsPeriod] = useState<'day' | 'week' | 'month' | 'year'>('day');
 
     useEffect(() => {
         const fetchStats = async () => {
@@ -109,17 +110,6 @@ export function ReceptionistProfileView({ username, onPatientSelected }: Recepti
         setTodoList(todoList.filter(t => t.id !== id));
     };
 
-    const getCompletedConsultations = () => {
-        // Filter based on status if available, otherwise just mock logic or use appointments with past dates/times
-        // Since we don't have explicit completed status in appointment list usually, checking if we can infer
-        // But the prompt says "Pull from existing consultation data"
-        // We'll use allAppointments.
-         return allAppointments
-            .filter((a: any) => a.appointmentDate && new Date(a.appointmentDate) <= new Date())
-            .slice(0, 3);
-    };
-    const completedConsultations = getCompletedConsultations();
-
     useEffect(() => {
         if (allAppointments.length > 0 && selectedCalendarDate) {
             const year = selectedDate.getFullYear();
@@ -164,6 +154,57 @@ export function ReceptionistProfileView({ username, onPatientSelected }: Recepti
         setSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 1));
         setSelectedCalendarDate(null);
     };
+
+    // ── Period filtering ──────────────────────────────────────────────────────
+    const getPeriodBounds = () => {
+        const ref = selectedDate;
+        if (statsPeriod === 'day') {
+            return {
+                start: new Date(ref.getFullYear(), ref.getMonth(), ref.getDate()),
+                end:   new Date(ref.getFullYear(), ref.getMonth(), ref.getDate(), 23, 59, 59),
+            };
+        } else if (statsPeriod === 'week') {
+            const dow = ref.getDay();
+            return {
+                start: new Date(ref.getFullYear(), ref.getMonth(), ref.getDate() - dow),
+                end:   new Date(ref.getFullYear(), ref.getMonth(), ref.getDate() + (6 - dow), 23, 59, 59),
+            };
+        } else if (statsPeriod === 'month') {
+            return {
+                start: new Date(ref.getFullYear(), ref.getMonth(), 1),
+                end:   new Date(ref.getFullYear(), ref.getMonth() + 1, 0, 23, 59, 59),
+            };
+        } else {
+            return {
+                start: new Date(ref.getFullYear(), 0, 1),
+                end:   new Date(ref.getFullYear(), 11, 31, 23, 59, 59),
+            };
+        }
+    };
+
+    const periodFilteredAppointments = allAppointments.filter((apt: any) => {
+        const aptDate = apt.appointmentDate;
+        if (!aptDate) return false;
+        const { start, end } = getPeriodBounds();
+        if (statsPeriod === 'day') {
+            const dateKey = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
+            return aptDate === dateKey || aptDate?.startsWith(dateKey);
+        }
+        try { const d = new Date(aptDate); return d >= start && d <= end; } catch { return false; }
+    });
+
+    const periodRevenue = allAppointments.length > 0
+        ? billingStats.totalRevenue * (periodFilteredAppointments.length / allAppointments.length)
+        : 0;
+
+    const periodPatientCount = new Set(periodFilteredAppointments.map((a: any) => a.patientId || a.patientName)).size;
+
+    const periodLabel = statsPeriod === 'day' ? 'Today'
+        : statsPeriod === 'week' ? 'This Week'
+        : statsPeriod === 'month' ? 'This Month'
+        : 'This Year';
+
+    const completedConsultations = periodFilteredAppointments.slice(0, 8);
 
     const getFilteredPatients = () => {
         let filtered = scheduledPatients;
@@ -368,16 +409,37 @@ export function ReceptionistProfileView({ username, onPatientSelected }: Recepti
                   {activeTab === 'dashboard' && (
                      <div className="flex flex-col gap-6">
 
+                        {/* Period Filter Row */}
+                        <div className="flex items-center justify-between">
+                            <h2 className="text-lg font-semibold text-[var(--theme-text)]">Reception Overview</h2>
+                            <div className="flex items-center gap-1 bg-[var(--theme-bg)] border border-[var(--theme-accent)]/20 rounded-xl p-1">
+                                {(['day', 'week', 'month', 'year'] as const).map((period) => (
+                                    <button
+                                        key={period}
+                                        onClick={() => setStatsPeriod(period)}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 capitalize ${
+                                            statsPeriod === period
+                                                ? 'bg-[var(--theme-accent)] text-white shadow'
+                                                : 'text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] hover:bg-[var(--theme-bg-secondary)]'
+                                        }`}
+                                    >
+                                        {period.charAt(0).toUpperCase() + period.slice(1)}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
                         {/* Card 1: Total Revenue - Donut Pie Chart - Full Width */}
-                        <div className="bg-[var(--theme-bg-secondary)] border border-[var(--theme-accent)]/20 rounded-2xl p-6 shadow-xl min-h-[300px]">
-                            <div className="flex items-center gap-2 mb-4 border-b border-[var(--theme-accent)]/10 pb-2">
+                        <div className="bg-[var(--theme-bg-secondary)] border border-[var(--theme-accent)]/20 rounded-2xl p-6 shadow-xl">
+                            <div className="flex items-center gap-2 mb-3 border-b border-[var(--theme-accent)]/10 pb-2">
                                 <DollarSign className="w-4 h-4 text-[var(--theme-accent)]" />
                                 <h3 className="text-sm font-bold text-[var(--theme-text)] uppercase tracking-wider">Total Revenue</h3>
+                                <span className="ml-auto text-[10px] font-bold text-[var(--theme-text-muted)] uppercase tracking-widest">{periodLabel}</span>
                             </div>
-                            <div className="flex items-center justify-center gap-16 py-6">
+                            <div className="flex items-center justify-center gap-12 py-2">
                                 {/* Donut Chart */}
                                 <div className="relative flex items-center justify-center">
-                                    <svg width="240" height="240" viewBox="0 0 100 100">
+                                    <svg width="160" height="160" viewBox="0 0 100 100">
                                         <circle cx="50" cy="50" r="35" fill="none" stroke="var(--theme-bg-tertiary)" strokeWidth="12" />
                                         {billingStats.totalRevenue > 0 ? (
                                             <>
@@ -396,23 +458,23 @@ export function ReceptionistProfileView({ username, onPatientSelected }: Recepti
                                     </svg>
                                 </div>
                                 {/* Revenue Details */}
-                                <div className="flex flex-col gap-4">
+                                <div className="flex flex-col gap-3">
                                     <div>
-                                        <div className="text-3xl font-bold text-[#FF9D00] leading-none">₹{(billingStats.totalRevenue || 0).toLocaleString()}</div>
+                                        <div className="text-3xl font-bold text-[#FF9D00] leading-none">₹{periodRevenue.toLocaleString(undefined, {maximumFractionDigits: 2})}</div>
                                         <div className="text-[10px] text-[var(--theme-text-muted)] uppercase tracking-widest font-medium mt-1">Overall Total</div>
                                     </div>
                                     <div className="flex flex-col gap-2">
                                         <div className="flex items-center gap-2">
                                             <div className="w-3 h-3 rounded-full bg-blue-500 flex-shrink-0"></div>
                                             <div>
-                                                <div className="text-sm font-bold text-[var(--theme-text)]">₹{(billingStats.totalRevenue * 0.7).toLocaleString()}</div>
+                                                <div className="text-sm font-bold text-[var(--theme-text)]">₹{(periodRevenue * 0.7).toLocaleString(undefined, {maximumFractionDigits: 2})}</div>
                                                 <div className="text-[9px] text-[var(--theme-text-muted)] uppercase tracking-wider">Surgical</div>
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <div className="w-3 h-3 rounded-full bg-[#FF9D00] flex-shrink-0"></div>
                                             <div>
-                                                <div className="text-sm font-bold text-[var(--theme-text)]">₹{(billingStats.totalRevenue * 0.3).toLocaleString()}</div>
+                                                <div className="text-sm font-bold text-[var(--theme-text)]">₹{(periodRevenue * 0.3).toLocaleString(undefined, {maximumFractionDigits: 2})}</div>
                                                 <div className="text-[9px] text-[var(--theme-text-muted)] uppercase tracking-wider">Consultation</div>
                                             </div>
                                         </div>
@@ -448,9 +510,9 @@ export function ReceptionistProfileView({ username, onPatientSelected }: Recepti
                                 <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
                                     <Users className="w-20 h-20 text-[var(--theme-accent)]" />
                                 </div>
-                                <h3 className="text-sm font-extrabold text-[var(--theme-text-muted)] uppercase tracking-wider mb-3 z-10">Patients Today</h3>
-                                <div className="text-5xl font-bold text-[#FF9D00] z-10 drop-shadow-lg">{stats.scheduled}</div>
-                                <div className="text-xs text-[var(--theme-text-muted)] mt-2 uppercase tracking-widest z-10 font-medium">{new Date().toLocaleDateString('en-US', {weekday:'long', month:'short', day:'numeric'})}</div>
+                                <h3 className="text-sm font-extrabold text-[var(--theme-text-muted)] uppercase tracking-wider mb-3 z-10">Patients {periodLabel}</h3>
+                                <div className="text-5xl font-bold text-[#FF9D00] z-10 drop-shadow-lg">{statsPeriod === 'day' ? stats.scheduled : periodPatientCount}</div>
+                                <div className="text-xs text-[var(--theme-text-muted)] mt-2 uppercase tracking-widest z-10 font-medium">{periodFilteredAppointments.length} appointment{periodFilteredAppointments.length !== 1 ? 's' : ''}</div>
                             </div>
                         </div>
 
@@ -461,6 +523,7 @@ export function ReceptionistProfileView({ username, onPatientSelected }: Recepti
                                 <div className="flex items-center gap-2 mb-2 border-b border-[var(--theme-accent)]/10 pb-1">
                                     <CheckCircle2 className="w-4 h-4 text-[var(--theme-accent)]" />
                                     <h3 className="text-sm font-bold text-[var(--theme-text)] uppercase tracking-wider">Follow Ups</h3>
+                                    <span className="ml-auto text-[10px] text-[var(--theme-text-muted)] font-medium">{periodLabel}</span>
                                 </div>
                                 <div className="flex-1 space-y-1.5 overflow-y-auto scrollbar-hide">
                                     {completedConsultations.length > 0 ? completedConsultations.map((appt: any, i: number) => (
