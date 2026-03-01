@@ -5,9 +5,10 @@
  * Centralized API endpoint management for easy deployment across environments
  */
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string) || 'http://127.0.0.1:8008';
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string) || 'http://3.209.236.78:8000';
+const AI_RAG_BASE_URL = 'http://3.209.236.78:8000';
 
-export { API_BASE_URL };
+export { API_BASE_URL, AI_RAG_BASE_URL };
 
 export const API_ENDPOINTS = {
   // Auth endpoints
@@ -128,9 +129,9 @@ export const API_ENDPOINTS = {
     ORG_USERS: (orgId: string) => `${API_BASE_URL}/organization/${encodeURIComponent(orgId)}/users`,
   },
 
-  // AI Summary endpoints
-  AI_GENERATE_SUMMARY: `${API_BASE_URL}/ai/generate-summary`,
-  AI_SAVE_FEEDBACK: `${API_BASE_URL}/ai/save-feedback`,
+  // AI Summary endpoints (Routed to separate RAG Server)
+  AI_GENERATE_SUMMARY: `${AI_RAG_BASE_URL}/ai/generate-summary`,
+  AI_SAVE_FEEDBACK: `${AI_RAG_BASE_URL}/ai/save-feedback`,
 
   // Admin Data Management
   ADMIN: {

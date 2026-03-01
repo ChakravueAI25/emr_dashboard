@@ -479,20 +479,11 @@ def patient_procedures_timeline(reg_id: str):
     return out
 
 # --- CORS Middleware ---
-# For local development allow common dev origins.
-# Using explicit origins because wildcard "*" is incompatible with allow_credentials=True.
-origins = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:8008",
-    "http://127.0.0.1:8008",
-]
-
+# Allows requests from any origin so it can be accessed from any system.
+# Using wildcard "*" for broad accessibility.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
