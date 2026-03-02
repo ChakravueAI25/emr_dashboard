@@ -1948,6 +1948,15 @@ export default function App() {
               <IndividualBillingView
                 registrationId={lastSavedRegistrationId || activePatientData?.patientDetails?.registrationId}
                 onBack={() => setCurrentView('billing-dashboard')}
+                onPatientSelected={async (patient) => {
+                  // Load patient data (same as clicking Verify in Operations Hub)
+                  // This sets activePatientData and displays Patient Details form
+                  if (patient?.registrationId) {
+                    await loadPatientByRegistration(patient.registrationId, true, true);
+                    // Navigate back to dashboard (ReceptionistPortal) which shows PatientDashboard
+                    setCurrentView('dashboard');
+                  }
+                }}
                 currentUser={currentUsername || 'Admin'}
                 patientData={lastAppointmentPatientData}
               />

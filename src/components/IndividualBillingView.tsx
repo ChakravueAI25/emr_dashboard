@@ -229,6 +229,7 @@ const DEFAULT_SURGERY_BREAKDOWN: Record<string, SurgeryParticular[]> = {
 interface IndividualBillingViewProps {
   registrationId?: string;
   onBack?: () => void;
+  onPatientSelected?: (patient: any) => void;
   currentUser?: string;
   patientData?: {
     _id?: string;
@@ -263,7 +264,7 @@ const COMMON_SERVICES = [
   { id: 'S10', name: 'Advance Fee', category: 'Payment', price: 0 },
 ];
 
-export function IndividualBillingView({ registrationId: initialRegistrationId, onBack, currentUser, patientData: initialPatientData }: IndividualBillingViewProps) {
+export function IndividualBillingView({ registrationId: initialRegistrationId, onBack, onPatientSelected, currentUser, patientData: initialPatientData }: IndividualBillingViewProps) {
   const [patient, setPatient] = useState<any>(null);
   const [items, setItems] = useState<BillingItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -1798,6 +1799,13 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
         const hasSurgeryItems = items.some(item => item.category === 'Surgery');
         if (hasSurgeryItems && status === 'paid') {
           setShowSaveAsPackagePopup(true);
+        } else {
+          // If no surgery items, show patient details after billing
+          if (onPatientSelected && patient) {
+            onPatientSelected(patient);
+          } else if (onBack) {
+            onBack();
+          }
         }
 
         // Notify BillingDashboardView to refresh stats
@@ -1807,8 +1815,6 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
             invoiceId: currentRegId
           }
         }));
-
-        if (onBack && !hasSurgeryItems) onBack();
       } else {
         const errData = await response.json();
         showAlert(`Error: ${errData.detail || 'Failed to process bill'}`);
@@ -1875,7 +1881,12 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
         const data = await packagesRes.json();
         setSavedPackages(data);
       }
-      if (onBack) onBack();
+      // Show patient details after billing is complete
+      if (onPatientSelected && patient) {
+        onPatientSelected(patient);
+      } else if (onBack) {
+        onBack();
+      }
     } catch (err) {
       console.error('Error saving package:', err);
       showAlert(err instanceof Error ? err.message : 'Failed to save package');
@@ -2770,7 +2781,12 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
                   onClick={() => {
                     setShowSaveAsPackagePopup(false);
                     setPackageName('');
-                    if (onBack) onBack();
+                    // Show patient details after billing is complete
+                    if (onPatientSelected && patient) {
+                      onPatientSelected(patient);
+                    } else if (onBack) {
+                      onBack();
+                    }
                   }}
                   disabled={isSavingAsPackage}
                   className="flex-1 bg-[#2a2a2a] text-[#D4A574] py-2 rounded-lg hover:bg-[#3a3a3a] transition disabled:opacity-50 font-medium"
