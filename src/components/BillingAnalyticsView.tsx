@@ -125,8 +125,8 @@ export function BillingAnalyticsView({ onBack }: AnalyticsViewProps) {
     
     return (
       <div className="space-y-6 animate-in fade-in duration-500">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          <Card className="bg-[#0f0f0f] border-[#D4A574]/50">
+        <div className="grid grid-cols-2 gap-4">
+          <Card className="bg-[#0f0f0f] border-[#D4A574]/50 min-h-[140px]">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-[#8B8B8B]">Total Revenue</CardTitle>
               <CreditCard className="h-4 w-4 text-[#D4A574]" />
@@ -137,7 +137,7 @@ export function BillingAnalyticsView({ onBack }: AnalyticsViewProps) {
             </CardContent>
           </Card>
           
-          <Card className="bg-[#0f0f0f] border-[#D4A574]/30">
+          <Card className="bg-[#0f0f0f] border-[#D4A574]/30 min-h-[140px]">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-[#8B8B8B]">OP / Consultation</CardTitle>
               <User className="h-4 w-4 text-blue-500" />
@@ -147,7 +147,7 @@ export function BillingAnalyticsView({ onBack }: AnalyticsViewProps) {
             </CardContent>
           </Card>
 
-          <Card className="bg-[#0f0f0f] border-[#D4A574]/30">
+          <Card className="bg-[#0f0f0f] border-[#D4A574]/30 min-h-[140px]">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-[#8B8B8B]">Surgery</CardTitle>
               <Activity className="h-4 w-4 text-purple-500" />
@@ -157,7 +157,7 @@ export function BillingAnalyticsView({ onBack }: AnalyticsViewProps) {
             </CardContent>
           </Card>
 
-          <Card className="bg-[#0f0f0f] border-[#D4A574]/30">
+          <Card className="bg-[#0f0f0f] border-[#D4A574]/30 min-h-[140px]">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-[#8B8B8B]">Pharmacy</CardTitle>
               <Pill className="h-4 w-4 text-green-500" />
@@ -167,7 +167,7 @@ export function BillingAnalyticsView({ onBack }: AnalyticsViewProps) {
             </CardContent>
           </Card>
 
-          <Card className="bg-[#0f0f0f] border-[#D4A574]/30">
+          <Card className="bg-[#0f0f0f] border-[#D4A574]/30 min-h-[140px]">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-[#8B8B8B]">Lab / Diag</CardTitle>
               <Microscope className="h-4 w-4 text-yellow-500" />

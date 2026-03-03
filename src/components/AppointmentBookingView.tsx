@@ -448,9 +448,9 @@ export function AppointmentBookingView(props: AppointmentBookingViewProps) {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
         {/* Left Column - Booking Flow */}
-        <div className="lg:col-span-8 space-y-10">
+        <div className="space-y-6">
 
           {/* STEP 1: PATIENT SELECTION */}
           <section className="relative">
@@ -628,98 +628,97 @@ export function AppointmentBookingView(props: AppointmentBookingViewProps) {
           </section>
 
           {/* STEP 2: DOCTOR & SCHEDULE */}
-          {selectedPatient && (
-            <section className="space-y-8 animate-in fade-in slide-in-from-bottom-6 duration-500">
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-2xl bg-[var(--theme-bg-secondary)] border border-[var(--theme-accent)] flex items-center justify-center text-[var(--theme-accent)]">
-                  <Calendar className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-bold text-[var(--theme-text)] tracking-tight">Schedule Visit</h2>
-                  <p className="text-[var(--theme-text-muted)] text-[10px] uppercase tracking-widest font-bold">Step 02 / Select Date & Doctor</p>
-                </div>
-              </div>
-
-              <div className="w-full">
-                {/* Date Side */}
-                <div className="space-y-8">
-                  <div className="bg-[var(--theme-bg-secondary)] border border-[var(--theme-accent)] rounded-3xl p-8 shadow-lg h-[180px] flex flex-col justify-between">
-                    <label className="text-[10px] font-bold text-[var(--theme-text-muted)] uppercase tracking-widest mb-6 block">Select Date</label>
-                    <div className="relative">
-                      <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--theme-accent)]" />
-                      <Input
-                        type="date"
-                        value={appointmentDate}
-                        onChange={(e) => setAppointmentDate(e.target.value)}
-                        min={getMinDate()}
-                        className="!pl-16 h-14 bg-[var(--theme-bg-tertiary)] border-[var(--theme-accent)] rounded-2xl focus:border-[var(--theme-accent)] text-[var(--theme-text)] focus:ring-0 text-lg font-light uppercase"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Doctor List */}
-                  <div className="bg-[var(--theme-bg-secondary)] border border-[var(--theme-accent)] rounded-3xl p-8 shadow-lg flex flex-col h-[500px]">
-                    <label className="text-[10px] font-bold text-[var(--theme-text-muted)] uppercase tracking-widest mb-6 block">Available Specialist</label>
-                    <div className="space-y-4 flex-1 overflow-hidden">
-                      {doctors.slice((currentDoctorPage - 1) * doctorsPerPage, currentDoctorPage * doctorsPerPage).map((doctor) => (
-                        <button
-                          key={doctor.id}
-                          onClick={() => setSelectedDoctor(doctor)}
-                          className={`w-full text-left p-5 rounded-2xl border-2 transition-all duration-300 relative group ${selectedDoctor?.id === doctor.id
-                            ? 'border-[var(--theme-accent)] bg-[var(--theme-accent)]/5'
-                            : 'border-[var(--theme-accent)] bg-[var(--theme-bg-tertiary)] hover:border-[var(--theme-accent)]'
-                            }`}
-                        >
-                          {selectedDoctor?.id === doctor.id && (
-                            <div className="absolute right-4 top-1/2 -translate-y-1/2 w-6 h-6 bg-[var(--theme-accent)] rounded-full flex items-center justify-center force-text-white">
-                              <CheckCircle className="w-4 h-4" />
-                            </div>
-                          )}
-                          <div className="flex items-center gap-4 pr-10">
-                            <div className={`p-2 rounded-xl transition-colors flex-shrink-0 ${selectedDoctor?.id === doctor.id ? 'bg-[var(--theme-accent)] force-text-white' : 'bg-[var(--theme-bg-secondary)] text-[var(--theme-text-muted)] group-hover:text-[var(--theme-accent)]'}`}>
-                              <Stethoscope className="w-4 h-4" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-bold text-[var(--theme-text)] break-words">{doctor.name}</p>
-                              <p className="text-[10px] text-[var(--theme-text-muted)] uppercase tracking-wider break-words">{doctor.specialization}</p>
-                            </div>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                    {/* Pagination Controls */}
-                    {doctors.length > doctorsPerPage && (
-                      <div className="flex items-center justify-end gap-2 mt-4 pt-4 border-t border-[var(--theme-accent)]/20">
-                        <button
-                          onClick={() => setCurrentDoctorPage(prev => Math.max(1, prev - 1))}
-                          disabled={currentDoctorPage === 1}
-                          className="p-2 rounded-xl bg-[var(--theme-bg-tertiary)] border border-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                        >
-                          <ChevronLeft className="w-4 h-4 text-[var(--theme-accent)]" />
-                        </button>
-                        <span className="text-xs text-[var(--theme-text-muted)] font-mono min-w-[60px] text-center">
-                          {currentDoctorPage} / {Math.ceil(doctors.length / doctorsPerPage)}
-                        </span>
-                        <button
-                          onClick={() => setCurrentDoctorPage(prev => Math.min(Math.ceil(doctors.length / doctorsPerPage), prev + 1))}
-                          disabled={currentDoctorPage >= Math.ceil(doctors.length / doctorsPerPage)}
-                          className="p-2 rounded-xl bg-[var(--theme-bg-tertiary)] border border-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                        >
-                          <ChevronRight className="w-4 h-4 text-[var(--theme-accent)]" />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </section>
-          )}
         </div>
+      </div>
 
-        {/* Right Column - Booking Summary (The Ticket) */}
-        {selectedPatient && (
-          <div className="lg:col-span-4 lg:block">
-            <div className="sticky top-0 space-y-6">
+      {/* STEP 2: SEPARATE FULL-WIDTH SECTION */}
+      {selectedPatient && (
+        <section className="w-full animate-in fade-in slide-in-from-bottom-6 duration-500 bg-[var(--theme-bg)] rounded-3xl p-8 shadow-xl border border-[var(--theme-accent)]/10">
+          <div className="flex items-center gap-4 mb-8">
+            <div className="w-10 h-10 rounded-2xl bg-[var(--theme-accent)]/10 border border-[var(--theme-accent)] flex items-center justify-center text-[var(--theme-text)]">
+              <Calendar className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-[var(--theme-text)] tracking-tight">Schedule Visit</h2>
+              <p className="text-[var(--theme-text-muted)] text-[10px] uppercase tracking-widest font-bold">Step 02 / Select Date & Doctor</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Left Half: Date & Doctor (Takes up 2/3 space) */}
+            <div className="space-y-6 lg:col-span-2">
+              {/* Date Picker */}
+              <div className="bg-[var(----theme-accent)] border border-[var(--theme-accent)] rounded-3xl p-8 shadow-lg h-[180px] flex flex-col justify-between">
+                <label className="text-[10px] font-bold text-[var(--theme-text-muted)] uppercase tracking-widest mb-6 block">Select Date</label>
+                <div className="relative">
+                  <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--theme-accent)]" />
+                  <Input
+                    type="date"
+                    value={appointmentDate}
+                    onChange={(e) => setAppointmentDate(e.target.value)}
+                    min={getMinDate()}
+                    className="!pl-16 h-14 bg-[var(--theme-bg-tertiary)] border-[var(--theme-accent)] rounded-2xl focus:border-[var(--theme-accent)] text-[var(--theme-text)] focus:ring-0 text-lg font-light uppercase"
+                  />
+                </div>
+              </div>
+              
+              {/* Doctor List */}
+              <div className="bg-[var(--theme-bg-secondary)] border border-[var(--theme-accent)] rounded-3xl p-8 shadow-lg flex flex-col h-[500px]">
+                <label className="text-[10px] font-bold text-[var(--theme-text-muted)] uppercase tracking-widest mb-6 block">Available Specialist</label>
+                <div className="space-y-4 flex-1 overflow-hidden">
+                  {doctors.slice((currentDoctorPage - 1) * doctorsPerPage, currentDoctorPage * doctorsPerPage).map((doctor) => (
+                    <button
+                      key={doctor.id}
+                      onClick={() => setSelectedDoctor(doctor)}
+                      className={`w-full text-left p-5 rounded-2xl border-2 transition-all duration-300 relative group ${selectedDoctor?.id === doctor.id
+                        ? 'border-[var(--theme-accent)] bg-[var(--theme-accent)]/5'
+                        : 'border-[var(--theme-accent)] bg-[var(--theme-bg-tertiary)] hover:border-[var(--theme-accent)]'
+                        }`}
+                    >
+                      {selectedDoctor?.id === doctor.id && (
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2 w-6 h-6 bg-[var(--theme-accent)] rounded-full flex items-center justify-center force-text-white">
+                          <CheckCircle className="w-4 h-4" />
+                        </div>
+                      )}
+                      <div className="flex items-center gap-4 pr-10">
+                        <div className={`p-2 rounded-xl transition-colors flex-shrink-0 ${selectedDoctor?.id === doctor.id ? 'bg-[var(--theme-accent)] force-text-white' : 'bg-[var(--theme-bg-secondary)] text-[var(--theme-text-muted)] group-hover:text-[var(--theme-accent)]'}`}>
+                          <Stethoscope className="w-4 h-4" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold text-[var(--theme-text)] break-words">{doctor.name}</p>
+                          <p className="text-[10px] text-[var(--theme-text-muted)] uppercase tracking-wider break-words">{doctor.specialization}</p>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+                {/* Pagination Controls */}
+                {doctors.length > doctorsPerPage && (
+                  <div className="flex items-center justify-end gap-2 mt-4 pt-4 border-t border-[var(--theme-accent)]/20">
+                    <button
+                      onClick={() => setCurrentDoctorPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentDoctorPage === 1}
+                      className="p-2 rounded-xl bg-[var(--theme-bg-tertiary)] border border-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                    >
+                      <ChevronLeft className="w-4 h-4 text-[var(--theme-accent)]" />
+                    </button>
+                    <span className="text-xs text-[var(--theme-text-muted)] font-mono min-w-[60px] text-center">
+                      {currentDoctorPage} / {Math.ceil(doctors.length / doctorsPerPage)}
+                    </span>
+                    <button
+                      onClick={() => setCurrentDoctorPage(prev => Math.min(Math.ceil(doctors.length / doctorsPerPage), prev + 1))}
+                      disabled={currentDoctorPage >= Math.ceil(doctors.length / doctorsPerPage)}
+                      className="p-2 rounded-xl bg-[var(--theme-bg-tertiary)] border border-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                    >
+                      <ChevronRight className="w-4 h-4 text-[var(--theme-accent)]" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Right Half: Booking Summary (Takes up 1/3 space) */}
+            <div className="sticky top-8 space-y-6 lg:col-span-1 h-fit">
               <div className="bg-[var(--theme-bg-secondary)] border border-[var(--theme-accent)] rounded-3xl overflow-hidden shadow-lg flex flex-col relative h-[680px]">
                 {/* Ticket Top */}
                 <div className="bg-[var(--theme-bg-tertiary)] p-8 border-b border-dashed border-[var(--theme-accent)] relative">
@@ -842,8 +841,8 @@ export function AppointmentBookingView(props: AppointmentBookingViewProps) {
               </div>
             </div>
           </div>
-        )}
-      </div>
+        </section>
+      )}
     </div>
   );
 }
