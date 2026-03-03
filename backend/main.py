@@ -306,7 +306,11 @@ def patient_iop_trend(reg_id: str, limit: int = 12):
 
     from datetime import datetime
 
-    p = patient_collection.find_one({"registrationId": reg_id})
+    # Optimization: Fetch only necessary fields (encounters, visits) to reduce payload size
+    p = patient_collection.find_one(
+        {"registrationId": reg_id}, 
+        {"encounters": 1, "visits": 1, "_id": 0}
+    )
     if not p:
         return []
 
@@ -383,7 +387,11 @@ def patient_visual_acuity(reg_id: str, limit: int = 12):
     """Return patient's visual acuity entries.
     Response: [{date: 'YYYY-MM-DD', od: <num>|null, os: <num>|null, odText: '', osText: ''}, ...]
     """
-    p = patient_collection.find_one({"registrationId": reg_id})
+    # Optimization: Fetch only encounters
+    p = patient_collection.find_one(
+        {"registrationId": reg_id}, 
+        {"encounters": 1, "_id": 0}
+    )
     if not p:
         return []
     encs = p.get("encounters") or []
@@ -414,7 +422,11 @@ def patient_visits(reg_id: str):
     Count unique dates only (one visit per day, regardless of how many encounters).
     Response: [{date: 'YYYY-MM-DD', visits: 1}, ...]
     """
-    p = patient_collection.find_one({"registrationId": reg_id})
+    # Optimization: Fetch only encounters
+    p = patient_collection.find_one(
+        {"registrationId": reg_id}, 
+        {"encounters": 1, "_id": 0}
+    )
     if not p:
         return []
     encs = p.get("encounters") or []
@@ -436,7 +448,11 @@ def patient_visits(reg_id: str):
 def patient_iop_distribution(reg_id: str):
     """Return raw IOP readings for histogramming: {iops: [numbers]}
     """
-    p = patient_collection.find_one({"registrationId": reg_id})
+    # Optimization: Fetch only encounters
+    p = patient_collection.find_one(
+        {"registrationId": reg_id}, 
+        {"encounters": 1, "_id": 0}
+    )
     if not p:
         return {"iops": []}
     encs = p.get("encounters") or []
@@ -459,7 +475,11 @@ def patient_procedures_timeline(reg_id: str):
     """Return procedures/interventions timeline for patient.
     Response: [{date: 'YYYY-MM-DD', procedures: [<names>]}, ...]
     """
-    p = patient_collection.find_one({"registrationId": reg_id})
+    # Optimization: Fetch only encounters
+    p = patient_collection.find_one(
+        {"registrationId": reg_id}, 
+        {"encounters": 1, "_id": 0}
+    )
     if not p:
         return []
     encs = p.get("encounters") or []
@@ -1352,9 +1372,10 @@ async def create_appointment(appointment_data: dict = Body(...)):
 
 
 @app.get("/appointments")
-async def get_all_appointments():
+async def get_all_appointments(skip: int = 0, limit: int = 50):
     """
-    Get all appointments from MongoDB.
+    Get all appointments from MongoDB with pagination.
+    Returns newest appointments first by default.
     """
     try:
         # Ensure collection exists
@@ -1362,18 +1383,28 @@ async def get_all_appointments():
             return {
                 "status": "success",
                 "totalAppointments": 0,
-                "appointments": []
+                "appointments": [],
+                "skip": skip,
+                "limit": limit
             }
         
         appointments_collection = db["appointments"]
-        appointments = list(appointments_collection.find())
         
-        print(f"✓ Fetched {len(appointments)} appointments")
+        # Get total count for pagination metadata
+        total_count = appointments_collection.count_documents({})
+        
+        # Fetch paginated results, sorted by creation time (newest first)
+        cursor = appointments_collection.find().sort("createdAt", -1).skip(skip).limit(limit)
+        appointments = list(cursor)
+        
+        print(f"✓ Fetched {len(appointments)} appointments (skip={skip}, limit={limit}, total={total_count})")
         
         return {
             "status": "success",
-            "totalAppointments": len(appointments),
-            "appointments": [sanitize(apt) for apt in appointments]
+            "totalAppointments": total_count,
+            "appointments": [sanitize(apt) for apt in appointments],
+            "skip": skip,
+            "limit": limit
         }
     except Exception as e:
         print(f"✗ Error fetching appointments: {str(e)}")

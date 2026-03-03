@@ -20,7 +20,9 @@ if not MONGO_URI or not DATABASE_NAME:
 
 # Use certifi for SSL certificates only for Atlas connections to avoid handshake errors on Windows
 # Local MongoDB usually doesn't use SSL by default
-client_kwargs = {}
+# Increase connection pool size to handle higher load (default is 100)
+client_kwargs = {"maxPoolSize": 200}
+
 if "mongodb.net" in MONGO_URI or "mongodb+srv://" in MONGO_URI:
     client_kwargs["tlsCAFile"] = certifi.where()
 
