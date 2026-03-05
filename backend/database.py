@@ -1,5 +1,6 @@
 import os
 from pymongo import MongoClient
+from motor.motor_asyncio import AsyncIOMotorClient
 import certifi
 from dotenv import load_dotenv
 
@@ -43,3 +44,11 @@ initial_surgery_bills_collection = db["initial_surgery_bills"]
 final_surgery_bills_collection = db["final_surgery_bills"]
 slit_lamp_collection = db["slit_lamp_images"]
 doctor_feedback_collection = db["doctor_feedback"]
+
+# Async Client (Motor) for non-blocking I/O
+async_client = AsyncIOMotorClient(MONGO_URI, **client_kwargs)
+async_db = async_client[DATABASE_NAME]
+
+# Async Collections (Lazy load as needed or define here)
+async_patient_collection = async_db["patients"]
+async_patient_queue_collection = async_db["patient_queue"]

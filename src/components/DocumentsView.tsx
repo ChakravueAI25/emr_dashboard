@@ -268,7 +268,7 @@ export function DocumentsView({ patientRegistrationId, patientName: initialPatie
         }
 
         // Fetch documents
-        const resp = await fetch(`http://localhost:8008/patients/${encodeURIComponent(patientRegistrationId)}/documents`);
+        const resp = await fetch(API_ENDPOINTS.PATIENT_DOCUMENTS(patientRegistrationId));
         if (resp.ok) {
           const json = await resp.json();
           const docs = (json.documents || []).map((d: any) => ({
@@ -374,8 +374,8 @@ export function DocumentsView({ patientRegistrationId, patientName: initialPatie
               <User className={`w-7 h-7 transition-colors duration-300 ${isLight ? 'text-[#222]' : 'text-[#D4A574]'}`} />
             </div>
             <div>
-              <span className={`block text-lg font-bold transition-colors duration-300 ${isLight ? 'text-[#753d3e]' : 'text-[#D4A574]'}`}>Selection Required</span>
-              <span className={`block text-sm font-medium transition-colors duration-300 ${isLight ? 'text-[#666]' : 'text-[#aaa]'}`}>SELECT A PATIENT FROM ANY QUEUE TO START UPLOADING</span>
+              <span className={`block text-lg font-bold transition-colors duration-300 ${isLight ? 'text-[#753d3e]' : 'text-[#D4A574]'}`}>{patientName || 'Unknown Patient'}</span>
+              <span className={`block text-sm font-medium transition-colors duration-300 ${isLight ? 'text-[#666]' : 'text-[#aaa]'}`}>ID: {patientRegistrationId}</span>
             </div>
           </div>
         ) : (

@@ -29,7 +29,7 @@ export const EditableText = forwardRef<EditableTextHandle, EditableTextProps>(({
   disableEval = false,
 }, ref) => {
   const [isEditing, setIsEditing] = useState(false);
-  const [tempValue, setTempValue] = useState<string>(value != null ? String(value) : '');
+  const [tempValue, setTempValue] = useState<string>(value != null && typeof (value as any) !== 'object' ? String(value) : '');
   const inputRef = useRef<HTMLInputElement>(null);
 
   useImperativeHandle(ref, () => ({
@@ -41,7 +41,7 @@ export const EditableText = forwardRef<EditableTextHandle, EditableTextProps>(({
   }));
 
   useEffect(() => {
-    const valStr = value != null ? String(value) : '';
+    const valStr = value != null && typeof (value as any) !== 'object' ? String(value) : '';
     setTempValue(valStr);
     // Evaluate the current value even when not editing
     if (!disableEval && valStr.trim().length > 0) {
@@ -226,13 +226,13 @@ export const EditableText = forwardRef<EditableTextHandle, EditableTextProps>(({
     return (
       <div
         className={`inline-flex items-center ${justifyClass} w-full ${className}`}
-        title={severityMessage || (value || placeholder)}
+        title={severityMessage || ((typeof (value as any) === 'object' && value !== null ? '' : value) || placeholder)}
       >
         {/* severity dot visible when not editing too */}
         {severity && (
           <span className={`w-2.5 h-2.5 rounded-full mr-1 flex-shrink-0 ${severity === 'red' ? 'bg-red-500' : severity === 'yellow' ? 'bg-yellow-400' : 'bg-green-500'}`} />
         )}
-        {type === 'password' ? (value ? '•'.repeat(Math.max(3, value.length)) : placeholder) : (value || placeholder)}
+        {type === 'password' ? (value && typeof (value as any) === 'string' ? '•'.repeat(Math.max(3, (value as string).length)) : placeholder) : ((typeof (value as any) === 'object' && value !== null ? '' : value) || placeholder)}
       </div>
     );
   }
@@ -264,7 +264,7 @@ export const EditableText = forwardRef<EditableTextHandle, EditableTextProps>(({
           />
         ) : (
           <span className={`cursor-pointer hover:text-[#D4A574] truncate flex-1 h-[24px] leading-[24px] ${alignLeft ? 'text-left' : alignRight ? 'text-right' : 'text-center'}`}>
-            {value || placeholder}
+            {(typeof (value as any) === 'object' && value !== null ? '' : value) || placeholder}
           </span>
         )}
       </div>

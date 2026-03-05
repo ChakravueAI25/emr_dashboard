@@ -23,6 +23,8 @@ from database import (
     patient_collection, 
     user_collection, 
     db, 
+    async_patient_collection, # Added async collections
+    async_patient_queue_collection,
     pharmacy_collection, 
     pharmacy_billing_collection, 
     coupon_quota_collection,
@@ -296,7 +298,7 @@ def _parse_encounter_date(enc: dict):
 
 
 @app.get("/api/analytics/patient/{reg_id}/iop-trend")
-def patient_iop_trend(reg_id: str, limit: int = 12):
+async def patient_iop_trend(reg_id: str, limit: int = 12):
     """
     Return patient's IOP trend.
     Supports BOTH:
@@ -307,7 +309,7 @@ def patient_iop_trend(reg_id: str, limit: int = 12):
     from datetime import datetime
 
     # Optimization: Fetch only necessary fields (encounters, visits) to reduce payload size
-    p = patient_collection.find_one(
+    p = await async_patient_collection.find_one(
         {"registrationId": reg_id}, 
         {"encounters": 1, "visits": 1, "_id": 0}
     )
@@ -383,12 +385,12 @@ def patient_iop_trend(reg_id: str, limit: int = 12):
 
 
 @app.get("/api/analytics/patient/{reg_id}/visual-acuity")
-def patient_visual_acuity(reg_id: str, limit: int = 12):
+async def patient_visual_acuity(reg_id: str, limit: int = 12):
     """Return patient's visual acuity entries.
     Response: [{date: 'YYYY-MM-DD', od: <num>|null, os: <num>|null, odText: '', osText: ''}, ...]
     """
-    # Optimization: Fetch only encounters
-    p = patient_collection.find_one(
+    # Async Optimization: Non-blocking find_one
+    p = await async_patient_collection.find_one(
         {"registrationId": reg_id}, 
         {"encounters": 1, "_id": 0}
     )
@@ -417,13 +419,13 @@ def patient_visual_acuity(reg_id: str, limit: int = 12):
 
 
 @app.get("/api/analytics/patient/{reg_id}/visits")
-def patient_visits(reg_id: str):
+async def patient_visits(reg_id: str):
     """Return timeline of the patient's visits (dates).
     Count unique dates only (one visit per day, regardless of how many encounters).
     Response: [{date: 'YYYY-MM-DD', visits: 1}, ...]
     """
-    # Optimization: Fetch only encounters
-    p = patient_collection.find_one(
+    # Async Optimization: Non-blocking find_one
+    p = await async_patient_collection.find_one(
         {"registrationId": reg_id}, 
         {"encounters": 1, "_id": 0}
     )
@@ -445,11 +447,11 @@ def patient_visits(reg_id: str):
 
 
 @app.get("/api/analytics/patient/{reg_id}/iop-distribution")
-def patient_iop_distribution(reg_id: str):
+async def patient_iop_distribution(reg_id: str):
     """Return raw IOP readings for histogramming: {iops: [numbers]}
     """
     # Optimization: Fetch only encounters
-    p = patient_collection.find_one(
+    p = await async_patient_collection.find_one(
         {"registrationId": reg_id}, 
         {"encounters": 1, "_id": 0}
     )
@@ -471,12 +473,12 @@ def patient_iop_distribution(reg_id: str):
 
 
 @app.get("/api/analytics/patient/{reg_id}/procedures")
-def patient_procedures_timeline(reg_id: str):
+async def patient_procedures_timeline(reg_id: str):
     """Return procedures/interventions timeline for patient.
     Response: [{date: 'YYYY-MM-DD', procedures: [<names>]}, ...]
     """
     # Optimization: Fetch only encounters
-    p = patient_collection.find_one(
+    p = await async_patient_collection.find_one(
         {"registrationId": reg_id}, 
         {"encounters": 1, "_id": 0}
     )
