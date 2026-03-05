@@ -173,6 +173,10 @@ export function UserLoginView({ onAuthSuccess, onNavigate }: { onAuthSuccess?: A
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
 
 
+              {/* Hidden dummy inputs to prevent browser autofill on real fields */}
+              <input type="text" style={{ display: 'none' }} autoComplete="username" aria-hidden="true" tabIndex={-1} readOnly />
+              <input type="password" style={{ display: 'none' }} autoComplete="current-password" aria-hidden="true" tabIndex={-1} readOnly />
+
               {/* Username */}
               <div style={{ transition: 'all 300ms' }}>
                 <label style={{ color: 'var(--theme-text-muted)', display: 'block', marginBottom: '0.25rem', fontSize: '0.75rem', fontWeight: 500 }}>
@@ -184,6 +188,7 @@ export function UserLoginView({ onAuthSuccess, onNavigate }: { onAuthSuccess?: A
                     type="text"
                     value={formData.username}
                     onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                    autoComplete="new-password"
                     autoFocus
                     style={{
                       width: '100%',
@@ -300,6 +305,7 @@ export function UserLoginView({ onAuthSuccess, onNavigate }: { onAuthSuccess?: A
                     type={showPassword ? 'text' : 'password'}
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    autoComplete="new-password"
                     style={{
                       width: '100%',
                       paddingLeft: '2.5rem',
