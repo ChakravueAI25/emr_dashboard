@@ -30,6 +30,8 @@ import { DoctorPortal } from './components/DoctorPortal';
 import { UnifiedOperationsHub } from './components/UnifiedOperationsHub';
 import { PharmacyBillingView } from './components/PharmacyBillingView';
 import { MedicineManagementView } from './components/MedicineManagementView';
+import { InvoiceUploadView } from './components/InvoiceUploadView';
+import { SummaryOfInvoiceView } from './components/SummaryOfInvoiceView';
 import { PatientHistoryView } from './components/PatientHistoryView';
 import { DataRepairView } from './components/DataRepairView';
 import { ProfileSettings } from './components/ProfileSettings';
@@ -147,11 +149,19 @@ export default function App() {
   const [currentUsername, setCurrentUsername] = useState<string | null>(() => localStorage.getItem('current_username'));
 
   // Default to the login view, or restore from storage
-  const [currentView, setCurrentView] = useState<'dashboard' | 'analytics' | 'billing' | 'billing-dashboard' | 'individual-billing' | 'login' | 'documents' | 'notifications' | 'settings' | 'profile-settings' | 'patients' | 'appointments' | 'appointment-queue' | 'reception-queue' | 'opd-queue' | 'doctor-queue' | 'patient-history' | 'data-repair' | 'pharmacy-billing' | 'medicine-management' | 'payment-setup' | 'organization-login' | 'admin-dashboard' | 'admin-data-management' | 'telemedicine' | 'reception-patient-view' | 'doctor-profile' | 'surgical-record' | 'discharge-summary'>(
+  const [currentView, setCurrentView] = useState<'dashboard' | 'analytics' | 'billing' | 'billing-dashboard' | 'individual-billing' | 'login' | 'documents' | 'notifications' | 'settings' | 'profile-settings' | 'patients' | 'appointments' | 'appointment-queue' | 'reception-queue' | 'opd-queue' | 'doctor-queue' | 'patient-history' | 'data-repair' | 'pharmacy-billing' | 'medicine-management' | 'invoice-upload' | 'grn-history' | 'payment-setup' | 'organization-login' | 'admin-dashboard' | 'admin-data-management' | 'telemedicine' | 'reception-patient-view' | 'doctor-profile' | 'surgical-record' | 'discharge-summary'>(
 
     () => (localStorage.getItem('current_view') as any) || 'login'
   );
   const [surgicalPrefill, setSurgicalPrefill] = useState<SurgicalPrefill | null>(null);
+  const [grnEntries, setGrnEntries] = useState<import('./components/SummaryOfInvoiceView').GrnEntry[]>(() => {
+    try { return JSON.parse(localStorage.getItem('grn_entries') || '[]'); } catch { return []; }
+  });
+
+  // Persist grnEntries to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('grn_entries', JSON.stringify(grnEntries));
+  }, [grnEntries]);
 
   // Persistence Effect
   useEffect(() => {
@@ -2021,7 +2031,11 @@ export default function App() {
                 patientName={activePatientData?.patientDetails?.name}
               />
             ) : currentView === 'medicine-management' ? (
-              <MedicineManagementView />
+              <MedicineManagementView onNavigate={(view) => setCurrentView(view)} />
+            ) : currentView === 'invoice-upload' ? (
+              <InvoiceUploadView onBack={() => setCurrentView('medicine-management')} onNavigate={(v) => setCurrentView(v)} onSubmit={(entry) => setGrnEntries(prev => [entry, ...prev])} createdBy={currentUsername || 'Staff'} />
+            ) : currentView === 'grn-history' ? (
+              <SummaryOfInvoiceView onBack={() => setCurrentView('invoice-upload')} entries={grnEntries} onDelete={(id) => setGrnEntries(prev => prev.filter(e => e.id !== id))} currentUser={currentUsername || 'Staff'} />
             ) : currentView === 'patient-history' ? (
               <PatientHistoryView />
             ) : currentView === 'data-repair' ? (

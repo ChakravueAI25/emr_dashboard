@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Minus, Trash2, Edit2, Save, X, AlertCircle, Upload } from 'lucide-react';
+import { Plus, Minus, Trash2, Edit2, Save, X, AlertCircle, Upload, FileText } from 'lucide-react';
 import API_ENDPOINTS, { API_BASE_URL } from '../config/api';
 
 interface Medicine {
@@ -26,7 +26,7 @@ interface Medicine {
   isExisting?: boolean;
 }
 
-export function MedicineManagementView() {
+export function MedicineManagementView({ onNavigate }: { onNavigate?: (view: 'invoice-upload') => void }) {
   const [medicines, setMedicines] = useState<Medicine[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -549,6 +549,13 @@ export function MedicineManagementView() {
             <Upload size={20} />
             <span>{isProcessingInvoice ? 'Processing...' : 'Upload Invoice'}</span>
           </label>
+          <button
+            onClick={() => onNavigate?.('invoice-upload')}
+            className="px-6 py-2 bg-[#1E1C24] text-[#F5F3EF] border border-[#262028] rounded-xl hover:bg-[#262028] transition-all flex items-center gap-2"
+          >
+            <FileText size={20} />
+            <span>Add Invoice</span>
+          </button>
         </div>
 
         {/* Imported Medicines Review Section */}
