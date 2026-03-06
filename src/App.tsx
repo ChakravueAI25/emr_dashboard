@@ -41,6 +41,9 @@ import { OrganizationLoginView } from './components/OrganizationLoginView';
 import { AdminDashboardView } from './components/AdminDashboardView';
 import { AdminDataManagementView } from './components/AdminDataManagementView';
 import { TelemedicineView } from './components/TelemedicineView';
+import { SurgicalRecordView } from './components/SurgicalRecordView';
+import type { SurgicalPrefill } from './components/SurgicalRecordView';
+import { DischargeSummaryView } from './components/DischargeSummaryView';
 import { ArrowLeft, Search, Bell, Settings, User, Save, UserPlus, CalendarPlus, Layers, Eye, Stethoscope, CheckCircle, ClipboardList, UserCircle, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ImageWithFallback } from './components/figma/ImageWithFallback';
 import { PatientData, UserRole, ROLES, CARD_ACCESS } from './components/patient';
@@ -144,9 +147,11 @@ export default function App() {
   const [currentUsername, setCurrentUsername] = useState<string | null>(() => localStorage.getItem('current_username'));
 
   // Default to the login view, or restore from storage
-  const [currentView, setCurrentView] = useState<'dashboard' | 'analytics' | 'billing' | 'billing-dashboard' | 'individual-billing' | 'login' | 'documents' | 'notifications' | 'settings' | 'profile-settings' | 'patients' | 'appointments' | 'appointment-queue' | 'reception-queue' | 'opd-queue' | 'doctor-queue' | 'patient-history' | 'data-repair' | 'pharmacy-billing' | 'medicine-management' | 'payment-setup' | 'organization-login' | 'admin-dashboard' | 'admin-data-management' | 'telemedicine' | 'reception-patient-view' | 'doctor-profile'>(
+  const [currentView, setCurrentView] = useState<'dashboard' | 'analytics' | 'billing' | 'billing-dashboard' | 'individual-billing' | 'login' | 'documents' | 'notifications' | 'settings' | 'profile-settings' | 'patients' | 'appointments' | 'appointment-queue' | 'reception-queue' | 'opd-queue' | 'doctor-queue' | 'patient-history' | 'data-repair' | 'pharmacy-billing' | 'medicine-management' | 'payment-setup' | 'organization-login' | 'admin-dashboard' | 'admin-data-management' | 'telemedicine' | 'reception-patient-view' | 'doctor-profile' | 'surgical-record' | 'discharge-summary'>(
+
     () => (localStorage.getItem('current_view') as any) || 'login'
   );
+  const [surgicalPrefill, setSurgicalPrefill] = useState<SurgicalPrefill | null>(null);
 
   // Persistence Effect
   useEffect(() => {
@@ -2078,6 +2083,16 @@ export default function App() {
                   }
                 }}
               />
+            ) : currentView === 'surgical-record' ? (
+              <SurgicalRecordView
+                onNavigate={view => setCurrentView(view as any)}
+                onDischargeSummary={(prefill) => {
+                  setSurgicalPrefill(prefill);
+                  setCurrentView('discharge-summary');
+                }}
+              />
+            ) : currentView === 'discharge-summary' ? (
+              <DischargeSummaryView onBack={() => setCurrentView('surgical-record')} prefill={surgicalPrefill ?? undefined} />
             ) : (
               <NotificationsView />
             )}

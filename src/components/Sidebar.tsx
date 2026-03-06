@@ -2,8 +2,8 @@
 import { useIsLightTheme } from '../hooks/useTheme';
 
 interface SidebarProps {
-  currentView: 'dashboard' | 'analytics' | 'billing' | 'billing-dashboard' | 'individual-billing' | 'login' | 'documents' | 'notifications' | 'settings' | 'profile-settings' | 'patients' | 'appointments' | 'appointment-queue' | 'reception-queue' | 'opd-queue' | 'doctor-queue' | 'patient-history' | 'data-repair' | 'pharmacy-billing' | 'medicine-management' | 'payment-setup' | 'organization-login' | 'admin-dashboard' | 'admin-data-management' | 'telemedicine' | 'reception-patient-view' | 'doctor-profile';
-  onViewChange: (view: 'dashboard' | 'analytics' | 'billing' | 'billing-dashboard' | 'individual-billing' | 'login' | 'documents' | 'notifications' | 'settings' | 'profile-settings' | 'patients' | 'appointments' | 'appointment-queue' | 'reception-queue' | 'opd-queue' | 'doctor-queue' | 'patient-history' | 'data-repair' | 'pharmacy-billing' | 'medicine-management' | 'payment-setup' | 'organization-login' | 'admin-dashboard' | 'admin-data-management' | 'telemedicine' | 'reception-patient-view' | 'doctor-profile') => void;
+  currentView: 'dashboard' | 'analytics' | 'billing' | 'billing-dashboard' | 'individual-billing' | 'login' | 'documents' | 'notifications' | 'settings' | 'profile-settings' | 'patients' | 'appointments' | 'appointment-queue' | 'reception-queue' | 'opd-queue' | 'doctor-queue' | 'patient-history' | 'data-repair' | 'pharmacy-billing' | 'medicine-management' | 'payment-setup' | 'organization-login' | 'admin-dashboard' | 'admin-data-management' | 'telemedicine' | 'reception-patient-view' | 'doctor-profile' | 'surgical-record' | 'discharge-summary';
+  onViewChange: (view: 'dashboard' | 'analytics' | 'billing' | 'billing-dashboard' | 'individual-billing' | 'login' | 'documents' | 'notifications' | 'settings' | 'profile-settings' | 'patients' | 'appointments' | 'appointment-queue' | 'reception-queue' | 'opd-queue' | 'doctor-queue' | 'patient-history' | 'data-repair' | 'pharmacy-billing' | 'medicine-management' | 'payment-setup' | 'organization-login' | 'admin-dashboard' | 'admin-data-management' | 'telemedicine' | 'reception-patient-view' | 'doctor-profile' | 'surgical-record' | 'discharge-summary') => void;
   userRole?: string;
   notificationCount?: number;
 }
@@ -310,6 +310,25 @@ export function Sidebar({ currentView, onViewChange, userRole, notificationCount
             Patient History
           </div>
         </button>
+
+        {!isReception && (
+        <button
+          onClick={() => onViewChange('surgical-record')}
+          className={`group relative w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-500 ease-out ${currentView === 'surgical-record'
+            ? 'bg-gradient-to-br from-[var(--theme-accent)] to-[var(--theme-accent-hover)] text-[var(--theme-bg)] shadow-lg shadow-[var(--theme-accent)]/30'
+            : 'text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg-tertiary)] hover:text-[var(--theme-accent)] hover:scale-105'
+            }`}
+          title="Surgical Record"
+        >
+          <ClipboardList
+            style={{ color: currentView === 'surgical-record' ? 'var(--theme-bg)' : inactiveCol }}
+            className="w-5 h-5 transition-all duration-500 ease-out group-hover:scale-110"
+          />
+          <div className="absolute left-full ml-3 px-3 py-1.5 bg-[var(--theme-bg-secondary)] text-[var(--theme-accent)] text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none whitespace-nowrap border border-[var(--theme-accent)]">
+            Surgical Record
+          </div>
+        </button>
+        )}
 
         <button
           onClick={() => onViewChange('data-repair')}

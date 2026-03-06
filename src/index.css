@@ -2610,7 +2610,8 @@
   color: #ffffff !important;
 }
 
-.dark input::placeholder {
+.dark input::placeholder,
+.dark textarea::placeholder {
   color: #888888 !important;
 }
 
