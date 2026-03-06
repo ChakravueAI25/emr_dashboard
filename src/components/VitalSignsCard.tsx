@@ -1,4 +1,4 @@
-﻿import { useRef } from 'react';
+﻿import { useRef, useState } from 'react';
 import { EditableText, EditableTextHandle } from './EditableText';
 import { ExpandableCard } from './ExpandableCard';
 import { FileText, Clock, AlertCircle, Plus, X, Eye, ChevronDown, CheckCircle } from 'lucide-react';
@@ -76,6 +76,9 @@ export function VitalSignsCard({
   const history = data?.history ?? { severity: '', onset: '', aggravating: '', relieving: '', associated: '' };
 
   const historyRef = useRef<EditableTextHandle>(null);
+  const [showOtherInput, setShowOtherInput] = useState(false);
+  const [otherComplaint, setOtherComplaint] = useState('');
+  const otherInputRef = useRef<HTMLInputElement>(null);
 
   // Removed global selectedAggravating/selectedRelieving - now stored per complaint
 
@@ -194,7 +197,60 @@ export function VitalSignsCard({
                 </button>
               );
             })}
+            {/* Other button */}
+            <button
+              onClick={() => {
+                if (!isEditable) return;
+                setShowOtherInput(prev => !prev);
+                setTimeout(() => otherInputRef.current?.focus(), 100);
+              }}
+              disabled={!isEditable}
+              className={`relative flex items-center justify-center gap-1.5 text-xs p-2 rounded transition-all duration-200 font-bold shadow-sm border ${
+                showOtherInput
+                  ? 'bg-[var(--theme-accent)]/20 border-[var(--theme-accent)] text-[var(--theme-accent)] ring-1 ring-[var(--theme-accent)]/40'
+                  : 'bg-[var(--theme-bg)] border-[var(--theme-border)] text-[var(--theme-text)] hover:bg-[var(--theme-accent)] hover:text-white hover:border-[var(--theme-accent)]'
+              } ${!isEditable ? 'cursor-default' : 'cursor-pointer'}`}
+            >
+              <Plus className="w-3.5 h-3.5 flex-shrink-0" />
+              <span>Other</span>
+            </button>
           </div>
+          {/* Other complaint text input */}
+          {showOtherInput && (
+            <div className="mt-3 flex gap-2">
+              <input
+                ref={otherInputRef}
+                type="text"
+                value={otherComplaint}
+                onChange={(e) => setOtherComplaint(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && otherComplaint.trim()) {
+                    addComplaintFromButton(otherComplaint.trim());
+                    setOtherComplaint('');
+                    setShowOtherInput(false);
+                  } else if (e.key === 'Escape') {
+                    setShowOtherInput(false);
+                    setOtherComplaint('');
+                  }
+                }}
+                placeholder="Type custom complaint..."
+                className="flex-1 bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg px-3 py-2 text-[var(--theme-text)] text-sm placeholder-[var(--theme-text-muted)] focus:outline-none focus:border-[var(--theme-accent)] focus:ring-1 focus:ring-[var(--theme-accent)]/40"
+              />
+              <button
+                onClick={() => {
+                  if (otherComplaint.trim()) {
+                    addComplaintFromButton(otherComplaint.trim());
+                    setOtherComplaint('');
+                    setShowOtherInput(false);
+                  }
+                }}
+                disabled={!otherComplaint.trim()}
+                className="px-4 py-2 bg-[var(--theme-accent)] text-black font-bold text-sm rounded-lg hover:opacity-90 transition-colors disabled:opacity-40"
+              >
+                Add
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

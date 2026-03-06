@@ -34,7 +34,8 @@ from database import (
     initial_surgery_bills_collection,
     final_surgery_bills_collection,
     slit_lamp_collection,
-    doctor_feedback_collection
+    doctor_feedback_collection,
+    presets_collection
 )
 from invoice_parser import parse_invoice
 from models import (
@@ -4463,6 +4464,70 @@ async def ai_save_feedback(payload: dict = Body(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ==================== SURGICAL RECORDS ====================
+
+@app.get("/api/patients/{registration_id}/surgical-records")
+async def get_surgical_records(registration_id: str):
+    """Fetch all surgical records for a patient."""
+    try:
+        patients_collection = db["patients"]
+        patient = patients_collection.find_one(
+            {"registrationId": registration_id},
+            {"surgicalRecords": 1, "_id": 0}
+        )
+        if not patient:
+            return {"surgicalRecords": []}
+        return {"surgicalRecords": patient.get("surgicalRecords", [])}
+    except Exception as e:
+        print(f"[Surgical Records GET Error] {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/patients/{registration_id}/surgical-records")
+async def add_surgical_record(registration_id: str, record: dict = Body(...)):
+    """
+    Push a new surgical record into the patient's surgicalRecords array.
+    Creates the patient document if it doesn't exist.
+    """
+    try:
+        patients_collection = db["patients"]
+        record["createdAt"] = datetime.utcnow().isoformat()
+        record["recordId"] = str(ObjectId())
+
+        result = patients_collection.update_one(
+            {"registrationId": registration_id},
+            {"$push": {"surgicalRecords": record}},
+            upsert=True
+        )
+        print(f"\n\U0001f3e5 Surgical record added for patient {registration_id}")
+        print(f"   Matched: {result.matched_count}, Modified: {result.modified_count}, Upserted: {result.upserted_id}")
+
+        return {
+            "status": "success",
+            "message": f"Surgical record saved for {registration_id}",
+            "recordId": record["recordId"]
+        }
+    except Exception as e:
+        print(f"[Surgical Records POST Error] {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/presets/{category}")
+async def get_presets(category: str):
+    doc = presets_collection.find_one({"category": category})
+    if doc:
+        return {"items": doc.get("items", [])}
+    return {"items": []}
+
+@app.post("/api/presets/{category}")
+async def save_presets(category: str, items: List[str] = Body(..., embed=True)):
+    # Assuming the body is `{ "items": ["...", "..."] }` which Body(embed=True) handles
+    presets_collection.update_one(
+        {"category": category},
+        {"$set": {"items": items}},
+        upsert=True
+    )
+    return {"message": "Presets saved"}
 
 
 if __name__ == "__main__":

@@ -44,6 +44,7 @@ initial_surgery_bills_collection = db["initial_surgery_bills"]
 final_surgery_bills_collection = db["final_surgery_bills"]
 slit_lamp_collection = db["slit_lamp_images"]
 doctor_feedback_collection = db["doctor_feedback"]
+presets_collection = db["presets"]
 
 # Async Client (Motor) for non-blocking I/O
 async_client = AsyncIOMotorClient(MONGO_URI, **client_kwargs)

@@ -1,5 +1,6 @@
-﻿import { useState } from 'react';
-import { Plus, X, ClipboardList, Stethoscope, User, Calendar, Clock, Hash, FileText } from 'lucide-react';
+﻿import { useState, useCallback } from 'react';
+import { Plus, X, ClipboardList, Stethoscope, User, Calendar, Clock, Hash, FileText, Loader2, Download } from 'lucide-react';
+import { API_ENDPOINTS } from '../config/api';
 
 interface SurgeryDetail {
   id: string;
@@ -141,6 +142,83 @@ interface SurgicalRecordViewProps {
 
 export function SurgicalRecordView({ onNavigate, onDischargeSummary }: SurgicalRecordViewProps = {}) {
   const [data, setData] = useState<SurgicalRecordData>(defaultData);
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [existingRecords, setExistingRecords] = useState<any[]>([]);
+  const [loadingRecords, setLoadingRecords] = useState(false);
+
+  // Load existing surgical records for a patient
+  const loadSurgicalRecords = useCallback(async (patientId: string) => {
+    if (!patientId.trim()) return;
+    setLoadingRecords(true);
+    try {
+      // Fetch patient details and surgical records in parallel
+      const [patientRes, recordsRes] = await Promise.all([
+        fetch(API_ENDPOINTS.PATIENT(patientId)),
+        fetch(API_ENDPOINTS.SURGICAL_RECORDS(patientId)),
+      ]);
+
+      if (patientRes.ok) {
+        const patient = await patientRes.json();
+        const details = patient.patientDetails || {};
+        const demo = patient.demographics || {};
+        const contact = patient.contactInfo || {};
+
+        const name = details.name || patient.name || '';
+        const age = details.age || demo.age || '';
+        const sex = details.sex || demo.sex || details.gender || demo.gender || '';
+        const ageSex = age && sex ? `${age} / ${sex}` : (age || sex || '');
+        const phone = details.phone || contact.phone || '';
+        const email = details.email || contact.email || '';
+
+        setData(prev => ({
+          ...prev,
+          patientName: name,
+          ageSex,
+          ipdNo: details.ipdNo || patient.ipdNo || prev.ipdNo,
+          bookingNo: details.bookingNo || patient.bookingNo || prev.bookingNo,
+        }));
+      }
+
+      if (recordsRes.ok) {
+        const json = await recordsRes.json();
+        setExistingRecords(json.surgicalRecords || []);
+      }
+    } catch (err) {
+      console.error('Failed to load patient / surgical records:', err);
+    } finally {
+      setLoadingRecords(false);
+    }
+  }, []);
+
+  // Save surgical record to backend
+  const saveSurgicalRecord = async () => {
+    if (!data.patientId.trim()) {
+      setSaveMsg({ type: 'error', text: 'Patient ID is required to save.' });
+      setTimeout(() => setSaveMsg(null), 3000);
+      return;
+    }
+    setSaving(true);
+    setSaveMsg(null);
+    try {
+      const { patientId, ...recordData } = data;
+      const res = await fetch(API_ENDPOINTS.SURGICAL_RECORDS(patientId), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(recordData),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const json = await res.json();
+      setSaveMsg({ type: 'success', text: `Surgical record saved (ID: ${json.recordId})` });
+      // Reload records
+      loadSurgicalRecords(patientId);
+    } catch (err: any) {
+      setSaveMsg({ type: 'error', text: `Failed to save: ${err.message}` });
+    } finally {
+      setSaving(false);
+      setTimeout(() => setSaveMsg(null), 4000);
+    }
+  };
 
   const setStr = (field: keyof SurgicalRecordData) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
@@ -234,13 +312,26 @@ export function SurgicalRecordView({ onNavigate, onDischargeSummary }: SurgicalR
             <FileText size={15} /> Discharge Summary
           </button>
           <button
-            onClick={() => alert('Update Surgical Record — backend integration pending.')}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 font-semibold text-sm hover:bg-emerald-500/20 transition-all"
+            onClick={saveSurgicalRecord}
+            disabled={saving}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 font-semibold text-sm hover:bg-emerald-500/20 transition-all disabled:opacity-50"
           >
-            Update Surgical Record
+            {saving ? <Loader2 size={15} className="animate-spin" /> : null}
+            {saving ? 'Saving...' : 'Update Surgical Record'}
           </button>
         </div>
       </div>
+
+      {/* Save feedback */}
+      {saveMsg && (
+        <div className={`max-w-5xl mx-auto mb-2 px-4 py-2 rounded-xl text-sm font-semibold ${
+          saveMsg.type === 'success'
+            ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400'
+            : 'bg-red-500/10 border border-red-500/30 text-red-400'
+        }`}>
+          {saveMsg.text}
+        </div>
+      )}
 
       <div className="max-w-5xl mx-auto space-y-4">
 
@@ -252,7 +343,17 @@ export function SurgicalRecordView({ onNavigate, onDischargeSummary }: SurgicalR
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             <FormField label="Patient ID">
-              <input className={inputCls} value={data.patientId} onChange={setStr('patientId')} placeholder="Enter Patient ID" />
+              <div className="flex gap-2">
+                <input className={inputCls} value={data.patientId} onChange={setStr('patientId')} placeholder="Enter Patient ID" />
+                <button
+                  onClick={() => loadSurgicalRecords(data.patientId)}
+                  disabled={!data.patientId.trim() || loadingRecords}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-[var(--theme-accent)]/10 border border-[var(--theme-accent)]/30 text-[var(--theme-accent)] text-xs font-bold hover:bg-[var(--theme-accent)]/20 transition-all disabled:opacity-40 whitespace-nowrap"
+                >
+                  {loadingRecords ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+                  Load
+                </button>
+              </div>
             </FormField>
             <div className="lg:col-span-2">
               <FormField label="Patient Name">
@@ -515,6 +616,56 @@ export function SurgicalRecordView({ onNavigate, onDischargeSummary }: SurgicalR
             </table>
           </div>
         </div>
+
+        {/* ── Previously Saved Surgical Records ── */}
+        {existingRecords.length > 0 && (
+          <div className="bg-[var(--theme-bg-secondary)] border border-[var(--theme-accent)]/30 rounded-2xl overflow-hidden shadow-lg">
+            <div className="px-5 py-3 border-b border-[var(--theme-accent)]/20 flex items-center gap-2">
+              <ClipboardList className="w-4 h-4 text-[var(--theme-accent)]" />
+              <span className="text-xs font-bold text-[var(--theme-text-muted)] uppercase tracking-widest">
+                Previous Surgical Records ({existingRecords.length})
+              </span>
+            </div>
+            <div className="divide-y divide-[var(--theme-accent)]/10">
+              {existingRecords.map((rec, idx) => (
+                <div
+                  key={rec.recordId || idx}
+                  className="px-5 py-3 hover:bg-[var(--theme-accent)]/5 cursor-pointer transition-colors"
+                  onClick={() => {
+                    setData(prev => ({
+                      ...prev,
+                      ...rec,
+                      patientId: prev.patientId,
+                      diagnoses: rec.diagnoses?.length ? rec.diagnoses : defaultData.diagnoses,
+                      surgeryDetails: rec.surgeryDetails || [],
+                    }));
+                  }}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs font-bold text-[var(--theme-accent)] tabular-nums">#{idx + 1}</span>
+                      <span className="text-sm font-semibold text-[var(--theme-text)]">
+                        {rec.surgeryProcedureName || rec.operationType || 'Untitled Procedure'}
+                      </span>
+                      <span className="text-xs text-[var(--theme-text-muted)]">{rec.operatedEye}</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-[var(--theme-text-muted)]">
+                      <span>{rec.surgeryDate}</span>
+                      <span>{rec.surgeonName}</span>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                        rec.status === 'Done' ? 'bg-emerald-500/10 text-emerald-400' :
+                        rec.status === 'Cancelled' ? 'bg-red-500/10 text-red-400' :
+                        'bg-amber-500/10 text-amber-400'
+                      }`}>
+                        {rec.status}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
