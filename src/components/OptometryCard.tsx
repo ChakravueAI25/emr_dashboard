@@ -4,6 +4,7 @@ import { ExpandableCard } from './ExpandableCard';
 import { EditableText, EditableTextHandle } from './EditableText';
 import { CardHeader } from './CardHeader';
 import { OptometryData } from './patient';
+import { API_ENDPOINTS } from '../config/api';
 
 interface OptometryCardProps {
   data: OptometryData;
@@ -34,10 +35,16 @@ function NumericStepper({ value, onChange, step, min, max, isEditable, allowNega
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value || '0');
   const inputRef = useRef<HTMLInputElement>(null);
+  // Ref to track the latest numeric value — survives across rapid clicks
+  // without waiting for React to re-render with the new prop.
+  const initNum = parseFloat(value || '0');
+  const latestNumRef = useRef<number>(isNaN(initNum) ? 0 : initNum);
 
-  // Keep draft in sync when external value changes (e.g. first load)
+  // Keep draft and ref in sync when external value changes (e.g. first load / parent update)
   useEffect(() => {
     if (!editing) setDraft(value || '0');
+    const n = parseFloat(value || '0');
+    latestNumRef.current = isNaN(n) ? 0 : n;
   }, [value, editing]);
 
   useEffect(() => {
@@ -47,13 +54,9 @@ function NumericStepper({ value, onChange, step, min, max, isEditable, allowNega
     }
   }, [editing]);
 
-  const currentNum = () => {
-    const n = parseFloat(value || '0');
-    return isNaN(n) ? 0 : n;
-  };
-
   const commit = (num: number) => {
     const clamped = Math.max(min, Math.min(max, parseFloat(num.toFixed(2))));
+    latestNumRef.current = clamped;
     // Format: if step is 0.25 use 2 decimal places, else integer
     const formatted = step < 1
       ? (clamped >= 0 && allowNegative ? `+${clamped.toFixed(2)}` : clamped.toFixed(2))
@@ -67,13 +70,13 @@ function NumericStepper({ value, onChange, step, min, max, isEditable, allowNega
   const decrement = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!isEditable) return;
-    commit(currentNum() - step);
+    commit(latestNumRef.current - step);
   };
 
   const increment = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!isEditable) return;
-    commit(currentNum() + step);
+    commit(latestNumRef.current + step);
   };
 
   const handleBlur = () => {
@@ -227,6 +230,73 @@ function NumericInput({ value, onChange, isEditable }: NumericInputProps) {
   );
 }
 
+// ---------- AlphaNumericInput ----------
+// Like NumericInput but accepts letters, digits, "/" etc. for V/A fields (e.g. 6/6, N6).
+interface AlphaNumericInputProps {
+  value: string;
+  onChange: (val: string) => void;
+  isEditable: boolean;
+}
+
+function AlphaNumericInput({ value, onChange, isEditable }: AlphaNumericInputProps) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value || '');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!editing) setDraft(value || '');
+  }, [value, editing]);
+
+  useEffect(() => {
+    if (editing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editing]);
+
+  const handleBlur = () => {
+    setEditing(false);
+    const trimmed = draft.trim();
+    if (trimmed !== value) onChange(trimmed);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); handleBlur(); }
+    else if (e.key === 'Escape') { setEditing(false); setDraft(value || ''); }
+  };
+
+  if (!isEditable) {
+    return (
+      <span className="text-white text-xs text-center block w-full truncate">
+        {value || '--'}
+      </span>
+    );
+  }
+
+  return (
+    <div className="flex items-center justify-center w-full" onClick={(e) => e.stopPropagation()}>
+      {editing ? (
+        <input
+          ref={inputRef}
+          type="text"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={handleBlur}
+          onKeyDown={handleKeyDown}
+          className="w-14 h-5 bg-transparent border-b border-[#D4A574] text-white text-xs text-center focus:outline-none caret-[#D4A574]"
+        />
+      ) : (
+        <span
+          onClick={() => setEditing(true)}
+          className="w-14 h-5 leading-5 text-white text-xs text-center cursor-pointer hover:text-[#D4A574] border border-transparent hover:border-[#D4A574]/40 rounded truncate transition-colors"
+        >
+          {value || '--'}
+        </span>
+      )}
+    </div>
+  );
+}
+
 // ---------- Main Component ----------
 
 export function OptometryCard({
@@ -241,6 +311,10 @@ export function OptometryCard({
   const finalGlasses = data?.finalGlasses ?? { rightEye: {}, leftEye: {} };
   const currentGlasses = data?.currentGlasses ?? { rightEye: {}, leftEye: {} };
   const oldGlass = data?.oldGlass ?? { rightEye: {}, leftEye: {} };
+  const keratometry = (data as any)?.keratometry ?? { 
+    rightEye: { k1: {}, k2: {} }, 
+    leftEye: { k1: {}, k2: {} } 
+  };
   const additional = data?.additional ?? {
     gpAdvisedFor: '',
     gpAdvisedBy: '',
@@ -248,27 +322,55 @@ export function OptometryCard({
     product: '',
   };
 
-  const [presets, setPresets] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem('optometry_presets');
-      return saved ? JSON.parse(saved) : ['6/6', '6/9', '6/12', 'N6'];
-    } catch {
-      return ['6/6', '6/9', '6/12', 'N6'];
-    }
-  });
+  const [presets, setPresets] = useState<string[]>(['6/6', '6/9', '6/12', 'N6']);
   const [newPreset, setNewPreset] = useState('');
+
+  useEffect(() => {
+    fetch(API_ENDPOINTS.PRESETS('optometry'))
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to fetch');
+        return res.json();
+      })
+      .then(data => {
+        if (data.items && Array.isArray(data.items) && data.items.length > 0) {
+          setPresets(data.items);
+        }
+      })
+      .catch(err => {
+        // Fallback to local storage
+        try {
+          const saved = localStorage.getItem('optometry_presets');
+          if (saved) setPresets(JSON.parse(saved));
+        } catch { }
+      });
+  }, []);
 
   const addPreset = () => {
     if (!newPreset) return;
     const updated = [...presets, newPreset];
     setPresets(updated);
-    localStorage.setItem('optometry_presets', JSON.stringify(updated));
     setNewPreset('');
+    
+    fetch(API_ENDPOINTS.PRESETS('optometry'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: updated })
+    }).catch(e => console.error('Failed to save preset', e));
+    
+    // Also save to local storage for offline fallback
+    localStorage.setItem('optometry_presets', JSON.stringify(updated));
   };
 
   const removePreset = (val: string) => {
     const updated = presets.filter(p => p !== val);
     setPresets(updated);
+    
+    fetch(API_ENDPOINTS.PRESETS('optometry'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: updated })
+    }).catch(e => console.error('Failed to remove preset', e));
+
     localStorage.setItem('optometry_presets', JSON.stringify(updated));
   };
 
@@ -298,48 +400,19 @@ export function OptometryCard({
   };
 
   const updateFinalGlasses = (rowKey: string, eye: 'rightEye' | 'leftEye', field: string, value: string) => {
-    try {
-      const legacy = (data?.finalGlasses || { rightEye: {}, leftEye: {}, add: '', mDist: '' }) as any;
-      const currentRows = (legacy.rows) ? { ...legacy.rows } : {
-        'D.V': { rightEye: { ...(legacy.rightEye || {}) }, leftEye: { ...(legacy.leftEye || {}) } },
-        Add: { rightEye: { va: legacy.add ?? '' }, leftEye: { va: legacy.add ?? '' } },
-        'M Dist': { rightEye: { va: legacy.mDist ?? '' }, leftEye: { va: legacy.mDist ?? '' } }
-      } as any;
-      const updatedRows: any = { ...currentRows };
-      updatedRows[rowKey] = updatedRows[rowKey] ? { ...updatedRows[rowKey] } : { rightEye: {}, leftEye: {} };
-      updatedRows[rowKey][eye] = { ...(updatedRows[rowKey][eye] || {}), [field]: value };
-      updateField(['finalGlasses'], { ...legacy, rows: updatedRows });
-    } catch (e) { console.error('Failed to update finalGlasses', e); }
+    updateField(['finalGlasses', 'rows', rowKey, eye, field], value);
   };
 
   const updateAutoRefraction = (rowKey: string, eye: 'rightEye' | 'leftEye', field: string, value: string) => {
-    try {
-      const legacy = (data?.autoRefraction || { rightEye: {}, leftEye: {} }) as any;
-      const currentRows = (legacy.rows) ? { ...legacy.rows } : {
-        'D.V': { rightEye: { ...(legacy.rightEye || {}) }, leftEye: { ...(legacy.leftEye || {}) } },
-        'ADD': { rightEye: {}, leftEye: {} }
-      } as any;
-      const updatedRows: any = { ...currentRows };
-      updatedRows[rowKey] = updatedRows[rowKey] ? { ...updatedRows[rowKey] } : { rightEye: {}, leftEye: {} };
-      updatedRows[rowKey][eye] = { ...(updatedRows[rowKey][eye] || {}), [field]: value };
-      updateField(['autoRefraction'], { ...legacy, rows: updatedRows });
-    } catch (e) { console.error('Failed to update autoRefraction', e); }
+    updateField(['autoRefraction', 'rows', rowKey, eye, field], value);
   };
 
   const updateCurrentGlasses = (rowKey: string, eye: 'rightEye' | 'leftEye', field: string, value: string) => {
-    try {
-      const legacy = (data?.currentGlasses || { rightEye: {}, leftEye: {} }) as any;
-      const currentRows = (legacy.rows) ? { ...legacy.rows } : {
-        'D.V': { rightEye: { ...(legacy.rightEye || {}) }, leftEye: { ...(legacy.leftEye || {}) } },
-        'N.V': { rightEye: {}, leftEye: {} },
-        'ADD': { rightEye: {}, leftEye: {} },
-        'M Dist': { rightEye: {}, leftEye: {} }
-      } as any;
-      const updatedRows: any = { ...currentRows };
-      updatedRows[rowKey] = updatedRows[rowKey] ? { ...updatedRows[rowKey] } : { rightEye: {}, leftEye: {} };
-      updatedRows[rowKey][eye] = { ...(updatedRows[rowKey][eye] || {}), [field]: value };
-      updateField(['currentGlasses'], { ...legacy, rows: updatedRows });
-    } catch (e) { console.error('Failed to update currentGlasses', e); }
+    updateField(['currentGlasses', 'rows', rowKey, eye, field], value);
+  };
+
+  const updateKeratometry = (eye: 'rightEye' | 'leftEye', k: 'k1' | 'k2', field: 'axis' | 'mm', value: string) => {
+    updateField(['keratometry', eye, k, field], value);
   };
 
   // Helper: get cell value from row-based storage with legacy fallback
@@ -383,7 +456,17 @@ export function OptometryCard({
         />
       );
     }
-    // All other fields: prism, va, add — numeric only, no expand
+    // V/A accepts alphanumeric (e.g. 6/6, N6)
+    if (fieldName === 'va') {
+      return (
+        <AlphaNumericInput
+          value={value}
+          onChange={onSave}
+          isEditable={canEdit}
+        />
+      );
+    }
+    // All other fields: prism, add — numeric only, no expand
     return (
       <NumericInput
         value={value}
@@ -649,6 +732,68 @@ export function OptometryCard({
                   )}
                 </tr>
               ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Keratometry Reading */}
+      <div>
+        <h4 className="text-[#D4A574] mb-3 text-lg">KERATOMETRY READING</h4>
+        <div className="bg-[#1a1a1a] border border-[#D4A574] rounded-lg overflow-hidden">
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr className="bg-[#0a0a0a]">
+                <th className="text-left p-3 text-[#8B8B8B] border-r border-[#D4A574] text-xs"></th>
+                <th className="text-center p-2 text-[#D4A574] border-r border-[#D4A574] text-xs font-normal" colSpan={2}>Right Eye</th>
+                <th className="text-center p-2 text-[#D4A574] text-xs font-normal" colSpan={2}>Left Eye</th>
+              </tr>
+              <tr className="bg-[#0a0a0a]">
+                 <th className="text-left p-3 text-[#8B8B8B] border-r border-[#D4A574] text-xs"></th>
+                 <th className="text-center p-2 text-[#8B8B8B] border-r border-[#D4A574] text-xs font-normal">AXIS</th>
+                 <th className="text-center p-2 text-[#8B8B8B] border-r border-[#D4A574] text-xs font-normal">mm</th>
+                 <th className="text-center p-2 text-[#8B8B8B] border-r border-[#D4A574] text-xs font-normal">AXIS</th>
+                 <th className="text-center p-2 text-[#8B8B8B] text-xs font-normal">mm</th>
+              </tr>
+            </thead>
+            <tbody>
+              {['K1', 'K2'].map((rowLabel, i) => {
+                 const rowKey = rowLabel.toLowerCase() as 'k1' | 'k2';
+                 return (
+                <tr key={rowKey} className={i % 2 === 0 ? 'bg-[#121212]' : 'bg-[#1a1a1a]'}>
+                  <td className="p-3 text-white border-r border-[#D4A574] text-xs font-medium">{rowLabel}</td>
+                  {/* Right Eye */}
+                  <td className="p-1 text-center border-r border-[#D4A574]">
+                    {renderCell(
+                      'axis', 
+                      String((keratometry as any)?.rightEye?.[rowKey]?.axis || ''), 
+                      (v) => updateKeratometry('rightEye', rowKey, 'axis', v as any)
+                    )}
+                  </td>
+                  <td className="p-1 text-center border-r border-[#D4A574]">
+                    {renderCell(
+                      'mm', 
+                      String((keratometry as any)?.rightEye?.[rowKey]?.mm || ''), 
+                      (v) => updateKeratometry('rightEye', rowKey, 'mm', v as any)
+                    )}
+                  </td>
+                  {/* Left Eye */}
+                  <td className="p-1 text-center border-r border-[#D4A574]">
+                    {renderCell(
+                      'axis', 
+                      String((keratometry as any)?.leftEye?.[rowKey]?.axis || ''), 
+                      (v) => updateKeratometry('leftEye', rowKey, 'axis', v as any)
+                    )}
+                  </td>
+                  <td className="p-1 text-center border-r border-[#D4A574]">
+                    {renderCell(
+                      'mm', 
+                      String((keratometry as any)?.leftEye?.[rowKey]?.mm || ''), 
+                      (v) => updateKeratometry('leftEye', rowKey, 'mm', v as any)
+                    )}
+                  </td>
+                </tr>
+              )})}
             </tbody>
           </table>
         </div>

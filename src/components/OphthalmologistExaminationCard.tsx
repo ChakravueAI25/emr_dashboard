@@ -3,6 +3,7 @@ import { Eye, Save, Trash2 } from 'lucide-react';
 import { ExpandableCard } from './ExpandableCard';
 import { EditableText, EditableTextHandle } from './EditableText';
 import { CardHeader } from './CardHeader';
+import { API_ENDPOINTS } from '../config/api';
 
 interface EyeExaminationData {
   ocularMovements: string;
@@ -38,27 +39,46 @@ export function OphthalmologistExaminationCard({
 
   const storageKey = getStorageKey();
 
-  // State for presets - load from localStorage on mount
-  const [presets, setPresetsState] = useState<Record<string, Record<string, any>>>(() => {
-    try {
-      const stored = localStorage.getItem(storageKey);
-      return stored ? JSON.parse(stored) : {};
-    } catch (err) {
-      console.error('Error loading presets from localStorage:', err);
-      return {};
-    }
-  });
+  // State for presets - load from DB on mount, fallback to localStorage
+  const [presets, setPresetsState] = useState<Record<string, Record<string, any>>>({});
 
-  // Wrapper to persist presets to localStorage when they change
+  useEffect(() => {
+    fetch(API_ENDPOINTS.PRESETS('ophthalmologist'))
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to fetch');
+        return res.json();
+      })
+      .then(data => {
+        if (data.items && Array.isArray(data.items) && data.items.length > 0) {
+          try {
+            // items is stored as a JSON string of the presets object
+            const parsed = typeof data.items[0] === 'string' ? JSON.parse(data.items[0]) : data.items[0];
+            if (parsed && typeof parsed === 'object') setPresetsState(parsed);
+          } catch { }
+        }
+      })
+      .catch(() => {
+        try {
+          const stored = localStorage.getItem(storageKey);
+          if (stored) setPresetsState(JSON.parse(stored));
+        } catch { }
+      });
+  }, []);
+
+  // Wrapper to persist presets to both DB and localStorage
   const setPresets = (newPresets: Record<string, Record<string, any>> | ((prev: Record<string, Record<string, any>>) => Record<string, Record<string, any>>)) => {
     setPresetsState((prev) => {
       const updated = typeof newPresets === 'function' ? newPresets(prev) : newPresets;
+      // Save to DB
+      fetch(API_ENDPOINTS.PRESETS('ophthalmologist'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: [JSON.stringify(updated)] })
+      }).catch(err => console.error('Failed to save presets to DB:', err));
+      // Also save to localStorage as fallback
       try {
         localStorage.setItem(storageKey, JSON.stringify(updated));
-        console.log('Presets saved to localStorage:', updated);
-      } catch (err) {
-        console.error('Error saving presets to localStorage:', err);
-      }
+      } catch { }
       return updated;
     });
   };
@@ -321,63 +341,56 @@ export function OphthalmologistExaminationCard({
         </div>
       </div>
 
-      {/* Eye Examination */}
+      {/* Eye Examination — table layout so Tab goes OD→OS (right) per row */}
       <div>
         <h4 className="text-[#D4A574] mb-3 text-lg">Eye Examination</h4>
-        <div className="grid grid-cols-2 gap-6">
-          {/* OD (Right Eye) */}
-          <div className="bg-[#1a1a1a] border border-[#D4A574] rounded-lg p-5 space-y-1">
-            <h5 className="text-[#D4A574] text-lg mb-4 border-b border-[#D4A574] pb-2">OD (Right Eye)</h5>
-            {keys.map((key) => (
-              <div
-                key={String(key)}
-                className="flex items-center justify-between py-2 border-b border-[#D4A574] border-opacity-50 last:border-0 cursor-pointer hover:bg-[#222]"
-                onClick={() => rowRefs.current[`od-${key}`]?.startEditing()}
-              >
-                <span className="text-[#8B8B8B] text-xs capitalize">
-                  {String(key).replace(/([A-Z])/g, ' $1')}
-                </span>
-                <div className="flex-1 max-w-[200px]" onClick={(e) => e.stopPropagation()}>
-                  <EditableText
-                    ref={(el) => { rowRefs.current[`od-${key}`] = el; }}
-                    value={get(['od', String(key)], '')}
-                    onSave={(val) =>
-                      updateField(['od', String(key)], val)
-                    }
-                    className="text-white text-sm !justify-end !text-right"
-                    isEditable={isEditable}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* OS (Left Eye) */}
-          <div className="bg-[#1a1a1a] border border-[#D4A574] rounded-lg p-5 space-y-1">
-            <h5 className="text-[#D4A574] text-lg mb-4 border-b border-[#D4A574] pb-2">OS (Left Eye)</h5>
-            {keys.map((key) => (
-              <div
-                key={String(key)}
-                className="flex items-center justify-between py-2 border-b border-[#D4A574] border-opacity-50 last:border-0 cursor-pointer hover:bg-[#222]"
-                onClick={() => rowRefs.current[`os-${key}`]?.startEditing()}
-              >
-                <span className="text-[#8B8B8B] text-xs capitalize">
-                  {String(key).replace(/([A-Z])/g, ' $1')}
-                </span>
-                <div className="flex-1 max-w-[200px]" onClick={(e) => e.stopPropagation()}>
-                  <EditableText
-                    ref={(el) => { rowRefs.current[`os-${key}`] = el; }}
-                    value={get(['os', String(key)], '')}
-                    onSave={(val) =>
-                      updateField(['os', String(key)], val)
-                    }
-                    className="text-white text-sm !justify-end !text-right"
-                    isEditable={isEditable}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
+        <div className="bg-[#1a1a1a] border border-[#D4A574] rounded-lg overflow-hidden">
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr className="bg-[#0a0a0a]">
+                <th className="text-left p-3 text-[#8B8B8B] border-r border-[#D4A574] text-xs w-1/5">Finding</th>
+                <th className="text-center p-3 text-[#D4A574] border-r border-[#D4A574] text-xs w-2/5">OD (Right Eye)</th>
+                <th className="text-center p-3 text-[#D4A574] text-xs w-2/5">OS (Left Eye)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {keys.map((key, i) => (
+                <tr key={String(key)} className={i % 2 === 0 ? 'bg-[#121212]' : 'bg-[#1a1a1a]'}>
+                  <td className="p-3 text-white border-r border-[#D4A574] text-xs font-medium capitalize">
+                    {String(key).replace(/([A-Z])/g, ' $1')}
+                  </td>
+                  <td
+                    className="p-3 text-center border-r border-[#D4A574] cursor-pointer hover:bg-[#2a2a2a] transition-colors"
+                    onClick={() => rowRefs.current[`od-${key}`]?.startEditing()}
+                  >
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <EditableText
+                        ref={(el) => { rowRefs.current[`od-${key}`] = el; }}
+                        value={get(['od', String(key)], '')}
+                        onSave={(val) => updateField(['od', String(key)], val)}
+                        className="text-white text-sm text-center w-full"
+                        isEditable={isEditable}
+                      />
+                    </div>
+                  </td>
+                  <td
+                    className="p-3 text-center cursor-pointer hover:bg-[#2a2a2a] transition-colors"
+                    onClick={() => rowRefs.current[`os-${key}`]?.startEditing()}
+                  >
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <EditableText
+                        ref={(el) => { rowRefs.current[`os-${key}`] = el; }}
+                        value={get(['os', String(key)], '')}
+                        onSave={(val) => updateField(['os', String(key)], val)}
+                        className="text-white text-sm text-center w-full"
+                        isEditable={isEditable}
+                      />
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -410,19 +423,17 @@ export function OphthalmologistExaminationCard({
         </div>
       )}
 
-      {/* Save as Preset Button */}
-      {allFieldsFilled && (
-        <button
-          onClick={() => {
-            console.log('Save as Preset button clicked');
-            initiatePreset();
-          }}
-          className="w-full bg-[#D4A574] hover:bg-[#c19564] text-black font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
-        >
-          <Save size={18} />
-          Save as Preset
-        </button>
-      )}
+      {/* Save as Preset Button - always visible */}
+      <button
+        onClick={() => {
+          console.log('Save as Preset button clicked');
+          initiatePreset();
+        }}
+        className="w-full bg-[#D4A574] hover:bg-[#c19564] text-black font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
+      >
+        <Save size={18} />
+        Save as Preset
+      </button>
     </div>
   );
 

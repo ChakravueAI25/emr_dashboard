@@ -47,6 +47,13 @@ export const API_ENDPOINTS = {
   // Appointments endpoints
   APPOINTMENTS: `${API_BASE_URL}/appointments`,
   APPOINTMENT: (appointmentId: string) => `${API_BASE_URL}/appointments/${encodeURIComponent(appointmentId)}`,
+  
+  // Surgical Records
+  SURGICAL_RECORDS: (registrationId: string) => `${API_BASE_URL}/api/patients/${encodeURIComponent(registrationId)}/surgical-records`,
+
+  // Presets
+  PRESETS: (category: string) => `${API_BASE_URL}/api/presets/${encodeURIComponent(category)}`,
+
 
   // Evaluation endpoints
   EVALUATE_READING: `${API_BASE_URL}/evaluate-reading`,
