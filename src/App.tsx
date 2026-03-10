@@ -46,6 +46,9 @@ import { TelemedicineView } from './components/TelemedicineView';
 import { SurgicalRecordView } from './components/SurgicalRecordView';
 import type { SurgicalPrefill } from './components/SurgicalRecordView';
 import { DischargeSummaryView } from './components/DischargeSummaryView';
+import { PharmacyFinanceDashboardView } from './components/PharmacyFinanceDashboardView';
+import { VendorLedgerView } from './components/VendorLedgerView';
+import { VendorListView } from './components/VendorListView';
 import { ArrowLeft, Search, Bell, Settings, User, Save, UserPlus, CalendarPlus, Layers, Eye, Stethoscope, CheckCircle, ClipboardList, UserCircle, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ImageWithFallback } from './components/figma/ImageWithFallback';
 import { PatientData, UserRole, ROLES, CARD_ACCESS } from './components/patient';
@@ -149,11 +152,12 @@ export default function App() {
   const [currentUsername, setCurrentUsername] = useState<string | null>(() => localStorage.getItem('current_username'));
 
   // Default to the login view, or restore from storage
-  const [currentView, setCurrentView] = useState<'dashboard' | 'analytics' | 'billing' | 'billing-dashboard' | 'individual-billing' | 'login' | 'documents' | 'notifications' | 'settings' | 'profile-settings' | 'patients' | 'appointments' | 'appointment-queue' | 'reception-queue' | 'opd-queue' | 'doctor-queue' | 'patient-history' | 'data-repair' | 'pharmacy-billing' | 'medicine-management' | 'invoice-upload' | 'grn-history' | 'payment-setup' | 'organization-login' | 'admin-dashboard' | 'admin-data-management' | 'telemedicine' | 'reception-patient-view' | 'doctor-profile' | 'surgical-record' | 'discharge-summary'>(
+  const [currentView, setCurrentView] = useState<'dashboard' | 'analytics' | 'billing' | 'billing-dashboard' | 'individual-billing' | 'login' | 'documents' | 'notifications' | 'settings' | 'profile-settings' | 'patients' | 'appointments' | 'appointment-queue' | 'reception-queue' | 'opd-queue' | 'doctor-queue' | 'patient-history' | 'data-repair' | 'pharmacy-billing' | 'medicine-management' | 'invoice-upload' | 'grn-history' | 'payment-setup' | 'organization-login' | 'admin-dashboard' | 'admin-data-management' | 'telemedicine' | 'reception-patient-view' | 'doctor-profile' | 'surgical-record' | 'discharge-summary' | 'pharmacy-finance' | 'vendor-ledger' | 'vendor-list'>(
 
     () => (localStorage.getItem('current_view') as any) || 'login'
   );
   const [surgicalPrefill, setSurgicalPrefill] = useState<SurgicalPrefill | null>(null);
+  const [vendorLedgerContext, setVendorLedgerContext] = useState<{ vendorId: string; vendorName: string } | null>(null);
   const [grnEntries, setGrnEntries] = useState<import('./components/SummaryOfInvoiceView').GrnEntry[]>(() => {
     try { return JSON.parse(localStorage.getItem('grn_entries') || '[]'); } catch { return []; }
   });
@@ -2107,6 +2111,31 @@ export default function App() {
               />
             ) : currentView === 'discharge-summary' ? (
               <DischargeSummaryView onBack={() => setCurrentView('surgical-record')} prefill={surgicalPrefill ?? undefined} />
+            ) : currentView === 'pharmacy-finance' ? (
+              <PharmacyFinanceDashboardView
+                onBack={() => setCurrentView('dashboard')}
+                onNavigate={(view) => {
+                  if (view === 'vendor-ledger' || view === 'vendor-list') setCurrentView(view);
+                  else setCurrentView(view as any);
+                }}
+              />
+            ) : currentView === 'vendor-ledger' ? (
+              <VendorLedgerView
+                vendorId={vendorLedgerContext?.vendorId || ''}
+                vendorName={vendorLedgerContext?.vendorName}
+                onBack={() => setCurrentView('pharmacy-finance')}
+                onNavigate={(view) => setCurrentView(view as any)}
+              />
+            ) : currentView === 'vendor-list' ? (
+              <VendorListView
+                onBack={() => setCurrentView('pharmacy-finance')}
+                onNavigate={(view, ctx) => {
+                  if (view === 'vendor-ledger' && ctx) {
+                    setVendorLedgerContext(ctx);
+                  }
+                  setCurrentView(view as any);
+                }}
+              />
             ) : (
               <NotificationsView />
             )}

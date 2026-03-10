@@ -105,6 +105,39 @@ export const API_ENDPOINTS = {
     ANALYTICS: `${API_BASE_URL}/api/billing/analytics`,
   },
 
+  // Vendor & Purchase endpoints
+  VENDORS: {
+    CREATE: `${API_BASE_URL}/vendors`,
+    GET_ALL: `${API_BASE_URL}/vendors`,
+    GET_ONE: (vendorId: string) => `${API_BASE_URL}/vendors/${encodeURIComponent(vendorId)}`,
+    UPDATE: (vendorId: string) => `${API_BASE_URL}/vendors/${encodeURIComponent(vendorId)}`,
+    DELETE: (vendorId: string) => `${API_BASE_URL}/vendors/${encodeURIComponent(vendorId)}`,
+    LEDGER: `${API_BASE_URL}/vendors/ledger`,
+    PAY_INVOICE: (invoiceId: string) => `${API_BASE_URL}/vendors/pay-invoice/${encodeURIComponent(invoiceId)}`,
+    OUTSTANDING_INVOICES: `${API_BASE_URL}/vendors/outstanding-invoices`,
+    OVERDUE_INVOICES: `${API_BASE_URL}/vendors/overdue-invoices`,
+  },
+
+  // GRN / Purchase Invoice
+  GRN: {
+    CREATE: `${API_BASE_URL}/pharmacy/grn`,
+  },
+
+  // Purchase & Inventory Analytics
+  PURCHASE_ANALYTICS: {
+    MONTHLY: `${API_BASE_URL}/analytics/purchases/monthly`,
+    YEARLY: `${API_BASE_URL}/analytics/purchases/yearly`,
+    VENDOR_TREND: `${API_BASE_URL}/analytics/vendor-trend`,
+    CATEGORIES: `${API_BASE_URL}/analytics/purchase-categories`,
+    BILLING_DASHBOARD: `${API_BASE_URL}/billing/dashboard`,
+  },
+
+  // Inventory Alerts
+  INVENTORY: {
+    EXPIRY_ALERTS: `${API_BASE_URL}/inventory/expiry-alerts`,
+    DEAD_STOCK: `${API_BASE_URL}/inventory/dead-stock`,
+  },
+
   // Surgery Packages endpoints
   SURGERY_PACKAGES: {
     CREATE: `${API_BASE_URL}/api/surgery-packages`,

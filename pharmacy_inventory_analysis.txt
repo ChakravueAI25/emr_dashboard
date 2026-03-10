@@ -1,0 +1,312 @@
+PHARMACY INVENTORY SYSTEM ANALYSIS
+
+1. PHARMACY COLLECTION STRUCTURE
+
+Collection definition:
+- backend/database.py
+- pharmacy_collection = db["pharmacy_medicines"]
+
+Primary medicine model:
+- backend/models.py
+- class PharmacyMedicine(BaseModel)
+
+Fields used for medicines:
+- id: Optional[str]
+- name: str
+- category: str
+- price: float
+- stock: int
+- description: str
+- manufacturer: Optional[str]
+- batch_number: Optional[str]
+- expiry_date: Optional[str]
+- reorder_level: int
+- created_at: Optional[datetime]
+- updated_at: Optional[datetime]
+
+Fields confirmed in backend GET responses:
+- id
+- name
+- category
+- price
+- stock
+- description
+- manufacturer
+- batch_number
+- expiry_date
+- reorder_level
+
+Extra fields sent by frontend but not part of the PharmacyMedicine model used in create endpoint logic:
+- mrp
+- invoiceNumber
+- purchasePrice
+- purchaseDate
+- branchName
+
+Confirmation about stock field:
+- Yes, stock is stored in a field named exactly: stock
+- Backend reads and writes med.get("stock", 0)
+
+2. MEDICINE CREATION ENDPOINT
+
+Endpoint path:
+- POST /pharmacy/medicines
+
+Where defined:
+- backend/main.py
+- async def create_medicine(medicine_data: dict = Body(...))
+
+Request body structure actually used by backend:
+{
+  "name": string,
+  "category": string,
+  "price": number,
+  "stock": number,
+  "description": string,
+  "manufacturer": string,
+  "batch_number": string,
+  "expiry_date": string,
+  "reorder_level": number
+}
+
+Notes:
+- Backend ignores extra fields unless explicitly copied into med dict.
+- The create endpoint currently copies only the fields listed above.
+
+Example payload:
+{
+  "name": "Refresh Tears",
+  "category": "Eye Drops",
+  "price": 150,
+  "stock": 50,
+  "description": "Artificial tears for dry eyes",
+  "manufacturer": "Allergan",
+  "batch_number": "AB-2025-001",
+  "expiry_date": "2026-12-31",
+  "reorder_level": 10
+}
+
+Frontend create payloads observed:
+- MedicineManagementView.tsx handleAddMedicine sends:
+{
+  "name": formData.name,
+  "category": formData.category,
+  "price": parseFloat(formData.price),
+  "stock": parseInt(formData.stock),
+  "description": formData.description,
+  "expiry_date": formData.expiryDate || null,
+  "batch_number": formData.batchNumber || null,
+  "manufacturer": formData.vendorName || null,
+  "invoiceNumber": formData.invoiceNumber || null,
+  "mrp": formData.mrp ? parseFloat(formData.mrp) : null,
+  "purchasePrice": formData.purchasePrice ? parseFloat(formData.purchasePrice) : null,
+  "purchaseDate": formData.purchaseDate || null,
+  "branchName": formData.branchName || null
+}
+- But backend create_medicine persists only:
+  name, category, price, stock, description, manufacturer, batch_number, expiry_date, reorder_level, created_at, updated_at
+
+3. MEDICINE STOCK UPDATE LOGIC
+
+Places where stock is modified:
+
+A. Manual stock update endpoint
+- PUT /pharmacy/medicines/{medicine_id}/stock
+- Expects payload:
+  {
+    "quantity_sold": int
+  }
+- Logic:
+  1. Load current medicine
+  2. Read current_stock = med.get("stock", 0)
+  3. Validate current_stock >= quantity_sold
+  4. Compute new_stock = current_stock - quantity_sold
+  5. Update using $set:
+     {
+       "$set": {
+         "stock": new_stock,
+         "updated_at": timestamp
+       }
+     }
+
+B. Generic medicine update endpoint
+- PUT /pharmacy/medicines/{medicine_id}
+- Accepts arbitrary medicine_data
+- Used by frontend MedicineManagementView for:
+  - adding stock
+  - removing stock
+  - editing medicine details
+- Stock change here is done by sending a new absolute stock value, then backend applies:
+  {
+    "$set": update_data
+  }
+
+C. Pharmacy billing stock reduction
+- POST /pharmacy/billing
+- Before billing is committed, backend validates stock for every item.
+- After the bill is inserted, stock is reduced per item using $inc:
+  {
+    "$inc": {
+      "stock": -quantity_sold
+    },
+    "$set": {
+      "updated_at": timestamp
+    }
+  }
+
+How stock is reduced during pharmacy billing:
+- create_pharmacy_bill reads billing_data.items
+- Each item must contain medicineId and quantity
+- Backend checks available stock first
+- If all items have enough stock, it inserts the bill into pharmacy_billing_collection
+- Then for each billed item it updates pharmacy_collection with:
+  stock = stock - quantity_sold
+- This reduction uses $inc, not manual recomputation
+
+4. INVOICE UPLOAD FRONTEND PAYLOAD
+
+Important finding:
+- In src/components/InvoiceUploadView.tsx, clicking "Add Stock" does NOT send any request to the backend.
+- There is no fetch/axios call in the Add Stock button handler.
+- Instead, it constructs a GRN object and calls:
+  onSubmit?.(grnEntry)
+  onNavigate?.('grn-history')
+
+So the exact payload produced by InvoiceUploadView on Add Stock is:
+{
+  "id": Date.now().toString(),
+  "grnNo": "GRN-" + Date.now(),
+  "invNo": invoiceNumber,
+  "branch": "Main Branch",
+  "vendor": vendorName,
+  "grnDate": "DD-MM-YYYY" of current day,
+  "invDate": invoiceDate,
+  "invDis": parseFloat(summaryDiscPct) || 0,
+  "invAmt": parseFloat(invoiceValue) || netValue,
+  "charges": charges ? `FC: ${charges}` : "FC: 0.00",
+  "roundOff": roundOff,
+  "total": netValue,
+  "createdBy": createdBy,
+  "products": [
+    {
+      "sno": idx + 1,
+      "category": r.category,
+      "productCode": r.product,
+      "product": r.product,
+      "stockType": r.stockType,
+      "batch": r.batch,
+      "gst": parseFloat(r.gstPct) || 0,
+      "discount": r.discType === '%' ? `(${discNum.toFixed(2)}%)` : `(₹${discNum.toFixed(2)})`,
+      "expiry": r.expiry,
+      "hsnCode": r.hsn,
+      "unitsPerStrip": parseFloat(r.unitsPerStrip) || 1,
+      "strips": `(${strips}+${parseFloat(r.freeStrips) || 0})`,
+      "freeStrips": r.freeStrips,
+      "pricePerStrip": parseFloat(r.price) || 0,
+      "mrpPerStrip": parseFloat(r.mrp) || 0,
+      "salePrice": parseFloat(r.salePrice) || 0,
+      "totalUnits": units * strips,
+      "pricePerUnit": units > 0 ? price / units : price,
+      "mrpPerUnit": units > 0 ? mrp / units : mrp,
+      "total": price * strips,
+      "rackNo": r.rackNo,
+      "boxNo": r.boxNo,
+      "remarks": r.remarks
+    }
+  ]
+}
+
+Conclusion for question 4:
+- Exact backend payload from Add Stock button: none
+- Exact emitted payload from InvoiceUploadView: grnEntry object above
+
+5. MEDICINE IDENTIFIER
+
+Backend database matching for medicine records:
+- Primary exact lookup/update field: _id (Mongo ObjectId)
+- Fallback exact lookup/update field: id
+
+Observed patterns:
+- pharmacy_collection.find_one({"_id": ObjectId(medicine_id)})
+- fallback: pharmacy_collection.find_one({"id": medicine_id})
+- same pattern used for update_one calls
+
+Frontend matching behavior:
+- Invoice import matching in MedicineManagementView uses exact normalized medicine name:
+  m.name.toLowerCase().trim() === item.name.toLowerCase().trim()
+- This is only for UI-side pre-match during invoice import review
+- It is not the primary backend database identifier
+
+Exact field used overall:
+- Backend CRUD/billing operations: _id, with fallback to id
+- Invoice import pre-match only: name
+
+6. DATABASE COLLECTIONS RELATED TO PHARMACY
+
+Direct pharmacy-related Mongo collections defined in backend/database.py:
+- pharmacy_collection = db["pharmacy_medicines"]
+- pharmacy_billing_collection = db["pharmacy_billing"]
+
+Related collection also used by pharmacy flow:
+- patient_collection = db["patients"]
+  Pharmacy billing writes embedded fields into patient documents:
+  - pharmacyBills
+  - lastPharmacyPurchase
+
+Not found as separate pharmacy collections:
+- purchase_invoices collection: not found
+- dedicated GRN collection: not found in the analyzed backend files
+
+7. MEDICINE MANAGEMENT PAGE
+
+Medicine table fields displayed in MedicineManagementView.tsx:
+- Name
+- Category
+- Price
+- MRP
+- Cost Price
+- Stock
+- Batch
+- Expiry
+- Vendor
+- Actions
+
+How stock is displayed:
+- Table column shows:
+  {medicine.stock} units
+- Color logic:
+  - red if stock < 10
+  - green otherwise
+
+Table field mapping details:
+- Name:
+  medicine.name
+  plus description shown below if present: medicine.description
+- Category:
+  medicine.category
+- Price:
+  medicine.price
+- MRP:
+  medicine.mrp
+- Cost Price:
+  medicine.purchasePrice
+- Stock:
+  medicine.stock
+- Batch:
+  medicine.batchNumber || medicine.batch_number
+- Expiry:
+  medicine.expiryDate || medicine.expiry_date
+- Vendor:
+  medicine.vendorName || medicine.manufacturer
+- Actions:
+  stock add/remove controls, edit, delete
+
+SUMMARY
+
+- Medicine inventory is stored in collection: pharmacy_medicines
+- Stock is stored in field: stock
+- New medicines are created through POST /pharmacy/medicines
+- Stock is reduced during billing in POST /pharmacy/billing using $inc: { stock: -quantity_sold }
+- InvoiceUploadView Add Stock does not directly call backend; it emits a GRN object via onSubmit
+- Backend medicine identity is primarily _id, with fallback id
+- Pharmacy-related collections are pharmacy_medicines, pharmacy_billing, and patients (embedded pharmacy history)

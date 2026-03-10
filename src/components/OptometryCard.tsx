@@ -18,6 +18,11 @@ interface OptometryCardProps {
   isViewingPastVisit?: boolean;
 }
 
+interface ActiveVisionCell {
+  rowIndex: number;
+  eye: 'rightEye' | 'leftEye';
+}
+
 // ---------- NumericStepper ----------
 // A compact inline cell component with - and + buttons.
 // Used for SPH/CYL (step=0.25, min=-10, max=10) and AXIS (step=1, min=0, max=180).
@@ -324,6 +329,7 @@ export function OptometryCard({
 
   const [presets, setPresets] = useState<string[]>(['6/6', '6/9', '6/12', 'N6']);
   const [newPreset, setNewPreset] = useState('');
+  const [activeVisionCell, setActiveVisionCell] = useState<ActiveVisionCell | null>(null);
 
   useEffect(() => {
     fetch(API_ENDPOINTS.PRESETS('optometry'))
@@ -375,10 +381,17 @@ export function OptometryCard({
   };
 
   const applySmartFill = (value: string) => {
-    const visionKeys = ['unaided', 'withGlass', 'withPinhole', 'bestCorrected'];
-    for (const key of visionKeys) {
-      if (!((visionData as any)?.[key]?.rightEye)) { updateVision(key, 'rightEye', value); return; }
-      if (!((visionData as any)?.[key]?.leftEye)) { updateVision(key, 'leftEye', value); return; }
+    if (activeVisionCell) {
+      const row = visionRows[activeVisionCell.rowIndex];
+      if (row) {
+        updateVision(row.key, activeVisionCell.eye, value);
+        return;
+      }
+    }
+
+    for (const row of visionRows) {
+      if (!((visionData as any)?.[row.key]?.rightEye)) { updateVision(row.key, 'rightEye', value); return; }
+      if (!((visionData as any)?.[row.key]?.leftEye)) { updateVision(row.key, 'leftEye', value); return; }
     }
   };
 
@@ -545,11 +558,11 @@ export function OptometryCard({
 
   // ---------- Quick Fill Sidebar ----------
   const quickFillSidebar = (
-    <div className="bg-[#1a1a1a] p-4 rounded-xl border border-[#D4A574] shadow-2xl h-fit">
+    <div className="bg-[#1a1a1a] p-4 rounded-xl border border-[#D4A574] shadow-2xl h-[520px] flex flex-col">
       <h4 className="text-[#D4A574] text-sm font-bold uppercase tracking-wider mb-4 flex items-center gap-2">
         <Zap className="w-4 h-4" /> Quick Fill
       </h4>
-      <div className="space-y-3">
+      <div className="space-y-3 overflow-y-auto pr-1 flex-1 min-h-0">
           {presets.map((preset, idx) => (
             <div key={`${preset}-${idx}`} className="flex gap-2 group">
             <button
@@ -585,14 +598,6 @@ export function OptometryCard({
           <Plus size={18} />
         </button>
       </div>
-
-      <div className="mt-4 p-3 bg-[#252525]/50 rounded-lg text-[10px] text-[#8B8B8B] leading-relaxed border border-[#D4A574]">
-        <p className="flex flex-col gap-1">
-          <span className="text-[#D4A574] font-bold">Smart Fill Mode:</span>
-          <span>Click a value to auto-fill the next empty slot in sequence:</span>
-          <span className="font-mono bg-[#111] px-1 rounded text-center block mt-1">Right → Left → Next Row</span>
-        </p>
-      </div>
     </div>
   );
 
@@ -617,11 +622,16 @@ export function OptometryCard({
                   <td className="p-3 text-white border-r border-[#D4A574] text-xs font-medium">{label}</td>
                   {['rightEye', 'leftEye'].map((eye) => {
                     const refKey = `vision-${key}-${eye}`;
+                    const isActive = activeVisionCell?.rowIndex === i && activeVisionCell?.eye === eye;
                     return (
                       <td
                         key={refKey}
-                        className="p-3 text-center border-r border-[#D4A574] cursor-pointer hover:bg-[#2a2a2a] transition-colors"
-                        onClick={() => fieldRefs.current[refKey]?.startEditing()}
+                        className={`p-3 text-center border-r border-[#D4A574] cursor-pointer transition-colors ${isActive ? 'bg-[#2a2a2a] ring-1 ring-inset ring-[#D4A574]' : 'hover:bg-[#2a2a2a]'}`}
+                        onClick={() => {
+                          setActiveVisionCell({ rowIndex: i, eye: eye as 'rightEye' | 'leftEye' });
+                          fieldRefs.current[refKey]?.startEditing();
+                        }}
+                        onFocusCapture={() => setActiveVisionCell({ rowIndex: i, eye: eye as 'rightEye' | 'leftEye' })}
                       >
                         <EditableText
                           ref={(el) => { fieldRefs.current[refKey] = el; }}

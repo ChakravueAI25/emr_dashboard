@@ -89,11 +89,16 @@ export const PatientDashboard = ({
                     contrastSensitivity: d.optometry?.vision?.contrastSensitivity || { rightEye: '', leftEye: '' },
                 },
                 autoRefraction: {
+                    ...d.optometry?.autoRefraction,
                     ur: d.optometry?.autoRefraction?.ur || { sph: '', cyl: '', axis: '' },
                     dr: d.optometry?.autoRefraction?.dr || { sph: '', cyl: '', axis: '' },
                     cyclo: d.optometry?.autoRefraction?.cyclo || { sph: '', cyl: '', axis: '' },
                 },
-                finalGlasses: d.optometry?.finalGlasses || { rightEye: {}, leftEye: {} }
+                finalGlasses: d.optometry?.finalGlasses || { rightEye: {}, leftEye: {} },
+                currentGlasses: d.optometry?.currentGlasses || { rightEye: {}, leftEye: {} },
+                oldGlass: d.optometry?.oldGlass || { rightEye: {}, leftEye: {} },
+                keratometry: d.optometry?.keratometry || { rightEye: { k1: {}, k2: {} }, leftEye: { k1: {}, k2: {} } },
+                additional: d.optometry?.additional || { gpAdvisedFor: '', gpAdvisedBy: '', useOfGlass: '', product: '' },
             },
             iop: d.iop || { iopReadings: [], chartData: [] },
             ophthalmicInvestigations: d.ophthalmicInvestigations || { oct: {}, biometry: {}, pachymetry: {}, colourVision: {}, ffa: '', hvf: '', otherInvestigations: [] },

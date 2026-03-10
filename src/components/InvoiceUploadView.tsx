@@ -1,6 +1,15 @@
-import React, { useState, useRef, useCallback } from 'react';
-import { ArrowLeft, Plus, RotateCcw, X, CreditCard, AlertCircle } from 'lucide-react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { ArrowLeft, Plus, RotateCcw, X, CreditCard, AlertCircle, ChevronDown, Loader2, CheckCircle2 } from 'lucide-react';
 import type { GrnEntry, GrnProduct } from './SummaryOfInvoiceView';
+import { API_ENDPOINTS } from '../config/api';
+
+interface Vendor {
+  id: string;
+  name: string;
+  phone?: string;
+  gstNumber?: string;
+  creditDays?: number;
+}
 
 interface Props {
   onBack: () => void;
@@ -51,6 +60,34 @@ export function InvoiceUploadView({ onBack, onNavigate, onSubmit, createdBy = 'S
   const [charges, setCharges] = useState('');
   const [totalReceived, setTotalReceived] = useState('');
 
+  // Vendor dropdown state
+  const [vendorList, setVendorList] = useState<Vendor[]>([]);
+  const [vendorDropdownOpen, setVendorDropdownOpen] = useState(false);
+  const [selectedVendorId, setSelectedVendorId] = useState('');
+  const vendorDropdownRef = useRef<HTMLDivElement>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  // Fetch vendors on mount
+  useEffect(() => {
+    fetch(API_ENDPOINTS.VENDORS.GET_ALL)
+      .then(r => r.json())
+      .then(data => {
+        if (data.vendors) setVendorList(data.vendors);
+      })
+      .catch(() => {});
+  }, []);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (vendorDropdownRef.current && !vendorDropdownRef.current.contains(e.target as Node)) {
+        setVendorDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
   // Inline rows – each row is either 'draft' (being filled) or 'saved'
   const emptyDraft = (): ProductRow => ({
     id: Date.now().toString() + Math.random(),
@@ -66,16 +103,18 @@ export function InvoiceUploadView({ onBack, onNavigate, onSubmit, createdBy = 'S
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Toast notification
-  const [toast, setToast] = useState<{ msg: string; visible: boolean }>({ msg: '', visible: false });
+  const [toast, setToast] = useState<{ msg: string; visible: boolean; type: 'error' | 'success' }>({ msg: '', visible: false, type: 'error' });
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const showToast = useCallback((msg: string) => {
+  const showToast = useCallback((msg: string, type: 'error' | 'success' = 'error') => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
-    setToast({ msg, visible: true });
-    toastTimer.current = setTimeout(() => setToast({ msg: '', visible: false }), 4000);
-    setTimeout(() => {
-      scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }, 30);
+    setToast({ msg, visible: true, type });
+    toastTimer.current = setTimeout(() => setToast({ msg: '', visible: false, type: 'error' }), 4000);
+    if (type === 'error') {
+      setTimeout(() => {
+        scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }, 30);
+    }
   }, []);
 
   const updateRow = (id: string, field: keyof ProductRow, value: string) => {
@@ -118,6 +157,8 @@ export function InvoiceUploadView({ onBack, onNavigate, onSubmit, createdBy = 'S
   const total = subTotal - discountAmt + gstTotal;
   const roundOff = Math.round(total) - total;
   const netValue = total + roundOff;
+  const savedRows = rows.filter(r => r.saved);
+  const isCreditInvoice = savedRows.length > 0 && savedRows.every(r => r.stockType === 'Purchased (Credit)');
 
   // small reusable input cell
   const Cell = ({ row, field, type = 'text', placeholder = '' }: {
@@ -164,13 +205,20 @@ export function InvoiceUploadView({ onBack, onNavigate, onSubmit, createdBy = 'S
           </div>
           {/* Inline toast — beside the header title */}
           <div
-            className={`flex items-start gap-2.5 px-4 py-2.5 rounded-xl border border-red-500/40 bg-red-950/90 text-red-200 text-sm max-w-sm transition-all duration-300 ${
+            className={`flex items-start gap-2.5 px-4 py-2.5 rounded-xl border text-sm max-w-sm transition-all duration-300 ${
+              toast.type === 'success'
+                ? 'border-emerald-500/40 bg-emerald-950/90 text-emerald-200'
+                : 'border-red-500/40 bg-red-950/90 text-red-200'
+            } ${
               toast.visible ? 'opacity-100 scale-100 pointer-events-auto' : 'opacity-0 scale-95 pointer-events-none'
             }`}
           >
-            <AlertCircle size={16} className="text-red-400 mt-0.5 shrink-0" />
+            {toast.type === 'success'
+              ? <CheckCircle2 size={16} className="text-emerald-400 mt-0.5 shrink-0" />
+              : <AlertCircle size={16} className="text-red-400 mt-0.5 shrink-0" />
+            }
             <span className="leading-snug flex-1 text-xs">{toast.msg}</span>
-            <button onClick={() => setToast({ msg: '', visible: false })} className="text-red-400 hover:text-red-200 ml-1 shrink-0">
+            <button onClick={() => setToast({ msg: '', visible: false, type: 'error' })} className={`${toast.type === 'success' ? 'text-emerald-400 hover:text-emerald-200' : 'text-red-400 hover:text-red-200'} ml-1 shrink-0`}>
               <X size={13} />
             </button>
           </div>
@@ -187,9 +235,40 @@ export function InvoiceUploadView({ onBack, onNavigate, onSubmit, createdBy = 'S
               <label className={lc}>Invoice Value <span className="text-red-400">*</span></label>
               <input className={ic} type="number" value={invoiceValue} onChange={e => setInvoiceValue(e.target.value)} placeholder="Invoice Value" />
             </div>
-            <div>
+            <div ref={vendorDropdownRef} className="relative">
               <label className={lc}>Vendor Name <span className="text-red-400">*</span></label>
-              <input className={ic} value={vendorName} onChange={e => setVendorName(e.target.value)} placeholder="Enter vendor name" />
+              <div className="relative">
+                <input
+                  className={ic + ' pr-8'}
+                  value={vendorName}
+                  onChange={e => { setVendorName(e.target.value); setSelectedVendorId(''); setVendorDropdownOpen(true); }}
+                  onFocus={() => setVendorDropdownOpen(true)}
+                  placeholder="Select or type vendor"
+                />
+                <button
+                  type="button"
+                  onClick={() => setVendorDropdownOpen(p => !p)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--theme-text-muted)]"
+                >
+                  <ChevronDown size={14} />
+                </button>
+              </div>
+              {vendorDropdownOpen && vendorList.length > 0 && (
+                <div className="absolute z-50 mt-1 w-full max-h-40 overflow-y-auto bg-[var(--theme-bg)] border border-[var(--theme-accent)]/25 rounded-lg shadow-lg">
+                  {vendorList
+                    .filter(v => !vendorName || v.name.toLowerCase().includes(vendorName.toLowerCase()))
+                    .map(v => (
+                      <button
+                        key={v.id}
+                        type="button"
+                        onClick={() => { setVendorName(v.name); setSelectedVendorId(v.id); setVendorDropdownOpen(false); }}
+                        className="w-full text-left px-3 py-2 text-xs text-[var(--theme-text)] hover:bg-[var(--theme-accent)]/10 transition-colors"
+                      >
+                        {v.name}{v.phone ? ` — ${v.phone}` : ''}
+                      </button>
+                    ))}
+                </div>
+              )}
             </div>
             <div>
               <label className={lc}>Invoice Number <span className="text-red-400">*</span></label>
@@ -476,10 +555,11 @@ export function InvoiceUploadView({ onBack, onNavigate, onSubmit, createdBy = 'S
               <span className="text-[var(--theme-text-muted)] font-medium">Total Received</span>
               <input
                 type="number"
-                value={totalReceived}
+                value={isCreditInvoice ? netValue.toFixed(2) : totalReceived}
                 onChange={e => setTotalReceived(e.target.value)}
                 placeholder="0.00"
-                className="w-32 bg-[var(--theme-bg)] border border-[var(--theme-accent)]/25 rounded-lg px-2 py-1.5 text-sm text-right text-[var(--theme-text)] font-semibold focus:outline-none focus:border-[var(--theme-accent)] transition-all"
+                disabled={isCreditInvoice}
+                className="w-32 bg-[var(--theme-bg)] border border-[var(--theme-accent)]/25 rounded-lg px-2 py-1.5 text-sm text-right text-[var(--theme-text)] font-semibold focus:outline-none focus:border-[var(--theme-accent)] transition-all disabled:opacity-70"
               />
             </div>
           </div>
@@ -511,6 +591,13 @@ export function InvoiceUploadView({ onBack, onNavigate, onSubmit, createdBy = 'S
                 showToast(`Invoice Value (${invVal.toFixed(2)}) does not match Net Value (${netValue.toFixed(2)}). Not all medicines may have been entered.`);
                 return;
               }
+              const allRowsCredit = savedRows.every(r => r.stockType === 'Purchased (Credit)');
+              const allRowsDebit = savedRows.every(r => r.stockType === 'Purchased (Debit)');
+              const purchaseType = allRowsCredit ? 'credit' : 'debit';
+              const effectivePaidAmount = purchaseType === 'credit'
+                ? netValue
+                : (parseFloat(totalReceived) || 0);
+
               const products: GrnProduct[] = savedRows.map((r, idx) => {
                 const units = parseFloat(r.unitsPerStrip) || 1;
                 const strips = parseFloat(r.strips) || 0;
@@ -520,6 +607,12 @@ export function InvoiceUploadView({ onBack, onNavigate, onSubmit, createdBy = 'S
                 const gstNum = parseFloat(r.gstPct) || 0;
                 const discNum = parseFloat(r.disc) || 0;
                 const discStr = r.discType === '%' ? `(${discNum.toFixed(2)}%)` : `(₹${discNum.toFixed(2)})`;
+                // Convert expiry from "MM/YYYY" to "YYYY-MM" for backend storage
+                let expiryFormatted = r.expiry;
+                const expiryMatch = r.expiry.match(/^(\d{2})\/(\d{4})$/);
+                if (expiryMatch) {
+                  expiryFormatted = `${expiryMatch[2]}-${expiryMatch[1]}`;
+                }
                 return {
                   sno: idx + 1,
                   category: r.category,
@@ -529,7 +622,7 @@ export function InvoiceUploadView({ onBack, onNavigate, onSubmit, createdBy = 'S
                   batch: r.batch,
                   gst: gstNum,
                   discount: discStr,
-                  expiry: r.expiry,
+                  expiry: expiryFormatted,
                   hsnCode: r.hsn,
                   unitsPerStrip: units,
                   strips: `(${strips}+${parseFloat(r.freeStrips) || 0})`,
@@ -566,12 +659,63 @@ export function InvoiceUploadView({ onBack, onNavigate, onSubmit, createdBy = 'S
                 createdBy: createdBy,
                 products,
               };
-              onSubmit?.(grnEntry);
-              onNavigate?.('grn-history');
+
+              // Build backend payload for POST /pharmacy/grn
+              const grnPayload = {
+                grnNo: grnEntry.grnNo,
+                invoiceNumber,
+                vendorId: selectedVendorId || '',
+                vendorName,
+                invoiceDate,
+                purchaseType,
+                totalAmount: netValue,
+                paidAmount: effectivePaidAmount,
+                createdBy,
+                products: savedRows.map(r => {
+                  let expiry = r.expiry;
+                  const em = r.expiry.match(/^(\d{2})\/(\d{4})$/);
+                  if (em) expiry = `${em[2]}-${em[1]}`;
+                  return {
+                    medicineName: r.product,
+                    category: r.category,
+                    stockType: r.stockType,
+                    batch: r.batch,
+                    expiry,
+                    unitsPerStrip: parseInt(r.unitsPerStrip) || 1,
+                    strips: parseInt(r.strips) || 0,
+                    freeStrips: parseInt(r.freeStrips) || 0,
+                    purchasePrice: parseFloat(r.price) || 0,
+                    mrp: parseFloat(r.mrp) || 0,
+                  };
+                }),
+              };
+
+              setSubmitting(true);
+              fetch(API_ENDPOINTS.GRN.CREATE, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(grnPayload),
+              })
+                .then(async res => {
+                  const data = await res.json();
+                  if (!res.ok) {
+                    throw new Error(data.detail || 'Failed to save GRN');
+                  }
+                  // Show green success toast, then navigate after a short delay
+                  showToast(`GRN ${grnEntry.grnNo} saved successfully with ${savedRows.length} product(s)`, 'success');
+                  onSubmit?.(grnEntry);
+                  setTimeout(() => onNavigate?.('grn-history'), 1500);
+                })
+                .catch(err => {
+                  showToast(err.message || 'Failed to save GRN. Please try again.', 'error');
+                })
+                .finally(() => setSubmitting(false));
             }}
-            className="flex items-center gap-2 px-7 py-2.5 bg-[var(--theme-accent)] text-[var(--theme-bg)] rounded-xl text-sm font-bold hover:opacity-90 transition-opacity shadow-lg shadow-[var(--theme-accent)]/20"
+            disabled={submitting}
+            className={`flex items-center gap-2 px-7 py-2.5 bg-[var(--theme-accent)] text-[var(--theme-bg)] rounded-xl text-sm font-bold hover:opacity-90 transition-opacity shadow-lg shadow-[var(--theme-accent)]/20 ${submitting ? 'opacity-60 cursor-not-allowed' : ''}`}
           >
-            <Plus size={16} /> Add Stock
+            {submitting ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+            {submitting ? 'Saving...' : 'Add Stock'}
           </button>
         </div>
 

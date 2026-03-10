@@ -310,6 +310,9 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
   const [couponCode, setCouponCode] = useState('');
   const [workerQuota, setWorkerQuota] = useState<any>(null);
   const [discountAmount, setDiscountAmount] = useState(0);
+  const [couponDiscountInput, setCouponDiscountInput] = useState('');
+  const [couponAppliedAmount, setCouponAppliedAmount] = useState(0);
+  const [isCouponApplied, setIsCouponApplied] = useState(false);
 
   // ============ SAVE AS PACKAGE STATE ============
   const [showSaveAsPackagePopup, setShowSaveAsPackagePopup] = useState(false);
@@ -459,23 +462,32 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
       // Even if we have pre-filled data, fetch the full details to get all fields (like age/sex for existing patients)
       console.log('🔄 Fetching patient details for registration:', currentRegId);
       fetchPatientDetails();
-      fetchWorkerQuota();
       fetchSurgeryBills();
     } else {
       setLoading(false);
     }
   }, [currentRegId]);
 
-  const fetchWorkerQuota = async () => {
+  const fetchWorkerQuota = async (workerId: string) => {
+    const normalizedWorkerId = workerId.trim().toUpperCase();
+    if (!normalizedWorkerId) {
+      setWorkerQuota(null);
+      return null;
+    }
+
     try {
-      const response = await fetch(API_ENDPOINTS.COUPONS.GET_QUOTA(currentUser || 'Admin'));
+      const response = await fetch(API_ENDPOINTS.COUPONS.GET_QUOTA(normalizedWorkerId));
       if (response.ok) {
         const data = await response.json();
         setWorkerQuota(data);
+        return data;
       }
+      setWorkerQuota(null);
     } catch (err) {
       console.error('Error fetching quota:', err);
+      setWorkerQuota(null);
     }
+    return null;
   };
 
   // Fetch existing surgery bills for the patient
@@ -721,7 +733,39 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
   const subtotal = items.reduce((sum, i) => sum + i.total, 0);
   const totalDiscount = items.reduce((sum, i) => sum + i.discount, 0);
   const totalTax = 0; // FIXED: Removed GST calculation
-  const grandTotal = subtotal - totalDiscount - discountAmount;
+  const grandTotal = subtotal - totalDiscount - discountAmount - couponAppliedAmount;
+
+  const handleApplyWorkerCoupon = async () => {
+    const normalizedWorkerId = couponCode.trim().toUpperCase();
+    const requestedDiscount = Number(couponDiscountInput);
+    const maxDiscountAllowed = Math.max(0, subtotal - totalDiscount - discountAmount);
+
+    if (!normalizedWorkerId) {
+      showAlert('Enter a worker ID first.');
+      return;
+    }
+
+    if (!Number.isFinite(requestedDiscount) || requestedDiscount <= 0) {
+      showAlert('Enter a valid discount amount.');
+      return;
+    }
+
+    if (requestedDiscount > maxDiscountAllowed) {
+      showAlert('Discount amount cannot exceed the payable amount.');
+      return;
+    }
+
+    const quota = await fetchWorkerQuota(normalizedWorkerId);
+    if (!quota || quota.remaining <= 0) {
+      showAlert('Invalid worker ID or no coupon quota remaining.');
+      return;
+    }
+
+    setCouponCode(normalizedWorkerId);
+    setCouponAppliedAmount(requestedDiscount);
+    setIsCouponApplied(true);
+    showAlert(`Coupon applied for ${normalizedWorkerId}.`);
+  };
 
   // ============ SURGERY BILL FUNCTIONS ============
 
@@ -1780,9 +1824,9 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
           insuranceStatus: govtInsuranceEnabled ? 'claimed' : 'none',
           patientResponsibility: govtInsuranceEnabled ? patientPayable : grandTotal,
           patientPaidAmount: govtInsuranceEnabled ? patientPayable : grandTotal,
-          couponCode: couponCode,
-          appliedBy: currentUser || 'Admin',
-          discountAmount: discountAmount + totalDiscount,
+          couponCode: isCouponApplied ? couponCode.trim().toUpperCase() : '',
+          appliedBy: isCouponApplied ? couponCode.trim().toUpperCase() : '',
+          discountAmount: discountAmount + couponAppliedAmount + totalDiscount,
           paymentMethod: paymentMethod, // Explicitly pass payment method
           notes: `Payment via ${paymentMethod}. ${govtInsuranceEnabled ? `Insurance Claim: ${insuranceCompany} - ${insuranceTPA}` : ''}`,
           // New Multi-stage tracking fields
@@ -2605,7 +2649,7 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-[#8B8B8B] font-medium">Discount</span>
-                <span className="text-green-500 font-bold tracking-tight">- ₹{(totalDiscount + discountAmount).toLocaleString('en-IN')}</span>
+                <span className="text-green-500 font-bold tracking-tight">- ₹{(totalDiscount + discountAmount + couponAppliedAmount).toLocaleString('en-IN')}</span>
               </div>
 
               {govtInsuranceEnabled && items.some(i => i.category === 'Surgery') && (
@@ -2686,24 +2730,44 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
                 <div className="flex gap-2">
                   <input
                     value={couponCode}
-                    onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                    className="flex-1 bg-[#0a0a0a] border border-[#D4A574]/30 rounded-lg h-9 px-3 text-xs font-mono text-white focus:border-[#D4A574]"
-                    placeholder="Enter code"
-                  />
-                  <button
-                    onClick={() => {
-                      if (couponCode === 'GOVT50') {
-                        setDiscountAmount(grandTotal * 0.5);
-                        showAlert('50% Govt Discount Applied');
-                      } else {
-                        showAlert('Invalid Coupon');
+                    onChange={(e) => {
+                      setCouponCode(e.target.value.toUpperCase());
+                      setWorkerQuota(null);
+                      if (isCouponApplied) {
+                        setIsCouponApplied(false);
+                        setCouponAppliedAmount(0);
                       }
                     }}
+                    className="flex-1 bg-[#0a0a0a] border border-[#D4A574]/30 rounded-lg h-9 px-3 text-xs font-mono text-white focus:border-[#D4A574]"
+                    placeholder="Enter worker ID"
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={couponDiscountInput}
+                    onChange={(e) => {
+                      setCouponDiscountInput(e.target.value);
+                      if (isCouponApplied) {
+                        setIsCouponApplied(false);
+                        setCouponAppliedAmount(0);
+                      }
+                    }}
+                    className="w-28 bg-[#0a0a0a] border border-[#D4A574]/30 rounded-lg h-9 px-3 text-xs text-white focus:border-[#D4A574]"
+                    placeholder="Amount"
+                  />
+                  <button
+                    onClick={handleApplyWorkerCoupon}
                     className="h-9 px-4 bg-[#D4A574]/10 border border-[#D4A574]/30 text-[#D4A574] rounded-lg text-xs font-bold hover:bg-[#D4A574] hover:text-[#0a0a0a] transition-all"
                   >
                     Apply
                   </button>
                 </div>
+                {isCouponApplied && couponAppliedAmount > 0 && (
+                  <p className="px-1 text-[10px] text-green-400 font-medium">
+                    Worker coupon applied: {couponCode} for ₹{couponAppliedAmount.toLocaleString('en-IN')}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -2729,7 +2793,7 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
                     });
                     if (res.ok) {
                       showAlert('Quota Refreshed!');
-                      fetchWorkerQuota();
+                      fetchWorkerQuota(couponCode.trim() || currentUser || 'Admin');
                     }
                   }}
                 >

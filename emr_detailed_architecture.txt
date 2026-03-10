@@ -1,0 +1,151 @@
+EMR PROJECT - DEEP TECHNICAL ARCHITECTURE ANALYSIS
+==================================================
+
+1. FULL ENDPOINT LIST
+--------------------------------------------------
+*Based on backend/main.py routing structure.*
+
+Clinical & Patient Management
+- POST /patients/new | Req: NewPatient | Res: PatientInDB | Col: patients
+- GET /patients/{registration_id} | Req: Path param | Res: Patient Object | Col: patients
+- PUT /patients/{registration_id} | Req: Dict (update fields) | Res: Success dict | Col: patients
+- PUT /patients/{registration_id}/doctor | Req: Dict (doctor exams) | Res: Success dict | Col: patients
+- PUT /patients/{registration_id}/investigations | Req: InvestigationsModel | Res: Success dict | Col: patients
+- GET /patients/all, /patients/search, /patients/recent | Res: Array of Patients | Col: patients
+- POST /patients/{registration_id}/documents | Req: UploadFile | Res: Document dict | Col: GridFS / patients
+- GET /patients/{registration_id}/documents/{file_id}/download | Res: File Stream | Col: GridFS
+
+Queue & Appointments
+- POST /appointments | Req: Dict | Res: Success dict | Col: appointments
+- GET /queue/reception, /queue/opd, /queue/doctor | Res: List of queue objects | Col: patient_queue
+- POST /queue/reception, /queue/opd, /queue/doctor | Req: Dict (regId, status) | Res: Success | Col: patient_queue
+- PUT /queue/{department}/{queue_id} | Req: Dict (status update) | Res: Success | Col: patient_queue
+
+Billing & Cases (OPD & Surgery)
+- GET /api/billing/patient/{reg_id}/summary | Res: Summary dict | Col: Mixed billing
+- POST /api/billing/cases | Req: BillingCase | Res: BillingCaseInDB | Col: billing_cases
+- POST /api/billing/patient/{reg_id}/surgery-bills/initial | Req: Dict | Res: Bill dict | Col: initial_surgery_bills
+- POST /api/billing/patient/{reg_id}/surgery-bills/final | Req: Dict | Res: Bill dict | Col: final_surgery_bills
+- POST /api/billing/patient/{reg_id}/invoices | Req: Dict | Res: Invoice dict | Col: billing_invoices
+- POST /api/billing/patient/{reg_id}/payments | Req: Dict | Res: Success | Col: billing_invoices
+- GET /api/surgery-packages | Res: List[SurgeryPackageInDB] | Col: surgery_packages
+
+Pharmacy & Inventory
+- POST /pharmacy/medicines | Req: PharmacyMedicine | Res: ID | Col: pharmacy_medicines
+- GET /pharmacy/medicines | Res: List of medicines | Col: pharmacy_medicines
+- PUT /pharmacy/medicines/{medicine_id}/stock | Req: Dict ({amount}) | Res: Success | Col: pharmacy_medicines
+- POST /pharmacy/billing | Req: PharmacyBilling | Res: Success | Col: pharmacy_billing (Auto-deducts from pharmacy_medicines)
+- POST /api/medicines/parse-invoice | Req: UploadFile | Res: Parsed text | Col: AI Service
+
+Vendor & Purchase (Supply Chain)
+- POST /vendors | Req: Dict | Res: VendorId | Col: vendors
+- GET /vendors/ledger | Res: Array of ledger objects | Col: vendors, purchase_invoices
+- POST /pharmacy/grn | Req: Dict | Res: Success | Col: purchase_invoices (Auto-adds to pharmacy_medicines)
+- PUT /vendors/pay-invoice/{invoice_id} | Req: Dict ({amount, mode}) | Res: Success | Col: vendor_payments
+
+
+2. DATABASE SCHEMA
+--------------------------------------------------
+*Extracted from backend/models.py and database.py.*
+
+users (UserInDB)
+- _id, username, full_name, hashed_password, role, created_at
+
+patients (PatientInDB)
+- _id, registrationId, name, hashed_password, demographics (age, sex, bloodType), contactInfo (phone, email, address), emergencyContact, allergies, documents_id, documents, drugHistory, doctor (dict for flexible ophthalmologist entries), history, encounters
+
+patient_queue (Dynamic)
+- _id, patientId, registrationId, name, status, department, arrivalTime, notes
+
+pharmacy_medicines (PharmacyMedicineInDB)
+- _id, name, category, price, stock, description, manufacturer, batch_number, expiry_date, reorder_level, created_at, updated_at
+
+pharmacy_billing (PharmacyBillingInDB)
+- _id, registrationId, patientName, items (array of CartItem -> medicineId, name, quantity, price, total), totalAmount, billDate, status, paymentMethod, gstRate, gstAmount, subTotal, isInsuranceClaimed
+
+billing_cases (BillingCaseInDB)
+- _id, caseId, registrationId, procedureName, totalEstimatedAmount, insuranceApprovedAmount, preSurgeryPaidAmount, stages, insuranceProvider, status, dateOfSurgery, dateOfDischarge, createdAt
+
+surgery_packages (SurgeryPackageInDB)
+- _id, packageName, description, items, totalAmount, createdBy, createdAt, usageCount
+
+vendors (Dynamic)
+- _id, name, contactPerson, phone, email, address, gstNumber, paymentTerms, status, createdAt
+
+purchase_invoices / vendor_payments (PurchaseProduct, VendorPaymentRecord)
+- _id, vendorId, invoiceId, amount, paymentMode, transactionRef, paidBy, paidAt (Payments)
+- _id, vendorId, invoiceNumber, subTotal, gstAmount, products (Purchases/GRN)
+
+
+3. ENTITY RELATIONSHIPS
+--------------------------------------------------
+- patients.registrationId → patient_queue.registrationId (Tracks movement)
+- patients.registrationId → billing_cases.registrationId (Groups multi-stage surgery logic)
+- patients.registrationId → billing_invoices.registrationId (Standard clinic billing)
+- patients.registrationId → pharmacy_billing.registrationId (Retail sales)
+- pharmacy_medicines._id → pharmacy_billing.items[].medicineId (Historical item linkage)
+- vendors._id → purchase_invoices.vendorId (One vendor -> Many purchase bills)
+- purchase_invoices._id → vendor_payments.invoiceId (One invoice -> Many payments)
+- users.username → patients.encounters[].doctor (Loosely tracks examining physician)
+
+
+4. DATA FLOW
+--------------------------------------------------
+- Clinical Walkthrough: Reception creates patient (POST) → Triggers push to patient_queue under "Reception" → Queue updated to "OPD" → OPD edits patients.investigations (PUT) → Queue updated to "Doctor" → Doctor edits patients.doctor (PUT) mapping ophthalmologist metrics → Patient goes to Billing.
+- Inventory/Pharmacy Flow (Outbound): Pharmacist selects stock → POST /pharmacy/billing saves pharmacy_billing invoice → System automatically executes $inc: { stock: -quantity } on pharmacy_medicines.
+- Vendor/Purchase Flow (Inbound): Hospital receives goods → Uses InvoiceUploadView (POST /pharmacy/grn) → Saves purchase_invoices → System automatically executes $inc: { stock: +quantity } on pharmacy_medicines and updates purchasePrice / mrp.
+- Vendor Payment: Accountant logs payment → PUT /vendors/pay-invoice/{id} → System aggregates total paid against total invoice amount to determine "Ledger Balance".
+
+
+5. FINANCIAL MODEL
+--------------------------------------------------
+Revenue (Cash Inflows):
+- pharmacy_billing: Over the counter / POS retail income.
+- billing_invoices: Registration fees, consultation mapping, diagnostic testing.
+- initial_surgery_bills / final_surgery_bills: High-ticket procedure revenue / security deposits.
+
+Expenses (Cash Outflows / Payables):
+- purchase_invoices calculates Accounts Payable tracking exactly what is owed over time.
+- vendor_payments calculates exact liquid capital dispatched.
+
+Daily Turnover Calculation: 
+An aggregation pipeline summing totalAmount grouping by matching createdAt and billDate on pharmacy_billing + billing_invoices + final_surgery_bills. 
+
+Receivables: 
+Calculated by matching totalEstimatedAmount minus preSurgeryPaidAmount and insuranceApprovedAmount inside the billing_cases collection. 
+
+
+6. FRONTEND → BACKEND INTEGRATION
+--------------------------------------------------
+InvoiceUploadView.tsx
+- Trigger: Adding stock from a vendor.
+- API Called: POST API_ENDPOINTS.GRN.CREATE (/pharmacy/grn)
+- Data Sent: Array of GrnProduct lines, vendorId, CGST/SGST ratios, subTotal.
+- Data Received: Success message. It then redirects the UI. 
+
+MedicineManagementView.tsx
+- Trigger: Loading inventory master list.
+- API Called: GET /pharmacy/medicines and PUT /pharmacy/medicines/{id}
+- Data Sent: Overwritten stock rules, MRP bounds, reorder levels.
+- Data Received: Array of PharmacyMedicine models used to populate the data grid.
+
+BillingDashboardView.tsx
+- Trigger: Landing on the hospital finance view.
+- API Called: GET /api/billing/dashboard/stats and GET /api/billing/analytics
+- Data Received: High-level JSON with sums of total collections, pending dues, and chronological transaction arrays mapped to Recharts on the screen.
+
+DoctorPortal.tsx / OpdDashboardView.tsx
+- Trigger: Staff opening a patient file from the Queue.
+- API Called: PUT /patients/{registration_id}/doctor (or investigations)
+- Data Sent: Massively nested dict (Optometry, Unaided Vision, Contact Lenses, IOP, Slit Lamp, Prescriptions). 
+- Data Received: HTTP 200 standard JSON confirmation.
+
+
+7. REPORTING CAPABILITIES
+--------------------------------------------------
+Using the exact schema boundaries defined above, the system can currently generate:
+1. Daily & Periodic Sales Report: Aggregation of OPD bills + Pharmacy Bills + Surgical final invoices. 
+2. Vendor Accounts Payable (Ledger): Live mapping of unpaid obligations natively using /vendors/ledger.
+3. Inventory Valuation & Alerts: Value = Sum of (stock x purchasePrice). GET /inventory/expiry-alerts flags soon-to-expire metrics.
+4. Clinical Efficacy (MIS): Connecting final_surgery_bills categories back to patients.encounters.investigations outputs procedure tracking. 
+5. Insurance Dues Report: Extracted from checking status = open inside billing_cases where third-party insurers are named.

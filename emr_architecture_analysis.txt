@@ -1,0 +1,130 @@
+EMR PROJECT ARCHITECTURE ANALYSIS & PROPOSAL
+============================================
+
+STEP 1 — Identify Existing System Modules
+-----------------------------------------
+Based on main.py endpoints, the system is structured into these core modules:
+
+1. Patients & Clinical:
+   • Endpoints: POST /patients/new, GET /patients/{registration_id}, POST /patients/{registration_id}/documents
+   • Collections: patients, patient_queue, slit_lamp_images, doctor_feedback, presets
+   • Relationships: Encounters and files are tied heavily to `registrationId`.
+
+2. Appointments & Queue:
+   • Endpoints: POST /appointments, GET /queue/reception, PUT /queue/doctor/{queue_id}, POST /queue/recall/...
+   • Collections: patient_queue, appointments (via patients array in older schemas)
+
+3. Billing (OPD & Surgery):
+   • Endpoints: GET /api/billing/patient/{reg_id}/summary, POST /api/billing/cases, POST /api/billing/patient/{reg_id}/surgery-bills/initial
+   • Collections: billing_invoices, billing_cases, initial_surgery_bills, final_surgery_bills, coupon_quotas, surgery_packages
+
+4. Pharmacy & Inventory:
+   • Endpoints: GET /pharmacy/medicines, POST /pharmacy/billing, POST /pharmacy/grn, GET /pharmacy/stock-report
+   • Collections: pharmacy_medicines, pharmacy_billing
+
+5. Vendor & Purchases (Supply Chain):
+   • Endpoints: POST /vendors, GET /vendors/ledger, GET /analytics/purchases/monthly
+   • Collections: vendors, purchase_invoices, vendor_payments
+   • Relationships: Invoices tie to Vendors (`vendorId`), and Payments tie to Invoices (`invoiceId`).
+
+
+STEP 2 — Identify Existing Database Collections
+-----------------------------------------------
+From database.py and models.py, here are the exact MongoDB collections and their purpose:
+
+1.  `users` — Authentication & role-based access control.
+2.  `patients` — Demographics, clinical encounters, visit history.
+3.  `patient_queue` — Live tracking of patient flow (Reception -> OPD -> Doctor -> Billing).
+4.  `pharmacy_medicines` — Inventory master list with `currentStock`, `mrp`, and `purchasePrice`.
+5.  `pharmacy_billing` — Retail sales records for pharmacy.
+6.  `coupon_quotas` — Discount or corporate coupon tracking.
+7.  `billing_cases` — Insurance & overall case tracking for patients.
+8.  `surgery_packages` — Reusable templates for surgical procedures.
+9.  `billing_invoices` — Primary invoices for OPD, diagnostics, and procedures.
+10. `initial_surgery_bills` — Estimates provided prior to admission.
+11. `final_surgery_bills` — Post-operative formalized billing schemas.
+12. `slit_lamp_images` — Image references for eye scans.
+13. `doctor_feedback` — Evaluative AI feedback loops.
+14. `presets` — Reusable textual presets for doctors.
+15. `vendors` — Suppliers of pharmacy medications/equipment.
+16. `purchase_invoices` — GRNs (Goods Received Notes) acting as purchase logs.
+17. `vendor_payments` — Ledger for tracking cash/bank outflows targeting vendors.
+
+
+STEP 3 — Identify Financial Data Sources
+----------------------------------------
+Financial Data is split between Revenue (Inflows) and Expenses (Outflows):
+
+REVENUE COLLECTIONS (CASH INFLOW):
+1. `pharmacy_billing`: Captures `totalAmount`, `subTotal`, `gstAmount`.
+2. `billing_invoices`: General clinical fees and procedures.
+3. `initial_surgery_bills` and `final_surgery_bills`: High-value operational revenue.
+   These represent the turnover. By aggregating these by `createdAt`/`billDate`, we derive Daily Sales.
+
+EXPENSE COLLECTIONS (CASH OUTFLOW):
+1. `purchase_invoices`: Track total purchase value owed to vendors (Accounts Payable).
+2. `vendor_payments`: Actual capital dispatched to satisfy payables.
+
+
+STEP 4 — Identify Inventory System
+----------------------------------
+The Pharmacy component manages the core inventory. 
+Changes revolve around `pharmacy_medicines` (the master stock container).
+
+• Stock Increases occur when interacting with `POST /pharmacy/grn` (Goods Received Note). Here, batch quantities are aggregated with `freeStrips` and added to `currentStock`. Manual overrides can also trigger via `PUT /pharmacy/medicines/{medicine_id}/stock`.
+• Stock Decreases occur actively during `POST /pharmacy/billing`. When an invoice is finalized, the system deducts the `CartItem.quantity` from the `currentStock`.
+• The system automatically alerts regarding expiry and low stock boundaries (`GET /inventory/expiry-alerts`, `GET /inventory/dead-stock`).
+
+
+STEP 5 — Identify Analytics Opportunities
+-----------------------------------------
+Existing collections provide deep reporting capabilities:
+
+• Daily Sales: Aggregate sum across `pharmacy_billing.totalAmount` + `billing_invoices.totalAmount` + `final_surgery_bills.totalAmount`, grouped by day.
+• Turnover: Same as Daily Sales mapped monthly or yearly via `$group` stages in MongoDB.
+• MIS Reports: Correlate `patients` diagnostics with `billing_invoices` to map which conditions lead to specific treatments (e.g., lens usage per surgery can be audited using `final_surgery_bills` arrays correlated with clinical `patients.encounters`).
+
+
+STEP 6 & 7 — Plan New Modules (Architecture Proposal)
+-----------------------------------------------------
+Based on constraints (do not modify existing modules, ensure seamless integration), here is the architecture for the ACCOUNTS and ADMIN modules:
+
+1. NEW COLLECTIONS PROPOSED
+   • `journal_entries`: Universal ledger (double-entry system) tracking debits/credits (supports Bank Statements and expenditures).
+   • `bank_statements`: Raw uploaded CSVs/JSON dumps of bank actions before they are reconciled.
+   • `expenses_log`: For daily expenditures (rent, utilities, tea, travel) separate from pharmacy purchases.
+   • `salaries_payslips`: Payroll tracking containing net pay, taxes, bonuses, deductions.
+   • `patient_advances`: Pre-payments/deposits against patient profiles (used before bill generation).
+   • `purchase_orders`: Pending POs (Requests) mapped to Vendors before they transition into a GRN.
+
+2. NEW BACKEND ENDPOINTS
+   Accounts Module:
+   • POST /api/accounts/upload-statement -> Parses and inserts to `bank_statements`
+   • GET  /api/accounts/gst-report -> Aggregates `pharmacy_billing` & `purchase_invoices` (calculating 5% / 18% splits).
+   • POST /api/accounts/expenses -> Record daily petty cash or operations spending into `expenses_log`.
+   • GET  /api/accounts/daily-sales -> Aggregates the 3 revenue tables (Pharmacy, OPD, Surgery).
+   • POST /api/accounts/journal -> Manual Journal Entry insertion.
+
+   Admin Module:
+   • POST /api/admin/payroll -> Generates & records payslip into `salaries_payslips`.
+   • GET  /api/admin/inventory-stock -> Extends `GET /pharmacy/stock-report`.
+   • GET  /api/admin/mis-reports -> Unified metrics on Surgeries vs Lenses vs Demographics.
+   • POST /api/admin/advances -> Store patient prepayments into `patient_advances`.
+   • GET  /api/admin/dues-report -> Scans `billing_cases` for unpaid balances.
+   • POST /api/admin/purchase-orders -> Creates a PO document.
+
+3. NEW UI DASHBOARDS
+   • `AccountsDashboardView.tsx` -> Tabs for Bank Reconciliations, Journal Entries, Day Book (Daily Sales + Expenditures).
+   • `GSTReportView.tsx` -> Charting output vs input GST mapped at 5% and 18% tiers.
+   • `AdminPayrollView.tsx` -> Upload/Create salary statements and print payslips.
+   • `MISReportsView.tsx` -> Granular analytics visualizer for admins (lenses, treatments).
+   • `AdvanceManagementView.tsx` -> Manage Dues and Advances in a tabular interface.
+   • `PurchaseOrderView.tsx` -> Raise and email Pharmacy POs to listed Vendors.
+
+4. DATA RELATIONSHIPS & INTEGRATION
+   • The new GST module uses the existing `purchase_invoices` (input tax) and `pharmacy_billing`/`billing_invoices` (output tax).
+   • The Daily Sales view directly pulls from existing bills natively without modifying how bills are saved.
+   • Advances tie exclusively to `registration_id` existing in `patients`, ensuring foreign key integrity.
+   • Pending POs relate directly to `vendors` and map tightly into the `POST /pharmacy/grn` logic, changing status from "Pending" to "Fulfilled" when GRN applies.
+
+This completely satisfies all tracking, operational, accounting, and reporting needs without breaking a single legacy endpoint.

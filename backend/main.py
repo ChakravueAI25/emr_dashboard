@@ -35,7 +35,10 @@ from database import (
     final_surgery_bills_collection,
     slit_lamp_collection,
     doctor_feedback_collection,
-    presets_collection
+    presets_collection,
+    vendors_collection,
+    purchase_invoices_collection,
+    vendor_payments_collection
 )
 from invoice_parser import parse_invoice
 from models import (
@@ -57,6 +60,8 @@ from models import (
     NewSurgeryPackage,
     SurgeryPackageInDB,
     UpdateSurgeryPackage,
+    PurchaseProduct,
+    VendorPaymentRecord,
 )
 import database  # ensure database.py is loaded
 from database import patient_collection  # re-import for clarity
@@ -2335,11 +2340,14 @@ def create_invoice(reg_id: str, invoice_data: dict = Body(...)):
     """Create a new invoice for a patient with insurance and coupon support."""
     try:
         # Handle Coupon Logic
-        coupon_code = invoice_data.get("couponCode")
-        worker_id = invoice_data.get("appliedBy")
+        coupon_code = (invoice_data.get("couponCode") or "").strip().upper()
+        worker_id = (invoice_data.get("appliedBy") or coupon_code).strip().upper()
         discount_amount = float(invoice_data.get("discountAmount", 0))
 
-        if coupon_code and worker_id:
+        if discount_amount > 0 and coupon_code:
+            if not worker_id:
+                raise HTTPException(status_code=400, detail="Worker ID is required to apply coupon discount")
+
             quota = coupon_quota_collection.find_one({"worker_id": worker_id})
             if not quota or quota.get("remaining", 0) <= 0:
                 raise HTTPException(status_code=400, detail="No coupons remaining for this worker")
@@ -2685,11 +2693,7 @@ def get_worker_coupon_quota(worker_id: str):
     """Get remaining coupons for a worker."""
     quota = coupon_quota_collection.find_one({"worker_id": worker_id})
     if not quota:
-        # Initialize if not exists
-        default_quota = {"worker_id": worker_id, "limit": 10, "remaining": 10, "used": 0}
-        result = coupon_quota_collection.insert_one(default_quota)
-        default_quota["id"] = str(result.inserted_id)
-        return default_quota
+        raise HTTPException(status_code=404, detail="Worker coupon quota not found")
     
     # Convert MongoDB ObjectId to string for JSON serialization
     if "_id" in quota:
@@ -3732,10 +3736,49 @@ async def get_billing_analytics():
             }}
         ]
 
+        # 4. Approved Insurance Receivables (final surgery bills only)
+        pipeline_insurance = [
+            {"$unwind": "$billing.surgeryBills"},
+            {"$match": {
+                "billing.surgeryBills.insuranceCompany": {"$nin": [None, ""]},
+                "billing.surgeryBills.insuranceApprovedAmount": {"$gt": 0}
+            }},
+            {"$project": {
+                "date": {
+                    "$cond": [
+                        {"$and": [
+                            {"$ne": [{"$ifNull": ["$billing.surgeryBills.insuranceApprovalDate", ""]}, ""]},
+                            {"$gte": [{"$strLenCP": {"$ifNull": ["$billing.surgeryBills.insuranceApprovalDate", ""]}}, 10]}
+                        ]},
+                        {"$substr": ["$billing.surgeryBills.insuranceApprovalDate", 0, 10]},
+                        {"$substr": ["$billing.surgeryBills.createdAt", 0, 10]}
+                    ]
+                },
+                "patientName": {
+                    "$ifNull": [
+                        "$billing.surgeryBills.patientName",
+                        "$patientDetails.name"
+                    ]
+                },
+                "registrationId": {
+                    "$ifNull": [
+                        "$billing.surgeryBills.registrationId",
+                        "$registrationId"
+                    ]
+                },
+                "insuranceCompany": "$billing.surgeryBills.insuranceCompany",
+                "amount": "$billing.surgeryBills.insuranceApprovedAmount",
+                "surgeryName": "$billing.surgeryBills.surgeryName",
+                "billId": "$billing.surgeryBills.billId",
+                "claimReference": "$billing.surgeryBills.insuranceClaimReference"
+            }}
+        ]
+
         # Execute Queries
         invoice_data = list(patient_collection.aggregate(pipeline_invoices))
         surgery_data = list(patient_collection.aggregate(pipeline_surgery))
         pharmacy_data = list(pharmacy_billing_collection.aggregate(pipeline_pharmacy))
+        insurance_data = list(patient_collection.aggregate(pipeline_insurance))
 
         # Process Data in Python
         # Structure: { "YYYY-MM-DD": { "op": {amount, count}, "lab": {...}, "surgery": {...}, "pharmacy": {...} } }
@@ -3815,11 +3858,27 @@ async def get_billing_analytics():
         def format_output(source_map):
             return [{"date": k, **v} for k, v in sorted(source_map.items())]
 
+        insurance_records = [
+            {
+                "date": item.get("date", ""),
+                "patientName": item.get("patientName", "Unknown"),
+                "registrationId": item.get("registrationId", ""),
+                "insuranceCompany": item.get("insuranceCompany", "Unknown"),
+                "amount": float(item.get("amount", 0) or 0),
+                "surgeryName": item.get("surgeryName", ""),
+                "billId": item.get("billId", ""),
+                "claimReference": item.get("claimReference", "")
+            }
+            for item in insurance_data
+        ]
+
         return {
             "status": "success",
             "daily": format_output(daily_map),
             "monthly": format_output(monthly_map),
-            "yearly": format_output(yearly_map)
+            "yearly": format_output(yearly_map),
+            "insuranceApprovedRecords": insurance_records,
+            "totalApprovedInsurance": round(sum(item["amount"] for item in insurance_records), 2)
         }
     except Exception as e:
         print(f"Error in analytics: {str(e)}")
@@ -4528,6 +4587,718 @@ async def save_presets(category: str, items: List[str] = Body(..., embed=True)):
         upsert=True
     )
     return {"message": "Presets saved"}
+
+
+# ==================== VENDOR / PURCHASE / GRN / ANALYTICS ENDPOINTS ====================
+
+from datetime import timedelta
+
+# ---------- MongoDB Indexes (run once on startup) ----------
+def _ensure_vendor_indexes():
+    try:
+        purchase_invoices_collection.create_index("vendorId")
+        purchase_invoices_collection.create_index("invoiceDate")
+        vendor_payments_collection.create_index("invoiceId")
+        pharmacy_collection.create_index("name")
+    except Exception as e:
+        print(f"[Index creation warning] {e}")
+
+_ensure_vendor_indexes()
+
+
+# ==================== FEATURE 1 — Vendor Master CRUD ====================
+
+@app.post("/vendors")
+async def create_vendor(data: dict = Body(...)):
+    try:
+        vendor = {
+            "name": data.get("name"),
+            "phone": data.get("phone", ""),
+            "gstNumber": data.get("gstNumber", ""),
+            "address": data.get("address", ""),
+            "creditDays": int(data.get("creditDays", 0)),
+            "createdAt": datetime.utcnow().isoformat()
+        }
+        if not vendor["name"]:
+            raise HTTPException(status_code=400, detail="Vendor name is required")
+        result = vendors_collection.insert_one(vendor)
+        return {"status": "success", "message": "Vendor created", "vendorId": str(result.inserted_id)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/vendors")
+async def get_vendors():
+    try:
+        vendors = list(vendors_collection.find())
+        return {"status": "success", "total": len(vendors), "vendors": [sanitize(v) for v in vendors]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/vendors/ledger")
+async def get_vendor_ledger():
+    """Return vendor financial summary: totalPurchase, totalPaid, balance per vendor."""
+    try:
+        pipeline = [
+            {"$group": {
+                "_id": "$vendorName",
+                "vendorId": {"$max": "$vendorId"},
+                "totalPurchase": {"$sum": "$totalAmount"},
+                "totalPaid": {"$sum": "$paidAmount"},
+                "lastPurchaseDate": {"$max": "$invoiceDate"}
+            }},
+            {"$project": {
+                "_id": 0,
+                "vendorId": 1,
+                "vendorName": "$_id",
+                "totalPurchase": 1,
+                "totalPaid": 1,
+                "lastPurchaseDate": 1,
+                "balance": {"$subtract": ["$totalPurchase", "$totalPaid"]}
+            }},
+            {"$sort": {"vendorName": 1}}
+        ]
+        result = list(purchase_invoices_collection.aggregate(pipeline))
+        return {"status": "success", "ledger": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/vendors/outstanding-invoices")
+async def get_outstanding_invoices():
+    """Return invoices with remaining balance, regardless of due date."""
+    try:
+        invoices = list(purchase_invoices_collection.find({
+            "$expr": {"$lt": ["$paidAmount", "$totalAmount"]}
+        }))
+        result = []
+        for inv in invoices:
+            item = sanitize(inv)
+            total_amount = float(item.get("totalAmount", 0) or 0)
+            paid_amount = float(item.get("paidAmount", 0) or 0)
+            item["balance"] = max(total_amount - paid_amount, 0)
+            result.append(item)
+        return {"status": "success", "total": len(result), "invoices": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/vendors/overdue-invoices")
+async def get_overdue_invoices():
+    """Return invoices where today > dueDate AND paymentStatus != paid."""
+    try:
+        now = datetime.utcnow().isoformat()
+        invoices = list(purchase_invoices_collection.find({
+            "dueDate": {"$lt": now},
+            "paymentStatus": {"$ne": "paid"}
+        }))
+        return {"status": "success", "total": len(invoices), "invoices": [sanitize(inv) for inv in invoices]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/vendors/{vendor_id}")
+async def get_vendor(vendor_id: str):
+    try:
+        vendor = None
+        try:
+            vendor = vendors_collection.find_one({"_id": ObjectId(vendor_id)})
+        except:
+            vendor = vendors_collection.find_one({"id": vendor_id})
+        if not vendor:
+            raise HTTPException(status_code=404, detail="Vendor not found")
+        return sanitize(vendor)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/vendors/{vendor_id}")
+async def update_vendor(vendor_id: str, data: dict = Body(...)):
+    try:
+        update_data = {k: v for k, v in data.items() if k != "id" and k != "_id"}
+        try:
+            result = vendors_collection.update_one({"_id": ObjectId(vendor_id)}, {"$set": update_data})
+        except:
+            result = vendors_collection.update_one({"id": vendor_id}, {"$set": update_data})
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail="Vendor not found")
+        return {"status": "success", "message": "Vendor updated"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/vendors/{vendor_id}")
+async def delete_vendor(vendor_id: str):
+    try:
+        try:
+            result = vendors_collection.delete_one({"_id": ObjectId(vendor_id)})
+        except:
+            result = vendors_collection.delete_one({"id": vendor_id})
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Vendor not found")
+        return {"status": "success", "message": "Vendor deleted"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== FEATURE 2 — Purchase Invoice / GRN ====================
+
+@app.post("/pharmacy/grn")
+async def create_grn(data: dict = Body(...)):
+    """
+    Create a Goods Received Note / Purchase Invoice.
+    For each product, update or create the medicine in pharmacy_medicines.
+    """
+    try:
+        vendor_id = data.get("vendorId", "")
+        vendor_name_input = (data.get("vendorName") or "").strip()
+        if not vendor_id and not vendor_name_input:
+            raise HTTPException(status_code=400, detail="vendorId or vendorName is required")
+
+        products = data.get("products", [])
+        if not products:
+            raise HTTPException(status_code=400, detail="At least one product is required")
+
+        # Duplicate invoice check: vendorName + invoiceNumber
+        invoice_number = (data.get("invoiceNumber") or "").strip()
+        if invoice_number and vendor_name_input:
+            existing_inv = purchase_invoices_collection.find_one({
+                "vendorName": {"$regex": f"^{re.escape(vendor_name_input)}$", "$options": "i"},
+                "invoiceNumber": invoice_number
+            })
+            if existing_inv:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Duplicate invoice: vendor '{vendor_name_input}' + invoice '{invoice_number}' already exists (GRN: {existing_inv.get('grnNo', 'N/A')})"
+                )
+
+        # Resolve vendor by id first, then by name, and auto-create if a typed name doesn't exist.
+        vendor = None
+        if vendor_id:
+            try:
+                vendor = vendors_collection.find_one({"_id": ObjectId(vendor_id)})
+            except:
+                vendor = vendors_collection.find_one({"id": vendor_id})
+
+        if not vendor and vendor_name_input:
+            vendor = vendors_collection.find_one({
+                "name": {"$regex": f"^{re.escape(vendor_name_input)}$", "$options": "i"}
+            })
+
+        credit_days = int(data.get("creditDays", 0))
+
+        if not vendor and vendor_name_input:
+            vendor_doc = {
+                "name": vendor_name_input,
+                "phone": data.get("vendorPhone", ""),
+                "gstNumber": data.get("vendorGstNumber", ""),
+                "address": data.get("vendorAddress", ""),
+                "creditDays": credit_days,
+                "createdAt": datetime.utcnow().isoformat(),
+                "updatedAt": datetime.utcnow().isoformat(),
+            }
+            vendor_result = vendors_collection.insert_one(vendor_doc)
+            vendor = {**vendor_doc, "_id": vendor_result.inserted_id}
+
+        if vendor:
+            vendor_id = str(vendor.get("_id") or vendor.get("id") or vendor_id)
+            vendor_name_input = (vendor.get("name") or vendor_name_input).strip()
+            credit_days = credit_days or int(vendor.get("creditDays", 0))
+
+        invoice_date_str = data.get("invoiceDate")
+        if invoice_date_str:
+            try:
+                invoice_date = datetime.fromisoformat(invoice_date_str)
+            except:
+                invoice_date = datetime.utcnow()
+        else:
+            invoice_date = datetime.utcnow()
+
+        due_date = invoice_date + timedelta(days=credit_days)
+
+        purchase_type = (data.get("purchaseType") or "debit").strip().lower()
+        total_amount = float(data.get("totalAmount", 0))
+        paid_amount = float(data.get("paidAmount", 0))
+        if purchase_type == "credit":
+            paid_amount = total_amount
+
+        invoice = {
+            "grnNo": data.get("grnNo", f"GRN-{uuid.uuid4().hex[:8].upper()}"),
+            "invoiceNumber": data.get("invoiceNumber", ""),
+            "vendorId": vendor_id,
+            "vendorName": vendor_name_input or data.get("vendorName", (vendor.get("name") if vendor else "")),
+            "invoiceDate": invoice_date.isoformat(),
+            "purchaseType": purchase_type,
+            "totalAmount": total_amount,
+            "paidAmount": paid_amount,
+            "paymentStatus": "pending",
+            "creditDays": credit_days,
+            "dueDate": due_date.isoformat(),
+            "products": products,
+            "createdBy": data.get("createdBy", ""),
+            "createdAt": datetime.utcnow().isoformat(),
+            "updatedAt": datetime.utcnow().isoformat()
+        }
+
+        # Determine payment status
+        if invoice["paidAmount"] >= invoice["totalAmount"] and invoice["totalAmount"] > 0:
+            invoice["paymentStatus"] = "paid"
+        elif invoice["paidAmount"] > 0:
+            invoice["paymentStatus"] = "partial"
+
+        result = purchase_invoices_collection.insert_one(invoice)
+
+        # Update stock for each product
+        for prod in products:
+            medicine_name = prod.get("medicineName", "").strip()
+            if not medicine_name:
+                continue
+            units_per_strip = int(prod.get("unitsPerStrip", 1))
+            strips = int(prod.get("strips", 0))
+            free_strips = int(prod.get("freeStrips", 0))
+            total_units = (strips + free_strips) * units_per_strip
+
+            # Try to find existing medicine by name (case-insensitive)
+            existing = pharmacy_collection.find_one({"name": {"$regex": f"^{re.escape(medicine_name)}$", "$options": "i"}})
+
+            if existing:
+                pharmacy_collection.update_one(
+                    {"_id": existing["_id"]},
+                    {
+                        "$inc": {"stock": total_units},
+                        "$set": {
+                            "batch_number": prod.get("batch", existing.get("batch_number", "")),
+                            "expiry_date": prod.get("expiry", existing.get("expiry_date", "")),
+                            "price": float(prod.get("mrp", existing.get("price", 0))),
+                            "lastPurchasePrice": float(prod.get("purchasePrice", prod.get("price", 0))),
+                            "lastPurchaseDate": datetime.utcnow().isoformat(),
+                            "lastVendor": invoice.get("vendorName", ""),
+                            "updated_at": datetime.utcnow().isoformat()
+                        }
+                    }
+                )
+            else:
+                # Create new medicine entry
+                new_med = {
+                    "name": medicine_name,
+                    "category": prod.get("category", "General"),
+                    "price": float(prod.get("mrp", 0)),
+                    "stock": total_units,
+                    "description": "",
+                    "manufacturer": "",
+                    "batch_number": prod.get("batch", ""),
+                    "expiry_date": prod.get("expiry", ""),
+                    "reorder_level": 10,
+                    "lastPurchasePrice": float(prod.get("purchasePrice", prod.get("price", 0))),
+                    "lastPurchaseDate": datetime.utcnow().isoformat(),
+                    "lastVendor": invoice.get("vendorName", ""),
+                    "created_at": datetime.utcnow().isoformat(),
+                    "updated_at": datetime.utcnow().isoformat()
+                }
+                pharmacy_collection.insert_one(new_med)
+
+        print(f"✓ GRN created: {invoice['grnNo']} with {len(products)} products")
+        return {
+            "status": "success",
+            "message": f"GRN {invoice['grnNo']} saved with {len(products)} products",
+            "invoiceId": str(result.inserted_id),
+            "grnNo": invoice["grnNo"]
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"✗ GRN Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== FEATURE 3 — Vendor Payments ====================
+
+@app.put("/vendors/pay-invoice/{invoice_id}")
+async def pay_vendor_invoice(invoice_id: str, data: dict = Body(...)):
+    """
+    Record a payment against a purchase invoice.
+    Updates paidAmount and paymentStatus on the invoice.
+    """
+    try:
+        # Find the invoice
+        inv = None
+        try:
+            inv = purchase_invoices_collection.find_one({"_id": ObjectId(invoice_id)})
+        except:
+            pass
+        if not inv:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+
+        amount = float(data.get("amount", 0))
+        if amount <= 0:
+            raise HTTPException(status_code=400, detail="Payment amount must be greater than 0")
+
+        # Insert payment record
+        payment = {
+            "vendorId": inv.get("vendorId", ""),
+            "invoiceId": invoice_id,
+            "amount": amount,
+            "paymentMode": data.get("paymentMode", "cash"),
+            "transactionRef": data.get("transactionRef", ""),
+            "paidBy": data.get("paidBy", ""),
+            "paidAt": datetime.utcnow().isoformat()
+        }
+        vendor_payments_collection.insert_one(payment)
+
+        # Update invoice paidAmount
+        new_paid = float(inv.get("paidAmount", 0)) + amount
+        total = float(inv.get("totalAmount", 0))
+        if new_paid >= total and total > 0:
+            status = "paid"
+        elif new_paid > 0:
+            status = "partial"
+        else:
+            status = "pending"
+
+        purchase_invoices_collection.update_one(
+            {"_id": ObjectId(invoice_id)},
+            {"$set": {"paidAmount": new_paid, "paymentStatus": status, "updatedAt": datetime.utcnow().isoformat()}}
+        )
+
+        return {
+            "status": "success",
+            "message": f"Payment of {amount} recorded",
+            "paidAmount": new_paid,
+            "paymentStatus": status
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== FEATURE 5 — Billing Dashboard Analytics ====================
+
+@app.get("/billing/dashboard")
+async def billing_dashboard():
+    """Return billing analytics: monthly/yearly purchase, vendor debit, overdue invoices."""
+    try:
+        now = datetime.utcnow()
+        current_month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        current_year_start = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+
+        # Monthly purchase
+        monthly_pipeline = [
+            {"$match": {"invoiceDate": {"$gte": current_month_start.isoformat()}}},
+            {"$group": {"_id": None, "total": {"$sum": "$totalAmount"}}}
+        ]
+        monthly_result = list(purchase_invoices_collection.aggregate(monthly_pipeline))
+        monthly_purchase = monthly_result[0]["total"] if monthly_result else 0
+
+        # Yearly purchase
+        yearly_pipeline = [
+            {"$match": {"invoiceDate": {"$gte": current_year_start.isoformat()}}},
+            {"$group": {"_id": None, "total": {"$sum": "$totalAmount"}}}
+        ]
+        yearly_result = list(purchase_invoices_collection.aggregate(yearly_pipeline))
+        yearly_purchase = yearly_result[0]["total"] if yearly_result else 0
+
+        # Total vendor debit (total unpaid)
+        debit_pipeline = [
+            {"$group": {
+                "_id": None,
+                "totalPurchase": {"$sum": "$totalAmount"},
+                "totalPaid": {"$sum": "$paidAmount"}
+            }}
+        ]
+        debit_result = list(purchase_invoices_collection.aggregate(debit_pipeline))
+        total_vendor_debit = 0
+        if debit_result:
+            total_vendor_debit = debit_result[0]["totalPurchase"] - debit_result[0]["totalPaid"]
+
+        # Overdue invoices count
+        overdue_count = purchase_invoices_collection.count_documents({
+            "dueDate": {"$lt": now.isoformat()},
+            "paymentStatus": {"$ne": "paid"}
+        })
+
+        # Per-vendor breakdown
+        vendor_pipeline = [
+            {"$group": {
+                "_id": "$vendorName",
+                "purchase": {"$sum": "$totalAmount"},
+                "paid": {"$sum": "$paidAmount"}
+            }},
+            {"$project": {
+                "_id": 0,
+                "vendor": "$_id",
+                "purchase": 1,
+                "paid": 1,
+                "pending": {"$subtract": ["$purchase", "$paid"]}
+            }},
+            {"$sort": {"vendor": 1}}
+        ]
+        vendors = list(purchase_invoices_collection.aggregate(vendor_pipeline))
+
+        return {
+            "monthlyPurchase": monthly_purchase,
+            "yearlyPurchase": yearly_purchase,
+            "totalVendorDebit": total_vendor_debit,
+            "overdueInvoices": overdue_count,
+            "vendors": vendors
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== FEATURE 6 — Monthly Purchase Analytics ====================
+
+@app.get("/analytics/purchases/monthly")
+async def monthly_purchase_analytics():
+    """Group purchase invoices by month and return totals."""
+    try:
+        pipeline = [
+            {"$addFields": {
+                "_invoiceDate": {
+                    "$cond": {
+                        "if": {"$eq": [{"$type": "$invoiceDate"}, "string"]},
+                        "then": {"$dateFromString": {"dateString": "$invoiceDate", "onError": None}},
+                        "else": "$invoiceDate"
+                    }
+                }
+            }},
+            {"$match": {"_invoiceDate": {"$ne": None}}},
+            {"$group": {
+                "_id": {
+                    "year": {"$year": "$_invoiceDate"},
+                    "month": {"$month": "$_invoiceDate"}
+                },
+                "totalPurchase": {"$sum": "$totalAmount"}
+            }},
+            {"$project": {
+                "_id": 0,
+                "month": {"$concat": [
+                    {"$toString": "$_id.year"}, "-",
+                    {"$cond": [{"$lt": ["$_id.month", 10]},
+                               {"$concat": ["0", {"$toString": "$_id.month"}]},
+                               {"$toString": "$_id.month"}]}
+                ]},
+                "totalPurchase": 1
+            }},
+            {"$sort": {"month": 1}}
+        ]
+        result = list(purchase_invoices_collection.aggregate(pipeline))
+        return {"status": "success", "data": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== FEATURE 7 — Yearly Purchase Analytics ====================
+
+@app.get("/analytics/purchases/yearly")
+async def yearly_purchase_analytics():
+    """Group purchase invoices by year and return totals."""
+    try:
+        pipeline = [
+            {"$addFields": {
+                "_invoiceDate": {
+                    "$cond": {
+                        "if": {"$eq": [{"$type": "$invoiceDate"}, "string"]},
+                        "then": {"$dateFromString": {"dateString": "$invoiceDate", "onError": None}},
+                        "else": "$invoiceDate"
+                    }
+                }
+            }},
+            {"$match": {"_invoiceDate": {"$ne": None}}},
+            {"$group": {
+                "_id": {"$year": "$_invoiceDate"},
+                "totalPurchase": {"$sum": "$totalAmount"}
+            }},
+            {"$project": {
+                "_id": 0,
+                "year": "$_id",
+                "totalPurchase": 1
+            }},
+            {"$sort": {"year": 1}}
+        ]
+        result = list(purchase_invoices_collection.aggregate(pipeline))
+        return {"status": "success", "data": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== FEATURE 8 — Vendor Purchase Trends ====================
+
+@app.get("/analytics/vendor-trend")
+async def vendor_purchase_trend():
+    """Monthly purchase totals grouped by vendor."""
+    try:
+        pipeline = [
+            {"$addFields": {
+                "_invoiceDate": {
+                    "$cond": {
+                        "if": {"$eq": [{"$type": "$invoiceDate"}, "string"]},
+                        "then": {"$dateFromString": {"dateString": "$invoiceDate", "onError": None}},
+                        "else": "$invoiceDate"
+                    }
+                }
+            }},
+            {"$match": {"_invoiceDate": {"$ne": None}}},
+            {"$group": {
+                "_id": {
+                    "vendor": "$vendorName",
+                    "year": {"$year": "$_invoiceDate"},
+                    "month": {"$month": "$_invoiceDate"}
+                },
+                "totalPurchase": {"$sum": "$totalAmount"}
+            }},
+            {"$project": {
+                "_id": 0,
+                "vendor": "$_id.vendor",
+                "month": {"$concat": [
+                    {"$toString": "$_id.year"}, "-",
+                    {"$cond": [{"$lt": ["$_id.month", 10]},
+                               {"$concat": ["0", {"$toString": "$_id.month"}]},
+                               {"$toString": "$_id.month"}]}
+                ]},
+                "totalPurchase": 1
+            }},
+            {"$sort": {"vendor": 1, "month": 1}}
+        ]
+        result = list(purchase_invoices_collection.aggregate(pipeline))
+        return {"status": "success", "data": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== FEATURE 10 — Expiry Alerts ====================
+
+@app.get("/inventory/expiry-alerts")
+async def get_expiry_alerts():
+    """Return medicines expiring within 60 days."""
+    try:
+        now = datetime.utcnow()
+        threshold = (now + timedelta(days=60)).strftime("%Y-%m-%d")
+        today_str = now.strftime("%Y-%m-%d")
+
+        # expiry_date stored as string (YYYY-MM-DD or similar)
+        medicines = list(pharmacy_collection.find({
+            "expiry_date": {"$ne": "", "$lte": threshold, "$gte": today_str}
+        }))
+        result = []
+        for med in medicines:
+            result.append({
+                "id": str(med.get("_id")),
+                "name": med.get("name"),
+                "category": med.get("category"),
+                "batch_number": med.get("batch_number"),
+                "expiry_date": med.get("expiry_date"),
+                "stock": int(med.get("stock", 0))
+            })
+        return {"status": "success", "total": len(result), "medicines": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== FEATURE 11 — Dead Stock Detection ====================
+
+@app.get("/inventory/dead-stock")
+async def get_dead_stock():
+    """Return medicines with stock > 0 and no billing in the last 90 days."""
+    try:
+        cutoff = (datetime.utcnow() - timedelta(days=90)).isoformat()
+
+        # Get all medicine names that appeared in billing in the last 90 days
+        billing_pipeline = [
+            {"$match": {"billDate": {"$gte": cutoff}}},
+            {"$unwind": "$items"},
+            {"$group": {"_id": "$items.name"}}
+        ]
+        billed_names_raw = list(pharmacy_billing_collection.aggregate(billing_pipeline))
+        billed_names = {doc["_id"] for doc in billed_names_raw if doc.get("_id")}
+
+        # Also check with medicineId-based billing
+        billing_pipeline_id = [
+            {"$match": {"billDate": {"$gte": cutoff}}},
+            {"$unwind": "$items"},
+            {"$group": {"_id": "$items.medicineId"}}
+        ]
+        billed_ids_raw = list(pharmacy_billing_collection.aggregate(billing_pipeline_id))
+        billed_ids = {doc["_id"] for doc in billed_ids_raw if doc.get("_id")}
+
+        # Get all medicines with stock > 0
+        all_meds = list(pharmacy_collection.find({"stock": {"$gt": 0}}))
+        dead_stock = []
+        for med in all_meds:
+            med_id = str(med.get("_id"))
+            med_name = med.get("name", "")
+            if med_name not in billed_names and med_id not in billed_ids:
+                dead_stock.append({
+                    "id": med_id,
+                    "name": med_name,
+                    "category": med.get("category"),
+                    "stock": int(med.get("stock", 0)),
+                    "expiry_date": med.get("expiry_date"),
+                    "batch_number": med.get("batch_number")
+                })
+        return {"status": "success", "total": len(dead_stock), "medicines": dead_stock}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== FEATURE 12 — Purchase Category Analytics ====================
+
+@app.get("/analytics/purchase-categories")
+async def purchase_category_analytics():
+    """Total purchase amount grouped by medicine category."""
+    try:
+        pipeline = [
+            {"$unwind": "$products"},
+            {"$lookup": {
+                "from": "pharmacy_medicines",
+                "let": {"prodName": "$products.medicineName"},
+                "pipeline": [
+                    {"$match": {"$expr": {"$eq": [{"$toLower": "$name"}, {"$toLower": "$$prodName"}]}}}
+                ],
+                "as": "medInfo"
+            }},
+            {"$addFields": {
+                "category": {
+                    "$cond": {
+                        "if": {"$gt": [{"$size": "$medInfo"}, 0]},
+                        "then": {"$arrayElemAt": ["$medInfo.category", 0]},
+                        "else": "Uncategorized"
+                    }
+                },
+                "lineTotal": {
+                    "$multiply": [
+                        {"$add": [
+                            {"$ifNull": ["$products.strips", 0]},
+                            {"$ifNull": ["$products.freeStrips", 0]}
+                        ]},
+                        {"$ifNull": ["$products.purchasePrice", 0]}
+                    ]
+                }
+            }},
+            {"$group": {
+                "_id": "$category",
+                "totalPurchase": {"$sum": "$lineTotal"}
+            }},
+            {"$project": {
+                "_id": 0,
+                "category": "$_id",
+                "totalPurchase": 1
+            }},
+            {"$sort": {"category": 1}}
+        ]
+        result = list(purchase_invoices_collection.aggregate(pipeline))
+        return {"status": "success", "data": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":

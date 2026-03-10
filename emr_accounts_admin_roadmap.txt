@@ -1,0 +1,163 @@
+EMR ACCOUNTS, ADMIN & MIS SYSTEM - ARCHITECTURE & DEVELOPMENT ROADMAP
+=====================================================================
+
+This document outlines the architecture, database extensions, endpoints, UI structure, and business logic required to implement the new Accounts, Admin, and MIS modules without breaking the existing EMR foundation.
+
+---------------------------------------------------------------------
+1. NEW MONGODB COLLECTIONS & SCHEMAS
+---------------------------------------------------------------------
+The following collections will be added as extensions. Existing collections remain strictly unmodified.
+
+[Inventory & Purchasing]
+- medicine_batches: {_id, medicineId, batchNumber, expiryDate, purchasePrice, mrp, quantity, vendorId, createdAt}
+- purchase_orders: {_id, vendorId, items: [medicineId, qty, price], status (pending/approved/fulfilled), createdBy, createdAt}
+
+[Universal Ledger]
+- accounts_ledger: {_id, date, accountType, accountName, debit, credit, referenceType (e.g., 'invoice', 'grn', 'expense'), referenceId, createdBy, createdAt}
+
+[Accounts & Finance]
+- bank_statements: {_id, uploadDate, periodStart, periodEnd, status, transactions: [], createdBy}
+- journal_entries: {_id, date, description, entries: [{accountName, debit, credit}], createdBy}
+- expenses_log: {_id, date, category, amount, paymentMode, description, createdBy}
+- gst_reports: {_id, month, year, inputGstAmount, outputGstAmount, netGstLiability, generatedAt}
+
+[Payroll / Admin]
+- employees: {_id, name, role, department, baseSalary, bankDetails, joinDate, status}
+- salary_records: {_id, employeeId, month, year, grossSalary, deductions, netSalary, status, disbursedAt}
+- payslips: {_id, salaryRecordId, payslipUrl, generatedAt}
+
+[Advances & Utilisation]
+- patient_advances: {_id, registrationId, amountPaid, amountRemaining, paymentMode, date, receivedBy}
+- advance_utilisation: {_id, advanceId, billReferenceType, billReferenceId, amountUsed, date}
+
+
+---------------------------------------------------------------------
+2. BACKEND FASTAPI ENDPOINTS
+---------------------------------------------------------------------
+All new endpoints will be isolated under specific routers (e.g., /accounts, /admin, /analytics, /inventory).
+
+[Accounts Module]
+POST /accounts/bank-statement/upload -> Upload & parse bank statement CSV/PDF
+POST /accounts/journal-entry -> Insert manual ledger entries
+POST /accounts/expenses -> Record daily operational expense
+GET  /accounts/daily-sales -> Aggregate turnover from pharmacy + OPD + surgery
+GET  /accounts/gst-report -> Calculate Input vs Output GST
+
+[Admin / Payroll Module]
+POST /admin/employees -> Register a new staff member
+GET  /admin/employees -> List available staff
+POST /admin/payroll -> Generate salary drafts & ledger entries for month
+GET  /admin/payroll -> Retrieve past payroll runs
+GET  /admin/payslip/{employeeId} -> Fetch specific payslip payload/PDF
+
+[Advances & Dues]
+POST /admin/advances -> Collect deposit for a patient
+GET  /admin/advance-list -> List all unutilized advances
+GET  /admin/advance-utilisation -> History of how advances mapped to bills
+GET  /admin/dues-report -> Scan unresolved billing_cases and pharmacy_billing
+
+[Purchase Orders & Inventory]
+POST /purchase-orders -> Create a draft PO
+GET  /purchase-orders -> List all POs
+PUT  /purchase-orders/{id}/approve -> Authorize PO for vendor delivery
+GET  /inventory/expiry-alerts -> Identify 'medicine_batches' nearing expiry
+GET  /inventory/dead-stock -> Correlate stock with absent recent sales
+
+[MIS Reporting]
+GET /analytics/mis/sales -> Cross-department sales trend
+GET /analytics/mis/surgeries -> Volume & revenue of specific procedures
+GET /analytics/mis/lens-usage -> Cross-reference billing/investigations for lenses
+GET /analytics/mis/investigations -> Diagnostics & investigations volume
+
+
+---------------------------------------------------------------------
+3. FRONTEND UI ARCHITECTURE (REACT)
+---------------------------------------------------------------------
+New views to be placed in `src/components/`, wrapped with existing RBAC and Navbar context:
+
+1. AccountsDashboardView.tsx -> Tabbed layout mapping Day Books, Assets, Liabilities
+2. BankStatementUploadView.tsx -> Drag & drop interface with reconciliation checklist
+3. GSTReportView.tsx -> Monthly matrix for 5%, 12%, 18% inward/outward taxes
+4. ExpenseEntryView.tsx -> Modal/Form to log petty cash and direct transfers
+5. JournalEntryView.tsx -> Double-entry table for manual debits/credits
+6. PayrollDashboardView.tsx -> Roster list and mass salaries disbursement tool
+7. SalaryStatementView.tsx -> Individual payslip printable view
+8. MISDashboardView.tsx -> Charts for Surgeries, Lens usages, and Sales mapping
+9. AdvanceManagementView.tsx -> Ledger tracking patient deposits vs consumptions
+10. PurchaseOrderView.tsx -> Builder mapped to inventory shortages
+
+
+---------------------------------------------------------------------
+4. DATA RELATIONSHIPS
+---------------------------------------------------------------------
+- medicine_batches: `medicineId` references `pharmacy_medicines._id`. 
+  (Rule: `pharmacy_medicines.stock` dynamically equals `SUM(medicine_batches.quantity)`).
+- accounts_ledger: `referenceId` polymorphism links to `purchase_invoices`, `pharmacy_billing`, `billing_invoices`, `salary_records`, or `expenses_log`.
+- patient_advances: `registrationId` references `patients.registrationId`.
+- advance_utilisation: Links to specific transaction IDs found in `billing_invoices` or `initial_surgery_bills`.
+- purchase_orders: `vendorId` references `vendors._id`. Converts directly to `purchase_invoices` (GRN) upon receipt.
+
+
+---------------------------------------------------------------------
+5. LEDGER ENTRY RULES (DOUBLE-ENTRY)
+---------------------------------------------------------------------
+Every financial event triggers parallel DB writes into `accounts_ledger`:
+
+Event: GRN/Purchase
+-> DEBIT: Pharmacy Inventory Account
+-> CREDIT: Vendor Payable Account
+
+Event: Pharmacy Sale (Cash/Card)
+-> DEBIT: Cash / Bank Account
+-> DEBIT: Cost of Goods Sold (COGS)
+-> CREDIT: Pharmacy Revenue Account
+-> CREDIT: Pharmacy Inventory Account (Reduction in asset)
+
+Event: Patient Advance
+-> DEBIT: Cash / Bank Account
+-> CREDIT: Patient Receivable / Liability Account (Advance)
+
+Event: Bill Finalized Using Advance
+-> DEBIT: Patient Receivable / Liability Account (Advance)
+-> CREDIT: OPD/Surgery Revenue Account
+
+Event: Logging Expense (e.g., utility bill)
+-> DEBIT: Utilities Expense Account
+-> CREDIT: Cash / Bank Account
+
+Event: Payroll Disbursement
+-> DEBIT: Salary Expense Account
+-> CREDIT: Bank Account
+
+
+---------------------------------------------------------------------
+6. ANALYTICS & MIS QUERIES
+---------------------------------------------------------------------
+GST Computation Pipeline:
+- Input GST: Aggregated `$sum` from `purchase_invoices.gstAmount` (or dynamically from `products` items).
+- Output GST: Aggregated `$sum` from `pharmacy_billing.gstAmount` and clinical `billing_invoices`.
+
+Dead Stock Pipeline:
+- `$lookup` from `medicine_batches` where `quantity > 0`.
+- Join `pharmacy_billing` checking if `medicineId` exists in recent 90 days. 
+- Filter items with no sales matches within the time frame.
+
+Expiry Alerts Pipeline:
+- Query `medicine_batches` where `expiryDate` <= `(currentDate + 60 days)` AND `quantity > 0`.
+
+
+---------------------------------------------------------------------
+7. ROLE PERMISSIONS (RBAC)
+---------------------------------------------------------------------
+Access enforcement relies on `users.role`.
+
+- ADMIN: 
+  Full access. Can approve POs, view Payroll, view MIS, approve Bank uploaded statements, edit ledgers.
+- ACCOUNTS: 
+  Can upload Bank Statements, add Expenses, view Ledgers, generate GST and Dues reports, issue Advances, process Payroll.
+- PHARMACY: 
+  Can view Inventory analytics (Dead Stock/Expiry), create Draft POs, execute GRN (implicitly updates ledger but cannot view ledger directly).
+- RECEPTION: 
+  Can view basic Advances assigned to patients.
+- DOCTOR: 
+  No access to new financial/admin pages.

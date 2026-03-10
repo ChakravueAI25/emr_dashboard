@@ -1,9 +1,9 @@
-﻿import { Home, TrendingUp, CreditCard, FileText, Bell, Users, CalendarDays, ClipboardList, UserCircle, Activity, Stethoscope, History, Database, Settings, User, ShoppingCart, Layers, Video } from 'lucide-react';
+﻿import { Home, TrendingUp, CreditCard, FileText, Bell, Users, CalendarDays, ClipboardList, UserCircle, Activity, Stethoscope, History, Database, Settings, User, ShoppingCart, Layers, Video, Wallet } from 'lucide-react';
 import { useIsLightTheme } from '../hooks/useTheme';
 
 interface SidebarProps {
-  currentView: 'dashboard' | 'analytics' | 'billing' | 'billing-dashboard' | 'individual-billing' | 'login' | 'documents' | 'notifications' | 'settings' | 'profile-settings' | 'patients' | 'appointments' | 'appointment-queue' | 'reception-queue' | 'opd-queue' | 'doctor-queue' | 'patient-history' | 'data-repair' | 'pharmacy-billing' | 'medicine-management' | 'invoice-upload' | 'grn-history' | 'payment-setup' | 'organization-login' | 'admin-dashboard' | 'admin-data-management' | 'telemedicine' | 'reception-patient-view' | 'doctor-profile' | 'surgical-record' | 'discharge-summary';
-  onViewChange: (view: 'dashboard' | 'analytics' | 'billing' | 'billing-dashboard' | 'individual-billing' | 'login' | 'documents' | 'notifications' | 'settings' | 'profile-settings' | 'patients' | 'appointments' | 'appointment-queue' | 'reception-queue' | 'opd-queue' | 'doctor-queue' | 'patient-history' | 'data-repair' | 'pharmacy-billing' | 'medicine-management' | 'invoice-upload' | 'grn-history' | 'payment-setup' | 'organization-login' | 'admin-dashboard' | 'admin-data-management' | 'telemedicine' | 'reception-patient-view' | 'doctor-profile' | 'surgical-record' | 'discharge-summary') => void;
+  currentView: 'dashboard' | 'analytics' | 'billing' | 'billing-dashboard' | 'individual-billing' | 'login' | 'documents' | 'notifications' | 'settings' | 'profile-settings' | 'patients' | 'appointments' | 'appointment-queue' | 'reception-queue' | 'opd-queue' | 'doctor-queue' | 'patient-history' | 'data-repair' | 'pharmacy-billing' | 'medicine-management' | 'invoice-upload' | 'grn-history' | 'payment-setup' | 'organization-login' | 'admin-dashboard' | 'admin-data-management' | 'telemedicine' | 'reception-patient-view' | 'doctor-profile' | 'surgical-record' | 'discharge-summary' | 'pharmacy-finance' | 'vendor-ledger' | 'vendor-list';
+  onViewChange: (view: 'dashboard' | 'analytics' | 'billing' | 'billing-dashboard' | 'individual-billing' | 'login' | 'documents' | 'notifications' | 'settings' | 'profile-settings' | 'patients' | 'appointments' | 'appointment-queue' | 'reception-queue' | 'opd-queue' | 'doctor-queue' | 'patient-history' | 'data-repair' | 'pharmacy-billing' | 'medicine-management' | 'invoice-upload' | 'grn-history' | 'payment-setup' | 'organization-login' | 'admin-dashboard' | 'admin-data-management' | 'telemedicine' | 'reception-patient-view' | 'doctor-profile' | 'surgical-record' | 'discharge-summary' | 'pharmacy-finance' | 'vendor-ledger' | 'vendor-list') => void;
   userRole?: string;
   notificationCount?: number;
 }
@@ -121,6 +121,23 @@ export function Sidebar({ currentView, onViewChange, userRole, notificationCount
             />
             <div className="absolute left-full ml-3 px-3 py-1.5 bg-[var(--theme-bg-secondary)] text-[var(--theme-text)] text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none whitespace-nowrap border border-[var(--theme-text-muted)]">
               Billing Dashboard
+            </div>
+          </button>
+        )}
+        {showBillingAndPharmacy && (
+          <button
+            onClick={() => onViewChange('pharmacy-finance')}
+            className={`group relative w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-500 ease-out ${currentView === 'pharmacy-finance' || currentView === 'vendor-ledger' || currentView === 'vendor-list'
+              ? 'bg-gradient-to-br from-[var(--theme-accent)] to-[var(--theme-accent-hover)] text-[var(--theme-bg)] shadow-lg shadow-[var(--theme-accent)]/30'
+              : 'text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg-tertiary)] hover:text-[var(--theme-accent)] hover:scale-105'
+              }`}
+          >
+            <Wallet
+              style={{ color: currentView === 'pharmacy-finance' || currentView === 'vendor-ledger' || currentView === 'vendor-list' ? 'var(--theme-bg)' : inactiveCol }}
+              className="w-5 h-5 transition-all duration-500 ease-out group-hover:scale-110"
+            />
+            <div className="absolute left-full ml-3 px-3 py-1.5 bg-[var(--theme-bg-secondary)] text-[var(--theme-text)] text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none whitespace-nowrap border border-[var(--theme-text-muted)]">
+              Vendor Payables
             </div>
           </button>
         )}

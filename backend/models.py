@@ -369,3 +369,28 @@ class UpdateSurgeryPackage(BaseModel):
     packageName: Optional[str] = None
     description: Optional[str] = None
     items: Optional[List[SurgeryPackageItem]] = None
+
+
+# --- Vendor / Purchase / GRN Models ---
+
+class PurchaseProduct(BaseModel):
+    """Individual product line in a purchase invoice / GRN"""
+    medicineName: str
+    batch: Optional[str] = None
+    expiry: Optional[str] = None
+    unitsPerStrip: int = 1
+    strips: int = 0
+    freeStrips: int = 0
+    purchasePrice: float = 0.0
+    mrp: float = 0.0
+
+
+class VendorPaymentRecord(BaseModel):
+    """Payment against a purchase invoice"""
+    vendorId: str
+    invoiceId: str
+    amount: float
+    paymentMode: Optional[str] = "cash"
+    transactionRef: Optional[str] = None
+    paidBy: Optional[str] = None
+    paidAt: datetime = Field(default_factory=datetime.utcnow)
