@@ -93,6 +93,7 @@ export const API_ENDPOINTS = {
     GET_BILLS: (registrationId: string) => `${API_BASE_URL}/api/billing/patient/${encodeURIComponent(registrationId)}/surgery-bills`,
     CREATE_INITIAL: (registrationId: string) => `${API_BASE_URL}/api/billing/patient/${encodeURIComponent(registrationId)}/surgery-bills/initial`,
     CREATE_FINAL: (registrationId: string) => `${API_BASE_URL}/api/billing/patient/${encodeURIComponent(registrationId)}/surgery-bills/final`,
+    MARK_INSURANCE_RECEIVED: (registrationId: string, billId: string) => `${API_BASE_URL}/api/billing/patient/${encodeURIComponent(registrationId)}/surgery-bills/${encodeURIComponent(billId)}/insurance-received`,
   },
 
   // Coupons endpoints

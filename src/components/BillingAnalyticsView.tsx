@@ -30,7 +30,7 @@ import {
   ShieldCheck,
   FileStack
 } from 'lucide-react';
-import API_ENDPOINTS from '../config/api';
+import API_ENDPOINTS, { API_BASE_URL } from '../config/api';
 
 interface InsuranceApprovedRecord {
   date: string;
@@ -38,9 +38,13 @@ interface InsuranceApprovedRecord {
   registrationId: string;
   insuranceCompany: string;
   amount: number;
-  surgeryName?: string;
+  itemDescription?: string;  // can be surgeryName or "Pharmacy Bill"
   billId?: string;
   claimReference?: string;
+  paymentStatus?: string;
+  paymentAmount?: number;
+  paymentReceivedDate?: string;
+  billType?: string;  // "Surgery" | "Pharmacy"
 }
 
 interface AnalyticsData {
@@ -48,6 +52,11 @@ interface AnalyticsData {
   monthly: any[];
   yearly: any[];
   insuranceApprovedRecords: InsuranceApprovedRecord[];
+  insuranceCollectionStatus?: {
+    pending: { total: number; count: number };
+    received: { total: number; count: number };
+    rejected: { total: number; count: number };
+  };
   totalApprovedInsurance?: number;
 }
 
@@ -59,9 +68,20 @@ export function BillingAnalyticsView({ onBack }: AnalyticsViewProps) {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [currentTab, setCurrentTab] = useState<'daily' | 'monthly' | 'yearly'>('monthly');
+  const [currentTab, setCurrentTab] = useState<'daily' | 'monthly' | 'yearly'>('yearly');
   const [selectedInsuranceCompany, setSelectedInsuranceCompany] = useState<string | null>(null);
   const printContainerRef = useRef<HTMLDivElement>(null);
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const [selectedDate, setSelectedDate] = useState(todayStr);
+  const [selectedMonth, setSelectedMonth] = useState(todayStr.slice(0, 7));
+  const [selectedYear, setSelectedYear] = useState(todayStr.slice(0, 4));
+
+  // Insurance payment modal state
+  const [showMarkReceivedModal, setShowMarkReceivedModal] = useState(false);
+  const [selectedRecord, setSelectedRecord] = useState<InsuranceApprovedRecord | null>(null);
+  const [markingAsReceived, setMarkingAsReceived] = useState(false);
+  const [receivedAmount, setReceivedAmount] = useState('');
+  const [receivedDate, setReceivedDate] = useState(todayStr);
 
   useEffect(() => {
     fetchAnalytics();
@@ -72,15 +92,28 @@ export function BillingAnalyticsView({ onBack }: AnalyticsViewProps) {
       setLoading(true);
       setError(null);
       const response = await fetch(API_ENDPOINTS.BILLING_DASHBOARD.ANALYTICS);
-      if (!response.ok) throw new Error('Failed to fetch analytics data');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `HTTP ${response.status}`);
+      }
       const result = await response.json();
       
       if (result.status === 'success') {
-        setData(result);
+        // Ensure data structure has all required fields with defaults
+        const safeData = {
+          daily: result.daily || [],
+          monthly: result.monthly || [],
+          yearly: result.yearly || [],
+          insuranceApprovedRecords: result.insuranceApprovedRecords || [],
+          insuranceCollectionStatus: result.insuranceCollectionStatus || { pending: { total: 0, count: 0 }, received: { total: 0, count: 0 }, rejected: { total: 0, count: 0 } },
+          totalApprovedInsurance: result.totalApprovedInsurance || 0
+        };
+        setData(safeData);
       } else {
-        throw new Error(result.detail || 'Unknown error');
+        throw new Error(result.detail || 'Unknown error from server');
       }
     } catch (err: any) {
+      console.error('Analytics fetch error:', err);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -252,25 +285,46 @@ export function BillingAnalyticsView({ onBack }: AnalyticsViewProps) {
     );
   }
 
-  if (!data) return null;
+  if (!data) {
+    return (
+      <div className="flex flex-col items-center justify-center p-20 bg-[#0a0a0a] text-white min-h-screen">
+        <Activity className="w-12 h-12 text-[#D4A574] mb-4" />
+        <p className="text-lg font-medium">No analytics data available</p>
+        <p className="text-[#8B8B8B] text-sm mt-2">Analytics will appear once billing records are created</p>
+        <Button onClick={fetchAnalytics} variant="outline" className="border-[#D4A574] text-[#D4A574] mt-4">
+          Refresh Data
+        </Button>
+      </div>
+    );
+  }
 
   // Process data for charts
   const processData = (rawData: any[]) => {
-    return rawData.map(item => ({
-      name: item.date || item._id, // date/month/year key
-      ...item,
-      // Flattened for charts
-      opAmount: item.op.amount,
-      opCount: item.op.count,
-      labAmount: item.lab.amount,
-      labCount: item.lab.count,
-      surgeryAmount: item.surgery.amount,
-      surgeryCount: item.surgery.count,
-      pharmacyAmount: item.pharmacy.amount,
-      pharmacyCount: item.pharmacy.count,
-      // Aggregates
-      totalAmount: item.op.amount + item.lab.amount + item.surgery.amount + item.pharmacy.amount
-    }));
+    if (!rawData || !Array.isArray(rawData)) return [];
+    
+    return rawData.map(item => {
+      // Safely access nested objects with fallbacks
+      const op = item.op || { amount: 0, count: 0 };
+      const lab = item.lab || { amount: 0, count: 0 };
+      const surgery = item.surgery || { amount: 0, count: 0 };
+      const pharmacy = item.pharmacy || { amount: 0, count: 0 };
+      
+      return {
+        name: item.date || item._id || 'Unknown',
+        ...item,
+        // Flattened for charts
+        opAmount: Number(op.amount) || 0,
+        opCount: Number(op.count) || 0,
+        labAmount: Number(lab.amount) || 0,
+        labCount: Number(lab.count) || 0,
+        surgeryAmount: Number(surgery.amount) || 0,
+        surgeryCount: Number(surgery.count) || 0,
+        pharmacyAmount: Number(pharmacy.amount) || 0,
+        pharmacyCount: Number(pharmacy.count) || 0,
+        // Aggregates
+        totalAmount: (Number(op.amount) || 0) + (Number(lab.amount) || 0) + (Number(surgery.amount) || 0) + (Number(pharmacy.amount) || 0)
+      };
+    });
   };
 
   const dailyData = processData(data.daily);
@@ -324,12 +378,75 @@ export function BillingAnalyticsView({ onBack }: AnalyticsViewProps) {
     };
   };
 
-  const renderContent = (dataset: any[], period: 'daily' | 'monthly' | 'yearly', subtitle: string) => {
-    const totals = calculateTotals(dataset);
-    const insurance = getInsuranceInsights(dataset, period);
+  const handleMarkInsuranceReceived = async () => {
+    if (!selectedRecord) return;
+    
+    const amount = parseFloat(receivedAmount);
+    if (!amount || amount <= 0) {
+      alert('Please enter a valid amount');
+      return;
+    }
+
+    setMarkingAsReceived(true);
+    try {
+      // Determine endpoint based on bill type
+      let endpoint: string;
+      let method = 'PUT';
+      let body: any;
+      
+      if (selectedRecord.billType === 'Pharmacy') {
+        // Pharmacy endpoint
+        endpoint = `${API_BASE_URL}/api/billing/pharmacy/${selectedRecord.billId}/insurance-received`;
+        body = {
+          registrationId: selectedRecord.registrationId,
+          insurancePaymentAmount: amount,
+          insurancePaymentReceivedDate: receivedDate,
+          insurancePaymentMethod: 'bank transfer'
+        };
+      } else {
+        // Surgery endpoint (default)
+        endpoint = API_ENDPOINTS.BILLING_SURGERY.MARK_INSURANCE_RECEIVED(
+          selectedRecord.registrationId,
+          selectedRecord.billId || ''
+        );
+        body = {
+          insurancePaymentAmount: amount,
+          insurancePaymentReceivedDate: receivedDate,
+          insurancePaymentMethod: 'bank transfer'
+        };
+      }
+      
+      const response = await fetch(endpoint, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+
+      if (!response.ok) throw new Error('Failed to mark insurance as received');
+      
+      await fetchAnalytics();
+      setShowMarkReceivedModal(false);
+      setReceivedAmount('');
+      setReceivedDate(todayStr);
+      alert('Insurance payment marked as received successfully!');
+    } catch (err: any) {
+      alert('Error: ' + (err.message || 'Failed to mark insurance as received'));
+    } finally {
+      setMarkingAsReceived(false);
+    }
+  };
+
+  const renderContent = (chartDataset: any[], kpiDataset: any[], period: 'daily' | 'monthly' | 'yearly', subtitle: string, picker?: React.ReactNode) => {
+    const totals = calculateTotals(kpiDataset);
+    const insurance = getInsuranceInsights(kpiDataset, period);
     
     return (
       <div className="space-y-6 animate-in fade-in duration-500">
+        {picker && (
+          <div className="flex items-center gap-4 p-4 bg-[#0f0f0f] border border-[#D4A574]/30 rounded-xl flex-wrap">
+            {picker}
+          </div>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           <Card className="bg-[#0f0f0f] border-[#D4A574]/50 min-h-[140px]">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -390,6 +507,29 @@ export function BillingAnalyticsView({ onBack }: AnalyticsViewProps) {
             <CardContent>
               <div className="text-2xl font-bold text-white">₹{insurance.totalApproved.toLocaleString('en-IN')}</div>
               <p className="text-xs text-[#8B8B8B] mt-1">Approved insurer amounts only</p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-[#0f0f0f] border-[#D4A574]/30 min-h-[140px]">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-[#8B8B8B]">Insurance Collection Status</CardTitle>
+              <CreditCard className="h-4 w-4 text-amber-400" />
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-[#8B8B8B]">Awaiting:</span>
+                  <span className="text-lg font-semibold text-red-400">
+                    ₹{((data?.insuranceCollectionStatus?.pending?.total) || 0).toLocaleString('en-IN')}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-[#8B8B8B]">Received:</span>
+                  <span className="text-lg font-semibold text-green-400">
+                    ₹{((data?.insuranceCollectionStatus?.received?.total) || 0).toLocaleString('en-IN')}
+                  </span>
+                </div>
+              </div>
             </CardContent>
           </Card>
 
@@ -472,8 +612,24 @@ export function BillingAnalyticsView({ onBack }: AnalyticsViewProps) {
                           <div className="min-w-0">
                             <p className="text-sm font-medium text-white truncate">{patient.patientName}</p>
                             <p className="text-xs text-[#8B8B8B] mt-1">{patient.registrationId || 'No registration ID'}</p>
-                            {patient.surgeryName && <p className="text-xs text-[#8B8B8B] mt-1 truncate">{patient.surgeryName}</p>}
+                            {patient.itemDescription && <p className="text-xs text-[#8B8B8B] mt-1 truncate">{patient.itemDescription}</p>}
+                            {patient.billType && <p className="text-[11px] text-[#D4A574] mt-1 font-medium">{patient.billType} Bill</p>}
                             {patient.claimReference && <p className="text-[11px] text-[#5a5a5a] mt-1 truncate">Claim Ref: {patient.claimReference}</p>}
+                            {patient.paymentStatus === 'pending' && (
+                              <button
+                                onClick={() => {
+                                  setSelectedRecord(patient);
+                                  setReceivedAmount(patient.amount.toString());
+                                  setShowMarkReceivedModal(true);
+                                }}
+                                className="mt-2 text-xs px-2 py-1 rounded bg-[#D4A574]/20 text-[#D4A574] hover:bg-[#D4A574]/30 transition"
+                              >
+                                Mark as Received ↓
+                              </button>
+                            )}
+                            {patient.paymentStatus === 'received' && (
+                              <p className="text-[11px] text-green-400 mt-2 font-medium">✓ Received ₹{patient.paymentAmount?.toLocaleString('en-IN')}</p>
+                            )}
                           </div>
                           <p className="text-sm font-semibold text-cyan-400 whitespace-nowrap">₹{patient.amount.toLocaleString('en-IN')}</p>
                         </div>
@@ -494,7 +650,7 @@ export function BillingAnalyticsView({ onBack }: AnalyticsViewProps) {
             <CardContent>
               <div className="h-[400px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={dataset} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                  <BarChart data={chartDataset} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#333" />
                     <XAxis dataKey="name" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
                     <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value: number) => `₹${value}`} />
@@ -522,7 +678,7 @@ export function BillingAnalyticsView({ onBack }: AnalyticsViewProps) {
             <CardContent>
               <div className="h-[300px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={dataset} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                  <LineChart data={chartDataset} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#333" />
                     <XAxis dataKey="name" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
                     <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
@@ -577,17 +733,156 @@ export function BillingAnalyticsView({ onBack }: AnalyticsViewProps) {
         </TabsList>
 
         <TabsContent value="daily" className="space-y-4">
-          {renderContent(dailyData.slice(-30), 'daily', 'Last 30 Days Summary')}
+          {renderContent(
+            dailyData.filter(d => d.name?.startsWith(selectedDate.slice(0, 7))),
+            dailyData.filter(d => d.name === selectedDate),
+            'daily',
+            `Daily breakdown — ${selectedDate}`,
+            <>
+              <label className="text-sm text-[#8B8B8B] font-medium">Select Date:</label>
+              <input
+                type="date"
+                value={selectedDate}
+                max={todayStr}
+                onChange={e => setSelectedDate(e.target.value)}
+                className="bg-[#1a1a1a] border border-[#D4A574]/50 text-white rounded px-3 py-1.5 text-sm focus:outline-none focus:border-[#D4A574]"
+              />
+              <span className="text-xs text-[#8B8B8B]">KPIs = selected day · Chart = all days in that month</span>
+            </>
+          )}
         </TabsContent>
 
         <TabsContent value="monthly" className="space-y-4">
-          {renderContent(monthlyData.slice(-12), 'monthly', 'Last 12 Months Summary')}
+          {(() => {
+            const availableYears = [...new Set(monthlyData.map((d: any) => d.name?.slice(0, 4)).filter(Boolean))].sort().reverse() as string[];
+            const availableMonths = monthlyData.map((d: any) => d.name).filter((m: any) => m?.startsWith(selectedYear)).sort().reverse() as string[];
+            return renderContent(
+              monthlyData.filter((d: any) => d.name?.startsWith(selectedYear)),
+              monthlyData.filter((d: any) => d.name === selectedMonth),
+              'monthly',
+              `Monthly breakdown — ${selectedMonth}`,
+              <>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-[#8B8B8B] font-medium">Year:</label>
+                  <select
+                    value={selectedYear}
+                    onChange={e => { setSelectedYear(e.target.value); setSelectedMonth(e.target.value + '-' + selectedMonth.slice(5)); }}
+                    className="bg-[#1a1a1a] border border-[#D4A574]/50 text-white rounded px-3 py-1.5 text-sm focus:outline-none focus:border-[#D4A574]"
+                  >
+                    {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-[#8B8B8B] font-medium">Month:</label>
+                  <select
+                    value={selectedMonth}
+                    onChange={e => setSelectedMonth(e.target.value)}
+                    className="bg-[#1a1a1a] border border-[#D4A574]/50 text-white rounded px-3 py-1.5 text-sm focus:outline-none focus:border-[#D4A574]"
+                  >
+                    {availableMonths.map(m => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                </div>
+                <span className="text-xs text-[#8B8B8B]">KPIs = selected month · Chart = all months in selected year</span>
+              </>
+            );
+          })()}
         </TabsContent>
 
         <TabsContent value="yearly" className="space-y-4">
-          {renderContent(yearlyData, 'yearly', 'All Time Summary')}
+          {(() => {
+            const availableYears = [...new Set(yearlyData.map((d: any) => d.name).filter(Boolean))].sort().reverse() as string[];
+            return renderContent(
+              yearlyData,
+              yearlyData.filter((d: any) => d.name === selectedYear),
+              'yearly',
+              `Yearly breakdown — ${selectedYear}`,
+              <>
+                <label className="text-sm text-[#8B8B8B] font-medium">Select Year:</label>
+                <select
+                  value={selectedYear}
+                  onChange={e => setSelectedYear(e.target.value)}
+                  className="bg-[#1a1a1a] border border-[#D4A574]/50 text-white rounded px-3 py-1.5 text-sm focus:outline-none focus:border-[#D4A574]"
+                >
+                  {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+                <span className="text-xs text-[#8B8B8B]">KPIs = selected year · Chart = all years for context</span>
+              </>
+            );
+          })()}
         </TabsContent>
       </Tabs>
+
+      {/* Mark Insurance as Received Modal */}
+      {showMarkReceivedModal && selectedRecord && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card className="bg-[#0f0f0f] border-[#D4A574] max-w-md w-full">
+            <CardHeader>
+              <CardTitle className="text-white">Mark Insurance Payment as Received</CardTitle>
+              <CardDescription className="text-[#8B8B8B] mt-2">
+                {selectedRecord.patientName} - {selectedRecord.registrationId}
+                <br />
+                {selectedRecord.insuranceCompany}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <label className="block text-sm text-[#8B8B8B] mb-2">Approved Amount</label>
+                <div className="text-2xl font-bold text-cyan-400">₹{selectedRecord.amount.toLocaleString('en-IN')}</div>
+              </div>
+
+              <div>
+                <label className="block text-sm text-[#8B8B8B] mb-2">Amount Received (₹)</label>
+                <input
+                  type="number"
+                  value={receivedAmount}
+                  onChange={e => setReceivedAmount(e.target.value)}
+                  className="w-full bg-[#1a1a1a] border border-[#D4A574]/50 text-white rounded px-3 py-2 focus:outline-none focus:border-[#D4A574]"
+                  placeholder="Enter amount received"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-[#8B8B8B] mb-2">Date Received</label>
+                <input
+                  type="date"
+                  value={receivedDate}
+                  onChange={e => setReceivedDate(e.target.value)}
+                  className="w-full bg-[#1a1a1a] border border-[#D4A574]/50 text-white rounded px-3 py-2 focus:outline-none focus:border-[#D4A574]"
+                />
+              </div>
+
+              <div className="pt-2">
+                <p className="text-xs text-[#8B8B8B]">
+                  This will move the ₹{receivedAmount || '0'} from "Awaiting" to "Received" in the Insurance Collection Status card.
+                </p>
+              </div>
+            </CardContent>
+            <div className="flex gap-3 p-6 border-t border-[#D4A574]/20">
+              <Button
+                variant="outline"
+                onClick={() => setShowMarkReceivedModal(false)}
+                className="flex-1 border-[#D4A574]/50 text-[#D4A574] hover:bg-[#D4A574]/10"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleMarkInsuranceReceived}
+                disabled={markingAsReceived}
+                className="flex-1 bg-[#D4A574] text-black hover:bg-[#E5B86B]"
+              >
+                {markingAsReceived ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  'Mark as Received'
+                )}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

@@ -303,6 +303,12 @@ class PharmacyBilling(BaseModel):
     subTotal: Optional[float] = 0.0
     isInsuranceClaimed: Optional[bool] = False
     insuranceDetails: Optional[dict] = None
+    # Insurance payment tracking (same as surgery bills)
+    insurancePaymentStatus: Optional[str] = "pending"  # pending | received | rejected
+    insurancePaymentAmount: Optional[float] = 0.0  # actual amount received from insurance
+    insurancePaymentReceivedDate: Optional[str] = None  # when payment was received
+    insurancePaymentMethod: Optional[str] = None  # bank transfer, cheque, etc
+    patientPaymentReceived: Optional[float] = 0.0  # amount already paid by patient
 
 
 class PharmacyBillingInDB(PharmacyBilling):

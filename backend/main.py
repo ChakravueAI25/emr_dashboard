@@ -3002,6 +3002,15 @@ def create_final_surgery_bill(reg_id: str, bill_data: dict = Body(...)):
             "balancePayable": max(0, balance_or_refund),  # If positive, patient pays this
             "refundAmount": abs(min(0, balance_or_refund)),  # If negative, patient gets this back
             
+            # Patient Payment Tracking (NEW - for insurance reconciliation)
+            "patientPaymentReceived": float(bill_data.get("patientPaymentReceived", 0)),
+            
+            # Insurance Payment Tracking (NEW - for insurance receivable tracking)
+            "insurancePaymentStatus": bill_data.get("insurancePaymentStatus", "pending"),  # pending | received | rejected
+            "insurancePaymentReceivedDate": bill_data.get("insurancePaymentReceivedDate", ""),
+            "insurancePaymentAmount": float(bill_data.get("insurancePaymentAmount", 0)),  # Actual amount received from insurer
+            "insurancePaymentMethod": bill_data.get("insurancePaymentMethod", ""),  # e.g., bank transfer, cheque
+            
             # Final Payment Details (to be updated when paid)
             "finalPaymentAmount": float(bill_data.get("finalPaymentAmount", 0)),
             "finalPaymentMethod": bill_data.get("finalPaymentMethod", ""),
@@ -3148,6 +3157,72 @@ def update_surgery_bill(reg_id: str, bill_id: str, update_data: dict = Body(...)
     except HTTPException as he:
         raise he
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/billing/patient/{reg_id}/surgery-bills/{bill_id}/insurance-received")
+def mark_insurance_received(reg_id: str, bill_id: str, payment_data: dict = Body(...)):
+    """
+    Mark insurance payment as received for a surgery bill.
+    Moves the amount from unsettled (awaiting insurance) to settled.
+    
+    Body: {
+      "insurancePaymentAmount": 50000,
+      "insurancePaymentReceivedDate": "2025-03-11",
+      "insurancePaymentMethod": "bank transfer"
+    }
+    """
+    try:
+        insurance_received_amount = float(payment_data.get("insurancePaymentAmount", 0))
+        received_date = payment_data.get("insurancePaymentReceivedDate", datetime.utcnow().isoformat()[:10])
+        payment_method = payment_data.get("insurancePaymentMethod", "")
+        
+        if insurance_received_amount <= 0:
+            raise HTTPException(status_code=400, detail="Insurance payment amount must be greater than 0")
+        
+        # Update in final_surgery_bills collection (source of truth)
+        result_final = final_surgery_bills_collection.update_one(
+            {"registrationId": reg_id, "billId": bill_id},
+            {"$set": {
+                "insurancePaymentStatus": "received",
+                "insurancePaymentAmount": insurance_received_amount,
+                "insurancePaymentReceivedDate": received_date,
+                "insurancePaymentMethod": payment_method,
+                "updatedAt": datetime.utcnow().isoformat()
+            }}
+        )
+        
+        if result_final.matched_count == 0:
+            raise HTTPException(status_code=404, detail="Surgery bill not found in final collection")
+        
+        # Also update in patient's billing.surgeryBills array (cache)
+        patient_collection.update_one(
+            {"registrationId": reg_id, "billing.surgeryBills.billId": bill_id},
+            {"$set": {
+                "billing.surgeryBills.$.insurancePaymentStatus": "received",
+                "billing.surgeryBills.$.insurancePaymentAmount": insurance_received_amount,
+                "billing.surgeryBills.$.insurancePaymentReceivedDate": received_date,
+                "billing.surgeryBills.$.insurancePaymentMethod": payment_method,
+                "billing.surgeryBills.$.updatedAt": datetime.utcnow().isoformat()
+            }}
+        )
+        
+        billing_logger.info(
+            "Insurance payment marked as received for bill %s: ₹%s on %s",
+            bill_id, insurance_received_amount, received_date
+        )
+        
+        return {
+            "status": "success",
+            "message": f"Insurance payment of ₹{insurance_received_amount} marked as received",
+            "billId": bill_id,
+            "amountReceived": insurance_received_amount,
+            "receivedDate": received_date
+        }
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        billing_logger.error("Error marking insurance as received: %s", str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -3682,6 +3757,13 @@ async def create_pharmacy_bill(billing_data: dict = Body(...)):
         is_insurance_claimed = billing_data.get("isInsuranceClaimed", False)
         insurance_details = billing_data.get("insuranceDetails", {})
         wave_off_reason = billing_data.get("waveOffReason")
+        
+        # Insurance payment tracking fields (NEW)
+        insurance_payment_status = billing_data.get("insurancePaymentStatus", "pending")
+        insurance_payment_amount = float(billing_data.get("insurancePaymentAmount", 0))
+        insurance_payment_received_date = billing_data.get("insurancePaymentReceivedDate", None)
+        insurance_payment_method = billing_data.get("insurancePaymentMethod", None)
+        patient_payment_received = float(billing_data.get("patientPaymentReceived", 0))
 
         # Wave Off Logic
         if payment_method == "WaveOff":
@@ -3749,7 +3831,14 @@ async def create_pharmacy_bill(billing_data: dict = Body(...)):
             "gstAmount": gst_amount,
             "isInsuranceClaimed": is_insurance_claimed,
             "insuranceDetails": insurance_details,
-            "waveOffReason": wave_off_reason if payment_method == "WaveOff" else None
+            "waveOffReason": wave_off_reason if payment_method == "WaveOff" else None,
+            
+            # --- Insurance Payment Tracking (NEW) ---
+            "insurancePaymentStatus": insurance_payment_status,
+            "insurancePaymentAmount": insurance_payment_amount,
+            "insurancePaymentReceivedDate": insurance_payment_received_date,
+            "insurancePaymentMethod": insurance_payment_method,
+            "patientPaymentReceived": patient_payment_received
         }
         
         # Save billing record
@@ -3876,6 +3965,75 @@ async def get_patient_pharmacy_bills(registration_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.put("/api/billing/pharmacy/{bill_id}/insurance-received")
+def mark_pharmacy_insurance_received(bill_id: str, payment_data: dict = Body(...)):
+    """
+    Mark insurance payment as received for a pharmacy bill.
+    Moves the amount from unsettled (awaiting insurance) to settled.
+    
+    Body: {
+      "registrationId": "REG-2026-123456",
+      "insurancePaymentAmount": 5000,
+      "insurancePaymentReceivedDate": "2025-03-11",
+      "insurancePaymentMethod": "bank transfer"
+    }
+    """
+    try:
+        reg_id = payment_data.get("registrationId", "")
+        insurance_received_amount = float(payment_data.get("insurancePaymentAmount", 0))
+        received_date = payment_data.get("insurancePaymentReceivedDate", datetime.utcnow().isoformat()[:10])
+        payment_method = payment_data.get("insurancePaymentMethod", "")
+        
+        if insurance_received_amount <= 0:
+            raise HTTPException(status_code=400, detail="Insurance payment amount must be greater than 0")
+        
+        # Update in pharmacy_billing collection (source of truth)
+        result = pharmacy_billing_collection.update_one(
+            {"billId": bill_id, "registrationId": reg_id},
+            {"$set": {
+                "insurancePaymentStatus": "received",
+                "insurancePaymentAmount": insurance_received_amount,
+                "insurancePaymentReceivedDate": received_date,
+                "insurancePaymentMethod": payment_method,
+                "updatedAt": datetime.utcnow().isoformat()
+            }}
+        )
+        
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail="Pharmacy bill not found")
+        
+        # Also update in patient's pharmacyBills array (cache)
+        patient_collection.update_one(
+            {"registrationId": reg_id, "pharmacyBills.billId": bill_id},
+            {"$set": {
+                "pharmacyBills.$.insurancePaymentStatus": "received",
+                "pharmacyBills.$.insurancePaymentAmount": insurance_received_amount,
+                "pharmacyBills.$.insurancePaymentReceivedDate": received_date,
+                "pharmacyBills.$.insurancePaymentMethod": payment_method,
+                "pharmacyBills.$.updatedAt": datetime.utcnow().isoformat()
+            }}
+        )
+        
+        billing_logger.info(
+            "Insurance payment marked as received for pharmacy bill %s: ₹%s on %s",
+            bill_id, insurance_received_amount, received_date
+        )
+        
+        return {
+            "status": "success",
+            "message": f"Pharmacy insurance payment of ₹{insurance_received_amount} marked as received",
+            "billId": bill_id,
+            "amountReceived": insurance_received_amount,
+            "receivedDate": received_date
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        billing_logger.error("Error marking pharmacy insurance as received: %s", str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ============ AGGREGATED BILLING DASHBOARD ENDPOINT ============
 @app.get("/api/billing/dashboard/stats")
 async def get_billing_dashboard_stats(page: int = 1, limit: int = 50):
@@ -3945,31 +4103,53 @@ async def get_billing_dashboard_stats(page: int = 1, limit: int = 50):
                         ]
                     }
                 },
-                # Settled = fully closed (settled) + amount already paid on partial bills
-                # For partially_paid: amount_collected = patientTotalShare - balancePayable
-                # For balance_due: nothing collected yet
+                # Settled = fully closed (settled) + amount already collected on any pending bill
+                # PLUS: insurance approved amount IF insurance payment status is "received"
+                # collected = patientTotalShare - balancePayable for ALL pending statuses
+                # (works for partially_paid and for balance_due bills where partial payments exist)
                 "settledRevenue": {
                     "$sum": {
                         "$cond": [
                             {"$eq": ["$status", "settled"]},
                             {"$ifNull": ["$patientTotalShare", 0]},
                             {"$cond": [
-                                {"$eq": ["$status", "partially_paid"]},
-                                {"$subtract": [
-                                    {"$ifNull": ["$patientTotalShare", 0]},
-                                    {"$ifNull": ["$balancePayable", 0]}
-                                ]},
+                                {"$in": ["$status", ["balance_due", "partially_paid"]]},
+                                {
+                                    "$add": [
+                                        {"$subtract": [
+                                            {"$ifNull": ["$patientTotalShare", 0]},
+                                            {"$ifNull": ["$balancePayable", 0]}
+                                        ]},
+                                        # Add insurance payment amount only if status is "received"
+                                        {"$cond": [
+                                            {"$eq": ["$insurancePaymentStatus", "received"]},
+                                            {"$ifNull": ["$insurancePaymentAmount", 0]},
+                                            0
+                                        ]}
+                                    ]
+                                },
                                 0
                             ]}
                         ]
                     }
                 },
                 # Unsettled = remaining balance owed on unpaid/partial surgery bills
+                # MINUS: insurance payment amount IF insurance payment status is "received"
                 "unsettledRevenue": {
                     "$sum": {
                         "$cond": [
                             {"$in": ["$status", ["balance_due", "partially_paid"]]},
-                            {"$ifNull": ["$balancePayable", 0]},
+                            {
+                                "$subtract": [
+                                    {"$ifNull": ["$balancePayable", 0]},
+                                    # Subtract insurance payment amount if already received
+                                    {"$cond": [
+                                        {"$eq": ["$insurancePaymentStatus", "received"]},
+                                        {"$ifNull": ["$insurancePaymentAmount", 0]},
+                                        0
+                                    ]}
+                                ]
+                            },
                             0
                         ]
                     }
@@ -3986,18 +4166,54 @@ async def get_billing_dashboard_stats(page: int = 1, limit: int = 50):
         ]
 
         # Pipeline for Pharmacy Bills (separate collection)
+        # Same logic as surgery: settled = completed bills + insurance if received
+        # unsettled = incomplete bills - insurance if received
         pharmacy_pipeline = [
             {"$group": {
                 "_id": None,
-                "totalRevenue": {
+                # Settled = completed bills + insurance received amount
+                "settledRevenue": {
                     "$sum": {
-                        "$cond": [{"$eq": ["$status", "completed"]}, "$totalAmount", 0]
+                        "$cond": [
+                            {"$eq": ["$status", "completed"]},
+                            {
+                                "$add": [
+                                    "$totalAmount",
+                                    # Add insurance payment amount only if status is "received"
+                                    {"$cond": [
+                                        {"$eq": ["$insurancePaymentStatus", "received"]},
+                                        {"$ifNull": ["$insurancePaymentAmount", 0]},
+                                        0
+                                    ]}
+                                ]
+                            },
+                            # For incomplete bills, add insurance if already received
+                            {"$cond": [
+                                {"$eq": ["$insurancePaymentStatus", "received"]},
+                                {"$ifNull": ["$insurancePaymentAmount", 0]},
+                                0
+                            ]}
+                        ]
                     }
                 },
-                # Outstanding balance on incomplete pharmacy bills
+                # Unsettled = incomplete bills - insurance if received
                 "unsettledRevenue": {
                     "$sum": {
-                        "$cond": [{"$ne": ["$status", "completed"]}, "$totalAmount", 0]
+                        "$cond": [
+                            {"$ne": ["$status", "completed"]},
+                            {
+                                "$subtract": [
+                                    "$totalAmount",
+                                    # Subtract insurance if already received
+                                    {"$cond": [
+                                        {"$eq": ["$insurancePaymentStatus", "received"]},
+                                        {"$ifNull": ["$insurancePaymentAmount", 0]},
+                                        0
+                                    ]}
+                                ]
+                            },
+                            0
+                        ]
                     }
                 },
                 "pendingBills": {
@@ -4021,7 +4237,7 @@ async def get_billing_dashboard_stats(page: int = 1, limit: int = 50):
         
         settled_revenue = (inv_stats[0]["totalRevenue"] if inv_stats else 0) + \
                           (final_surg_stats[0]["settledRevenue"] if final_surg_stats and "settledRevenue" in final_surg_stats[0] else 0) + \
-                          (pharm_stats[0]["totalRevenue"] if pharm_stats else 0)
+                          (pharm_stats[0]["settledRevenue"] if pharm_stats and "settledRevenue" in pharm_stats[0] else 0)
                           
         unsettled_revenue = (inv_stats[0]["unsettledRevenue"] if inv_stats and "unsettledRevenue" in inv_stats[0] else 0) + \
                             (final_surg_stats[0]["unsettledRevenue"] if final_surg_stats and "unsettledRevenue" in final_surg_stats[0] else 0) + \
@@ -4255,12 +4471,18 @@ async def get_billing_analytics():
         from datetime import datetime
         route_started_perf = time.perf_counter()
         
-        # --- Define Lab Keywords (lowercase) ---
-        lab_keywords = ["ot scan", "visual field", "iop", "refraction", "lab", "investigation"]
-        
+        # --- Define Service Classification Keywords (lowercase) ---
+        lab_keywords     = ["ot scan", "visual field", "iop", "refraction", "lab", "investigation",
+                            "oct scan", "fundus", "photography", "perimetry", "pachymetry", "topography"]
+        surgery_keywords = ["iol", "mics", "phaco", "cataract", "lasik", "surgery",
+                            "intravitreal", "injection", "vitrectomy", "trabeculectomy",
+                            "pterygium", "squint", "enucleation", "evisceration", "dcr",
+                            "glaucoma", "retinal", "corneal transplant", "keratoplasty"]
+
         # 1. OP & Lab Analytics (from standalone invoices)
+        # Include all non-refunded invoices (paid + draft/unpaid) — matches dashboard unsettled logic
         pipeline_invoices = [
-            {"$match": {"status": "paid"}},
+            {"$match": {"status": {"$nin": ["refunded"]}}},
             {"$project": {
                 "date": "$date",
                 "amount": "$patientResponsibility",
@@ -4277,6 +4499,7 @@ async def get_billing_analytics():
         ]
         
         # 2. Surgery Analytics (from final surgery bills)
+        # Use patientTotalShare for all active bills — full billed amount regardless of payment stage
         pipeline_surgery = [
             {"$match": {"status": {"$in": ["settled", "balance_due", "partially_paid"]}}},
             {"$project": {
@@ -4304,8 +4527,8 @@ async def get_billing_analytics():
             }}
         ]
 
-        # 4. Approved Insurance Receivables (final surgery bills only)
-        pipeline_insurance = [
+        # 4. Approved Insurance Receivables (Surgery Bills)
+        pipeline_insurance_surgery = [
             {"$match": {
                 "insuranceCompany": {"$nin": [None, ""]},
                 "insuranceApprovedAmount": {"$gt": 0}
@@ -4325,9 +4548,61 @@ async def get_billing_analytics():
                 "registrationId": {"$ifNull": ["$registrationId", ""]},
                 "insuranceCompany": "$insuranceCompany",
                 "amount": "$insuranceApprovedAmount",
-                "surgeryName": "$surgeryName",
+                "itemDescription": "$surgeryName",
                 "billId": "$billId",
-                "claimReference": "$insuranceClaimReference"
+                "claimReference": "$insuranceClaimReference",
+                "paymentStatus": {"$ifNull": ["$insurancePaymentStatus", "pending"]},
+                "paymentAmount": {"$ifNull": ["$insurancePaymentAmount", 0]},
+                "paymentReceivedDate": {"$ifNull": ["$insurancePaymentReceivedDate", ""]},
+                "billType": {"$literal": "Surgery"}
+            }}
+        ]
+        
+        # 4b. Insurance from Pharmacy Bills (if claimed)
+        # Only include if insurance was claimed and there's an approved amount or payment
+        pipeline_insurance_pharmacy = [
+            {"$match": {
+                "isInsuranceClaimed": True,
+                "insuranceDetails": {"$exists": True, "$ne": None}
+            }},
+            {"$project": {
+                "date": {"$substr": ["$billDate", 0, 10]},
+                "patientName": {"$ifNull": ["$patientName", "Unknown"]},
+                "registrationId": {"$ifNull": ["$registrationId", ""]},
+                "insuranceCompany": {"$ifNull": ["$insuranceDetails.provider", "Unknown"]},
+                "amount": "$totalAmount",
+                "itemDescription": {"$literal": "Pharmacy Bill"},
+                "billId": "$billId",
+                "claimReference": {"$ifNull": ["$insuranceDetails.claimNumber", ""]},
+                "paymentStatus": {"$ifNull": ["$insurancePaymentStatus", "pending"]},
+                "paymentAmount": {"$ifNull": ["$insurancePaymentAmount", 0]},
+                "paymentReceivedDate": {"$ifNull": ["$insurancePaymentReceivedDate", ""]},
+                "billType": {"$literal": "Pharmacy"}
+            }}
+        ]
+
+        # 5. Insurance Collection Status (pending vs received) - COMBINED from both collections
+        pipeline_insurance_status_surgery = [
+            {"$match": {
+                "insuranceCompany": {"$nin": [None, ""]},
+                "insuranceApprovedAmount": {"$gt": 0}
+            }},
+            {"$group": {
+                "_id": "$insurancePaymentStatus",
+                "totalAmount": {"$sum": "$insuranceApprovedAmount"},
+                "count": {"$sum": 1}
+            }}
+        ]
+        
+        pipeline_insurance_status_pharmacy = [
+            {"$match": {
+                "isInsuranceClaimed": True,
+                "insuranceDetails": {"$exists": True, "$ne": None}
+            }},
+            {"$group": {
+                "_id": "$insurancePaymentStatus",
+                "totalAmount": {"$sum": "$totalAmount"},
+                "count": {"$sum": 1}
             }}
         ]
 
@@ -4335,7 +4610,10 @@ async def get_billing_analytics():
         invoice_data = timed_aggregate(billing_invoices_collection, pipeline_invoices, label="billing.analytics.invoices")
         surgery_data = timed_aggregate(final_surgery_bills_collection, pipeline_surgery, label="billing.analytics.surgery")
         pharmacy_data = timed_aggregate(pharmacy_billing_collection, pipeline_pharmacy, label="billing.analytics.pharmacy")
-        insurance_data = timed_aggregate(final_surgery_bills_collection, pipeline_insurance, label="billing.analytics.insurance")
+        insurance_surgery_data = timed_aggregate(final_surgery_bills_collection, pipeline_insurance_surgery, label="billing.analytics.insurance_surgery")
+        insurance_pharmacy_data = timed_aggregate(pharmacy_billing_collection, pipeline_insurance_pharmacy, label="billing.analytics.insurance_pharmacy")
+        insurance_status_surgery_data = timed_aggregate(final_surgery_bills_collection, pipeline_insurance_status_surgery, label="billing.analytics.insurance_status_surgery")
+        insurance_status_pharmacy_data = timed_aggregate(pharmacy_billing_collection, pipeline_insurance_status_pharmacy, label="billing.analytics.insurance_status_pharmacy")
 
         # Process Data in Python
         # Structure: { "YYYY-MM-DD": { "op": {amount, count}, "lab": {...}, "surgery": {...}, "pharmacy": {...} } }
@@ -4360,9 +4638,13 @@ async def get_billing_analytics():
             
             init_date(date)
             
-            # Check if Lab
-            is_lab = any(k in service for k in lab_keywords)
-            category = "lab" if is_lab else "op"
+            # Classify: lab → surgery → op (in priority order)
+            if any(k in service for k in lab_keywords):
+                category = "lab"
+            elif any(k in service for k in surgery_keywords):
+                category = "surgery"
+            else:
+                category = "op"
             
             daily_map[date][category]["amount"] += amount
             daily_map[date][category]["count"] += count
@@ -4415,33 +4697,82 @@ async def get_billing_analytics():
         def format_output(source_map):
             return [{"date": k, **v} for k, v in sorted(source_map.items())]
 
-        insurance_records = [
-            {
+        # Combine insurance records from both Surgery and Pharmacy
+        insurance_records = []
+        
+        # Add Surgery Insurance Records
+        for item in insurance_surgery_data:
+            insurance_records.append({
                 "date": item.get("date", ""),
                 "patientName": item.get("patientName", "Unknown"),
                 "registrationId": item.get("registrationId", ""),
                 "insuranceCompany": item.get("insuranceCompany", "Unknown"),
                 "amount": float(item.get("amount", 0) or 0),
-                "surgeryName": item.get("surgeryName", ""),
+                "itemDescription": item.get("itemDescription", ""),
                 "billId": item.get("billId", ""),
-                "claimReference": item.get("claimReference", "")
-            }
-            for item in insurance_data
-        ]
+                "claimReference": item.get("claimReference", ""),
+                "paymentStatus": item.get("paymentStatus", "pending"),
+                "paymentAmount": float(item.get("paymentAmount", 0) or 0),
+                "paymentReceivedDate": item.get("paymentReceivedDate", ""),
+                "billType": item.get("billType", "Surgery")
+            })
+        
+        # Add Pharmacy Insurance Records
+        for item in insurance_pharmacy_data:
+            insurance_records.append({
+                "date": item.get("date", ""),
+                "patientName": item.get("patientName", "Unknown"),
+                "registrationId": item.get("registrationId", ""),
+                "insuranceCompany": item.get("insuranceCompany", "Unknown"),
+                "amount": float(item.get("amount", 0) or 0),
+                "itemDescription": item.get("itemDescription", ""),
+                "billId": item.get("billId", ""),
+                "claimReference": item.get("claimReference", ""),
+                "paymentStatus": item.get("paymentStatus", "pending"),
+                "paymentAmount": float(item.get("paymentAmount", 0) or 0),
+                "paymentReceivedDate": item.get("paymentReceivedDate", ""),
+                "billType": item.get("billType", "Pharmacy")
+            })
+
+        # Calculate Insurance Collection Status Metrics (Combined from Surgery + Pharmacy)
+        insurance_status_metrics = {
+            "pending": {"total": 0, "count": 0},
+            "received": {"total": 0, "count": 0},
+            "rejected": {"total": 0, "count": 0}
+        }
+        
+        # Process Surgery Insurance Status
+        for item in insurance_status_surgery_data:
+            status = item.get("_id") or "pending"
+            if status not in insurance_status_metrics:
+                insurance_status_metrics[status] = {"total": 0, "count": 0}
+            insurance_status_metrics[status]["total"] += round(float(item.get("totalAmount", 0) or 0), 2)
+            insurance_status_metrics[status]["count"] += item.get("count", 0)
+        
+        # Process Pharmacy Insurance Status
+        for item in insurance_status_pharmacy_data:
+            status = item.get("_id") or "pending"
+            if status not in insurance_status_metrics:
+                insurance_status_metrics[status] = {"total": 0, "count": 0}
+            insurance_status_metrics[status]["total"] += round(float(item.get("totalAmount", 0) or 0), 2)
+            insurance_status_metrics[status]["count"] += item.get("count", 0)
 
         payload = {
             "status": "success",
-            "daily": format_output(daily_map),
-            "monthly": format_output(monthly_map),
-            "yearly": format_output(yearly_map),
+            "daily": format_output(daily_map) if daily_map else [],
+            "monthly": format_output(monthly_map) if monthly_map else [],
+            "yearly": format_output(yearly_map) if yearly_map else [],
             "insuranceApprovedRecords": insurance_records,
-            "totalApprovedInsurance": round(sum(item["amount"] for item in insurance_records), 2)
+            "insuranceCollectionStatus": insurance_status_metrics,
+            "totalApprovedInsurance": round(sum(item["amount"] for item in insurance_records), 2) if insurance_records else 0
         }
         record_count = len(payload["daily"]) + len(payload["monthly"]) + len(payload["yearly"]) + len(insurance_records)
         return preview_payload("/api/billing/analytics", payload, route_started_perf, record_count)
     except Exception as e:
+        import traceback
         print(f"Error in analytics: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Analytics error: {str(e)}")
 
 @app.get("/pharmacy/stock-report")
 async def get_stock_report():
