@@ -31,6 +31,8 @@ export const API_ENDPOINTS = {
   PATIENT_VISITS: (registrationId: string) => `${API_BASE_URL}/patients/${encodeURIComponent(registrationId)}/visits`,
   PATIENT_VISIT_SAVE: (registrationId: string) => `${API_BASE_URL}/patients/${encodeURIComponent(registrationId)}/visit`,
   PATIENT_DOCUMENTS: (registrationId: string) => `${API_BASE_URL}/patients/${encodeURIComponent(registrationId)}/documents`,
+  PATIENT_DOCUMENT_DELETE: (registrationId: string, docId: string) =>
+    `${API_BASE_URL}/patients/${encodeURIComponent(registrationId)}/documents/${encodeURIComponent(docId)}`,
   PATIENT_DOCUMENT_DOWNLOAD: (registrationId: string, docId: string, inline: boolean = false) =>
     `${API_BASE_URL}/patients/${encodeURIComponent(registrationId)}/documents/${encodeURIComponent(docId)}/download${inline ? '?inline=1' : ''}`,
 

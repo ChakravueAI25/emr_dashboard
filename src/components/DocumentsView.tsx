@@ -24,6 +24,13 @@ const categoryTitles: Record<string, string> = {
   general: 'General Documents',
 };
 
+const investigationCategories = new Set([
+  'ophthalmic_oct',
+  'ophthalmic_hvf',
+  'pachymetry',
+  'investigation_images',
+]);
+
 function Uploader({ patientRegistrationId, onUploaded }: { patientRegistrationId: string; onUploaded?: (saved: any[]) => void }) {
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -263,6 +270,7 @@ export function DocumentsView({ patientRegistrationId, patientName: initialPatie
   const [previewFile, setPreviewFile] = useState<string | null>(null);
   const [previewType, setPreviewType] = useState<Document['type']>('other');
   const [previewName, setPreviewName] = useState('');
+  const [deletingDocumentId, setDeletingDocumentId] = useState<string | null>(null);
 
   useEffect(() => {
     // Fetch documents for the current patient when patientRegistrationId changes
@@ -345,6 +353,46 @@ export function DocumentsView({ patientRegistrationId, patientName: initialPatie
     ...Object.entries(groupedDocuments).filter(([category]) => !(category in categoryTitles)),
   ];
 
+  const investigationTimelineEntries = Object.entries(
+    filteredDocuments
+      .filter(doc => investigationCategories.has(doc.category || 'general'))
+      .reduce<Record<string, Document[]>>((acc, doc) => {
+        const uploadedDate = doc.uploadedDate || '';
+        const monthKey = /^\d{4}-\d{2}/.test(uploadedDate)
+          ? uploadedDate.slice(0, 7)
+          : 'Unknown';
+
+        if (!acc[monthKey]) {
+          acc[monthKey] = [];
+        }
+
+        acc[monthKey].push(doc);
+        return acc;
+      }, {})
+  ).sort(([leftMonth], [rightMonth]) => {
+    if (leftMonth === 'Unknown') return 1;
+    if (rightMonth === 'Unknown') return -1;
+    return rightMonth.localeCompare(leftMonth);
+  });
+
+  const formatTimelineMonth = (monthKey: string) => {
+    if (monthKey === 'Unknown') {
+      return 'Unknown Month';
+    }
+
+    const [year, month] = monthKey.split('-');
+    const parsedDate = new Date(Number(year), Number(month) - 1, 1);
+
+    if (Number.isNaN(parsedDate.getTime())) {
+      return monthKey;
+    }
+
+    return parsedDate.toLocaleDateString('en-US', {
+      month: 'long',
+      year: 'numeric',
+    });
+  };
+
   const getDownloadUrl = (doc: Document, inline = false) => {
     if (!patientRegistrationId) return '#';
     return API_ENDPOINTS.PATIENT_DOCUMENT_DOWNLOAD(patientRegistrationId, doc.id, inline);
@@ -382,12 +430,100 @@ export function DocumentsView({ patientRegistrationId, patientName: initialPatie
     }
   };
 
+  const handleDelete = async (doc: Document) => {
+    if (!patientRegistrationId) return;
+
+    const confirmed = window.confirm('Are you sure you want to delete this document?');
+    if (!confirmed) return;
+
+    try {
+      setDeletingDocumentId(doc.id);
+      const resp = await fetch(API_ENDPOINTS.PATIENT_DOCUMENT_DELETE(patientRegistrationId, doc.id), {
+        method: 'DELETE',
+      });
+
+      if (!resp.ok) {
+        console.error('Delete failed', resp.statusText);
+        return;
+      }
+
+      setDocuments(prev => prev.filter(existingDoc => existingDoc.id !== doc.id));
+    } catch (err) {
+      console.error('Delete error', err);
+    } finally {
+      setDeletingDocumentId(null);
+    }
+  };
+
   const stats = {
     total: documents.length,
     pdfs: documents.filter(d => d.type === 'pdf').length,
     videos: documents.filter(d => d.type === 'video').length,
     images: documents.filter(d => d.type === 'image').length
   };
+
+  const renderDocumentRows = (docs: Document[]) => docs.map((doc, index) => (
+    <tr
+      key={doc.id}
+      className={`border-b border-[var(--theme-border)] hover:bg-[var(--theme-accent)]/5 transition-colors ${index % 2 === 0 ? 'bg-[var(--theme-bg)]' : 'bg-[var(--theme-bg-tertiary)]'
+        }`}
+    >
+      <td className="p-3 border-r border-[var(--theme-border)]">
+        <div className="flex items-center justify-center">
+          {getFileIcon(doc.type)}
+        </div>
+      </td>
+      <td className="p-3 border-r border-[var(--theme-border)]">
+        <span className="text-[var(--theme-text)] font-medium">{doc.name}</span>
+      </td>
+      <td className="p-3 border-r border-[var(--theme-border)]">
+        <span className="text-[var(--theme-text-muted)]">{doc.size}</span>
+      </td>
+      <td className="p-3 border-r border-[var(--theme-border)]">
+        <span className="text-[var(--theme-text-muted)]">{doc.uploadedDate}</span>
+      </td>
+      <td className="p-3 border-r border-[var(--theme-border)]">
+        <span className="text-[var(--theme-text-muted)]">{doc.uploadedBy}</span>
+      </td>
+      <td className="p-3">
+        <div className="flex items-center justify-center gap-2">
+          <button onClick={() => handlePreview(doc)} className="p-1.5 rounded hover:bg-[var(--theme-accent)]/20 transition-colors group">
+            <Eye className="w-4 h-4 text-[var(--theme-text-muted)] group-hover:text-[var(--theme-accent)]" />
+          </button>
+          <button onClick={() => handleDownload(doc)} className="p-1.5 rounded hover:bg-blue-500/20 transition-colors group">
+            <Download className="w-4 h-4 text-[var(--theme-text-muted)] group-hover:text-blue-500" />
+          </button>
+          <button
+            onClick={() => handleDelete(doc)}
+            disabled={deletingDocumentId === doc.id}
+            className="p-1.5 rounded hover:bg-red-500/20 transition-colors group disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Trash2 className="w-4 h-4 text-[var(--theme-text-muted)] group-hover:text-red-500" />
+          </button>
+        </div>
+      </td>
+    </tr>
+  ));
+
+  const renderDocumentTable = (docs: Document[]) => (
+    <div className="overflow-x-auto">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="bg-[var(--theme-accent)]/10">
+            <th className="text-left p-3 text-gray-900 dark:text-white border-r border-[var(--theme-border)] font-bold uppercase tracking-wider">Type</th>
+            <th className="text-left p-3 text-gray-900 dark:text-white border-r border-[var(--theme-border)] font-bold uppercase tracking-wider">Name</th>
+            <th className="text-left p-3 text-gray-900 dark:text-white border-r border-[var(--theme-border)] font-bold uppercase tracking-wider">Size</th>
+            <th className="text-left p-3 text-gray-900 dark:text-white border-r border-[var(--theme-border)] font-bold uppercase tracking-wider">Uploaded</th>
+            <th className="text-left p-3 text-gray-900 dark:text-white border-r border-[var(--theme-border)] font-bold uppercase tracking-wider">Uploaded By</th>
+            <th className="text-center p-3 text-gray-900 dark:text-white font-bold uppercase tracking-wider">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {renderDocumentRows(docs)}
+        </tbody>
+      </table>
+    </div>
+  );
 
   return (
     <div className="max-w-[1600px] mx-auto p-12 space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -543,6 +679,31 @@ export function DocumentsView({ patientRegistrationId, patientName: initialPatie
         </div>
       </div>
 
+      <div className="bg-[var(--theme-bg-secondary)] border border-[var(--theme-border)] rounded-lg overflow-hidden shadow-lg">
+        <div className="p-4 border-b border-[var(--theme-border)]">
+          <h3 className="text-[var(--theme-text)] font-bold">Ophthalmic Investigation Timeline</h3>
+        </div>
+
+        <div className="p-4 space-y-6">
+          {investigationTimelineEntries.length === 0 ? (
+            <div className="rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg)] p-6 text-center text-[var(--theme-text-muted)] text-sm">
+              No ophthalmic investigation documents found.
+            </div>
+          ) : (
+            investigationTimelineEntries.map(([monthKey, docs]) => (
+              <div key={monthKey} className="rounded-lg border border-[var(--theme-border)] overflow-hidden">
+                <div className="px-4 py-3 border-b border-[var(--theme-border)] bg-[var(--theme-accent)]/5">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    {formatTimelineMonth(monthKey)}
+                  </h3>
+                </div>
+                {renderDocumentTable(docs)}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
       {/* Documents List */}
       <div className="bg-[var(--theme-bg-secondary)] border border-[var(--theme-border)] rounded-lg overflow-hidden shadow-lg">
         <div className="p-4 border-b border-[var(--theme-border)]">
@@ -562,61 +723,7 @@ export function DocumentsView({ patientRegistrationId, patientName: initialPatie
                     {categoryTitles[category] || category}
                   </h3>
                 </div>
-
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="bg-[var(--theme-accent)]/10">
-                        <th className="text-left p-3 text-gray-900 dark:text-white border-r border-[var(--theme-border)] font-bold uppercase tracking-wider">Type</th>
-                        <th className="text-left p-3 text-gray-900 dark:text-white border-r border-[var(--theme-border)] font-bold uppercase tracking-wider">Name</th>
-                        <th className="text-left p-3 text-gray-900 dark:text-white border-r border-[var(--theme-border)] font-bold uppercase tracking-wider">Size</th>
-                        <th className="text-left p-3 text-gray-900 dark:text-white border-r border-[var(--theme-border)] font-bold uppercase tracking-wider">Uploaded</th>
-                        <th className="text-left p-3 text-gray-900 dark:text-white border-r border-[var(--theme-border)] font-bold uppercase tracking-wider">Uploaded By</th>
-                        <th className="text-center p-3 text-gray-900 dark:text-white font-bold uppercase tracking-wider">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {docs.map((doc, index) => (
-                        <tr
-                          key={doc.id}
-                          className={`border-b border-[var(--theme-border)] hover:bg-[var(--theme-accent)]/5 transition-colors ${index % 2 === 0 ? 'bg-[var(--theme-bg)]' : 'bg-[var(--theme-bg-tertiary)]'
-                            }`}
-                        >
-                          <td className="p-3 border-r border-[var(--theme-border)]">
-                            <div className="flex items-center justify-center">
-                              {getFileIcon(doc.type)}
-                            </div>
-                          </td>
-                          <td className="p-3 border-r border-[var(--theme-border)]">
-                            <span className="text-[var(--theme-text)] font-medium">{doc.name}</span>
-                          </td>
-                          <td className="p-3 border-r border-[var(--theme-border)]">
-                            <span className="text-[var(--theme-text-muted)]">{doc.size}</span>
-                          </td>
-                          <td className="p-3 border-r border-[var(--theme-border)]">
-                            <span className="text-[var(--theme-text-muted)]">{doc.uploadedDate}</span>
-                          </td>
-                          <td className="p-3 border-r border-[var(--theme-border)]">
-                            <span className="text-[var(--theme-text-muted)]">{doc.uploadedBy}</span>
-                          </td>
-                          <td className="p-3">
-                            <div className="flex items-center justify-center gap-2">
-                              <button onClick={() => handlePreview(doc)} className="p-1.5 rounded hover:bg-[var(--theme-accent)]/20 transition-colors group">
-                                <Eye className="w-4 h-4 text-[var(--theme-text-muted)] group-hover:text-[var(--theme-accent)]" />
-                              </button>
-                              <button onClick={() => handleDownload(doc)} className="p-1.5 rounded hover:bg-blue-500/20 transition-colors group">
-                                <Download className="w-4 h-4 text-[var(--theme-text-muted)] group-hover:text-blue-500" />
-                              </button>
-                              <button className="p-1.5 rounded hover:bg-red-500/20 transition-colors group">
-                                <Trash2 className="w-4 h-4 text-[var(--theme-text-muted)] group-hover:text-red-500" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                {renderDocumentTable(docs)}
               </div>
             ))
           )}

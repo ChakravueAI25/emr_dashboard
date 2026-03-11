@@ -1174,6 +1174,34 @@ async def get_patient_documents(registration_id: str):
     return {"documents": _sanitize_documents(legacy_docs)}
 
 
+@app.delete("/patients/{registration_id}/documents/{file_id}")
+async def delete_patient_document(registration_id: str, file_id: str):
+    """Delete a previously uploaded patient document and its metadata."""
+    doc = patient_documents_collection.find_one(
+        {"registrationId": registration_id, "fileId": file_id}
+    )
+
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    stored_name = doc.get("storedName")
+    if not stored_name:
+        raise HTTPException(status_code=404, detail="Document file reference is missing")
+
+    file_path = UPLOAD_ROOT / registration_id / stored_name
+    if file_path.exists():
+        try:
+            os.remove(file_path)
+        except FileNotFoundError:
+            pass
+
+    patient_documents_collection.delete_one(
+        {"registrationId": registration_id, "fileId": file_id}
+    )
+
+    return {"message": "Document deleted successfully"}
+
+
 @app.get("/patients/{registration_id}/documents/{file_id}/download")
 async def download_patient_document(registration_id: str, file_id: str, inline: bool | None = None):
     """Download or preview a previously uploaded patient document.
