@@ -168,10 +168,16 @@ export interface OCTFindingsEye {
   findings?: string;
 }
 
+export interface InvestigationDocumentRef {
+  documentId?: string;
+  name?: string;
+  type?: string;
+}
+
 export interface OphthalmicInvestigationsData {
-  oct?: { od: OCTFindingsEye; os: OCTFindingsEye; date?: string; performedBy?: string };
+  oct?: { od: OCTFindingsEye; os: OCTFindingsEye; date?: string; performedBy?: string; documentId?: string; name?: string; type?: string };
   ffa?: Record<string, any>;
-  hvf?: Record<string, any>;
+  hvf?: Record<string, any> & { documentId?: string; name?: string; type?: string };
   biometry?: {
     od?: { [key: string]: string };
     os?: { [key: string]: string };
@@ -179,16 +185,18 @@ export interface OphthalmicInvestigationsData {
   pachymetry?: {
     od?: string;
     os?: string;
-    image?: string; // Base64 encoded file
-    fileName?: string;
+    documentId?: string;
+    name?: string;
+    type?: string;
   };
   colourVision?: {
     od?: string;
     os?: string;
-    image?: string; // Base64 encoded file
-    fileName?: string;
+    documentId?: string;
+    name?: string;
+    type?: string;
   };
-  additionalImages?: string;
+  additionalImages?: InvestigationDocumentRef[] | string;
   otherInvestigations?: Array<Record<string, any>>;
 }
 

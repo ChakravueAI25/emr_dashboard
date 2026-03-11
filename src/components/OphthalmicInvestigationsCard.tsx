@@ -1,58 +1,168 @@
-﻿import { useRef } from 'react';
-import { FileSearch, Scan, Activity, Upload } from 'lucide-react';
+﻿import { useRef, useState } from 'react';
+import { FileSearch, Scan, Activity, Upload, Eye, Download } from 'lucide-react';
 import { ExpandableCard } from './ExpandableCard';
 import { EditableText, EditableTextHandle } from './EditableText';
 import { CardHeader } from './CardHeader';
-import { OphthalmicInvestigationsData } from './patient';
+import API_ENDPOINTS from '../config/api';
+import { DocumentPreviewModal } from './DocumentPreviewModal';
+import { InvestigationDocumentRef, OphthalmicInvestigationsData } from './patient';
 
 interface OphthalmicInvestigationsCardProps {
   data?: OphthalmicInvestigationsData;
   updateData?: (path: (string | number)[], value: any) => void;
   isEditable?: boolean;
+  patientRegistrationId?: string | null;
 }
 
-export function OphthalmicInvestigationsCard({ data, updateData, isEditable = false }: OphthalmicInvestigationsCardProps) {
+export function OphthalmicInvestigationsCard({ data, updateData, isEditable = false, patientRegistrationId }: OphthalmicInvestigationsCardProps) {
   const fieldRefs = useRef<{ [key: string]: EditableTextHandle | null }>({});
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewFile, setPreviewFile] = useState<string | null>(null);
+  const [previewType, setPreviewType] = useState<'pdf' | 'video' | 'image' | 'other'>('other');
+  const [previewName, setPreviewName] = useState('');
 
   const octFindings = data?.oct || { od: { cmt: '', rnfl: '', gcl: '', findings: '' }, os: { cmt: '', rnfl: '', gcl: '', findings: '' }, date: '', performedBy: '' };
   const hvfFindings = data?.hvf || { od: {}, os: {}, date: '', performedBy: '' };
+  const additionalImageRefs = Array.isArray(data?.additionalImages) ? data.additionalImages : [];
 
   const setField = (path: (string | number)[], value: any) => {
     if (!updateData) return;
     updateData(['ophthalmicInvestigations', ...path], value);
   };
 
-  // Function to convert file to Base64
-  const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result as string;
-        // Extract only the Base64 part (remove data:image/jpeg;base64, prefix)
-        const base64String = result.split(',')[1] || result;
-        resolve(base64String);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
+  const getFileExtension = (fileName?: string, explicitType?: string) => {
+    if (explicitType) return explicitType.toLowerCase();
+    if (!fileName || !fileName.includes('.')) return '';
+    return fileName.split('.').pop()?.toLowerCase() || '';
   };
 
-  // Unified file handler for Pachymetry and Colour Vision
-  const handlePachymetryAndColourVisionUpload = async (e: React.ChangeEvent<HTMLInputElement>, uploadType: 'both') => {
-    const file = e.target.files?.[0];
-    if (file) {
-      try {
-        const base64String = await fileToBase64(file);
-        // Save to both Pachymetry and Colour Vision
-        setField(['pachymetry', 'image'], base64String);
-        setField(['pachymetry', 'fileName'], file.name);
-        setField(['colourVision', 'image'], base64String);
-        setField(['colourVision', 'fileName'], file.name);
-        console.log('File uploaded and converted to Base64:', file.name);
-      } catch (err) {
-        console.error('Error converting file to Base64:', err);
-      }
+  const getPreviewType = (fileName?: string, explicitType?: string): 'pdf' | 'video' | 'image' | 'other' => {
+    const ext = getFileExtension(fileName, explicitType);
+    if (['png', 'jpg', 'jpeg', 'gif'].includes(ext)) return 'image';
+    if (ext === 'pdf') return 'pdf';
+    if (['mp4', 'webm', 'ogg'].includes(ext)) return 'video';
+    return 'other';
+  };
+
+  const createDocumentRef = (saved: any): InvestigationDocumentRef => ({
+    documentId: saved?.id || saved?.fileId || '',
+    name: saved?.name || '',
+    type: saved?.type || getFileExtension(saved?.name),
+  });
+
+  const uploadFilesToPatientDocuments = async (files: File[]) => {
+    if (!patientRegistrationId || patientRegistrationId === 'Not Assigned') {
+      console.error('Cannot upload investigation documents without a patient registration ID');
+      return [] as InvestigationDocumentRef[];
     }
+
+    const formData = new FormData();
+    files.forEach((file) => formData.append('files', file));
+    formData.append('uploaded_by', 'doctor');
+
+    const response = await fetch(API_ENDPOINTS.PATIENT_DOCUMENTS(patientRegistrationId), {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const message = await response.text();
+      throw new Error(message || 'Failed to upload investigation document');
+    }
+
+    const body = await response.json();
+    return (body.saved || []).map(createDocumentRef);
+  };
+
+  const handleSingleDocumentUpload = async (file: File, section: 'oct' | 'hvf') => {
+    try {
+      const [saved] = await uploadFilesToPatientDocuments([file]);
+      if (!saved) return;
+      setField([section, 'documentId'], saved.documentId);
+      setField([section, 'name'], saved.name);
+      setField([section, 'type'], saved.type);
+    } catch (err) {
+      console.error(`Failed to upload ${section.toUpperCase()} document`, err);
+    }
+  };
+
+  const handlePachymetryAndColourVisionUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const [saved] = await uploadFilesToPatientDocuments([file]);
+      if (!saved) return;
+      setField(['pachymetry', 'documentId'], saved.documentId);
+      setField(['pachymetry', 'name'], saved.name);
+      setField(['pachymetry', 'type'], saved.type);
+      setField(['colourVision', 'documentId'], saved.documentId);
+      setField(['colourVision', 'name'], saved.name);
+      setField(['colourVision', 'type'], saved.type);
+    } catch (err) {
+      console.error('Failed to upload pachymetry/colour vision document', err);
+    }
+  };
+
+  const handleAdditionalImagesUpload = async (files: File[]) => {
+    if (!files.length) return;
+
+    try {
+      const saved = await uploadFilesToPatientDocuments(files);
+      const next = [...additionalImageRefs, ...saved];
+      setField(['additionalImages'], next);
+    } catch (err) {
+      console.error('Failed to upload additional investigation images', err);
+    }
+  };
+
+  const openPreview = (documentRef: InvestigationDocumentRef | undefined) => {
+    if (!documentRef?.documentId || !patientRegistrationId) return;
+    setPreviewFile(API_ENDPOINTS.PATIENT_DOCUMENT_DOWNLOAD(patientRegistrationId, documentRef.documentId, true));
+    setPreviewType(getPreviewType(documentRef.name, documentRef.type));
+    setPreviewName(documentRef.name || 'Document Preview');
+    setPreviewOpen(true);
+  };
+
+  const handleDownload = async (documentRef: InvestigationDocumentRef | undefined) => {
+    if (!documentRef?.documentId || !patientRegistrationId) return;
+
+    try {
+      const url = API_ENDPOINTS.PATIENT_DOCUMENT_DOWNLOAD(patientRegistrationId, documentRef.documentId, false);
+      const response = await fetch(url);
+      if (!response.ok) {
+        console.error('Download failed', response.statusText);
+        return;
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = downloadUrl;
+      anchor.download = documentRef.name || 'investigation-document';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (err) {
+      console.error('Download error', err);
+    }
+  };
+
+  const renderDocumentActions = (documentRef: InvestigationDocumentRef | undefined) => {
+    if (!documentRef?.documentId || !documentRef?.name) return null;
+
+    return (
+      <div className="mt-2 flex items-center gap-2 text-xs">
+        <span className="max-w-[240px] truncate text-green-500">{documentRef.name}</span>
+        <button onClick={() => openPreview(documentRef)} className="rounded p-1 text-[#8B8B8B] transition-colors hover:bg-[#2a2a2a] hover:text-[#D4A574]" type="button">
+          <Eye className="h-4 w-4" />
+        </button>
+        <button onClick={() => handleDownload(documentRef)} className="rounded p-1 text-[#8B8B8B] transition-colors hover:bg-[#2a2a2a] hover:text-blue-400" type="button">
+          <Download className="h-4 w-4" />
+        </button>
+      </div>
+    );
   };
 
   const cardContent = (
@@ -131,10 +241,10 @@ export function OphthalmicInvestigationsCard({ data, updateData, isEditable = fa
         <div className="bg-[#1a1a1a] border border-[#D4A574] rounded-lg overflow-hidden">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-[#D4A574] bg-opacity-20">
-                <th className="text-left p-3 text-[#8B8B8B] border-r border-[#D4A574] text-xs">Parameter</th>
-                <th className="text-center p-3 text-[#D4A574] border-r border-[#D4A574] text-xs">OD (Right Eye)</th>
-                <th className="text-center p-3 text-[#D4A574] text-xs">OS (Left Eye)</th>
+              <tr className="bg-[#f3e0c8] dark:bg-[#D4A574]/20">
+                <th className="text-left p-3 text-gray-900 dark:text-white border-r border-[#D4A574] text-xs font-semibold">Parameter</th>
+                <th className="text-center p-3 text-gray-900 dark:text-white border-r border-[#D4A574] text-xs font-semibold">OD (Right Eye)</th>
+                <th className="text-center p-3 text-gray-900 dark:text-white text-xs font-semibold">OS (Left Eye)</th>
               </tr>
             </thead>
             <tbody>
@@ -261,12 +371,12 @@ export function OphthalmicInvestigationsCard({ data, updateData, isEditable = fa
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file) {
-                  setField(['oct', 'image'], file.name);
-                  console.log('OCT Image selected:', file.name);
+                  void handleSingleDocumentUpload(file, 'oct');
                 }
               }}
               className="w-full px-3 py-2 bg-[#1a1a1a] border border-[#D4A574] rounded text-white text-xs cursor-pointer"
             />
+            {renderDocumentActions(data?.oct)}
           </div>
         )}
       </div>
@@ -319,10 +429,10 @@ export function OphthalmicInvestigationsCard({ data, updateData, isEditable = fa
         <div className="bg-[#1a1a1a] border border-[#D4A574] rounded-lg overflow-hidden">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-[#D4A574] bg-opacity-20">
-                <th className="text-left p-3 text-[#8B8B8B] border-r border-[#D4A574]">Parameter</th>
-                <th className="text-center p-3 text-[#D4A574] border-r border-[#D4A574]">OD (Right Eye)</th>
-                <th className="text-center p-3 text-[#D4A574]">OS (Left Eye)</th>
+              <tr className="bg-[#f3e0c8] dark:bg-[#D4A574]/20">
+                <th className="text-left p-3 text-gray-900 dark:text-white border-r border-[#D4A574] font-semibold">Parameter</th>
+                <th className="text-center p-3 text-gray-900 dark:text-white border-r border-[#D4A574] font-semibold">OD (Right Eye)</th>
+                <th className="text-center p-3 text-gray-900 dark:text-white font-semibold">OS (Left Eye)</th>
               </tr>
             </thead>
             <tbody>
@@ -481,12 +591,12 @@ export function OphthalmicInvestigationsCard({ data, updateData, isEditable = fa
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file) {
-                  setField(['hvf', 'image'], file.name);
-                  console.log('HVF Image selected:', file.name);
+                  void handleSingleDocumentUpload(file, 'hvf');
                 }
               }}
               className="w-full px-3 py-2 bg-[#1a1a1a] border border-[#D4A574] rounded text-white text-xs cursor-pointer"
             />
+            {renderDocumentActions(data?.hvf)}
           </div>
         )}
       </div>
@@ -497,10 +607,10 @@ export function OphthalmicInvestigationsCard({ data, updateData, isEditable = fa
         <div className="bg-[#1a1a1a] border border-[#D4A574] rounded-lg overflow-hidden">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-[#D4A574] bg-opacity-20">
-                <th className="text-left p-3 text-[#8B8B8B] border-r border-[#D4A574]">Parameter</th>
-                <th className="text-center p-3 text-[#D4A574] border-r border-[#D4A574]">OD (Right Eye)</th>
-                <th className="text-center p-3 text-[#D4A574]">OS (Left Eye)</th>
+              <tr className="bg-[#f3e0c8] dark:bg-[#D4A574]/20">
+                <th className="text-left p-3 text-gray-900 dark:text-white border-r border-[#D4A574] font-semibold">Parameter</th>
+                <th className="text-center p-3 text-gray-900 dark:text-white border-r border-[#D4A574] font-semibold">OD (Right Eye)</th>
+                <th className="text-center p-3 text-gray-900 dark:text-white font-semibold">OS (Left Eye)</th>
               </tr>
             </thead>
             <tbody>
@@ -935,14 +1045,14 @@ export function OphthalmicInvestigationsCard({ data, updateData, isEditable = fa
                 <input
                   type="file"
                   accept=".png,.jpg,.jpeg,.pdf,image/png,image/jpeg,application/pdf"
-                  onChange={(e) => handlePachymetryAndColourVisionUpload(e, 'both')}
+                  onChange={(e) => {
+                    void handlePachymetryAndColourVisionUpload(e);
+                  }}
                   className="hidden"
                 />
               </label>
             </div>
-            {data?.pachymetry?.fileName && (
-              <p className="text-[10px] text-green-500 mt-2">âœ“ File uploaded: {data.pachymetry.fileName}</p>
-            )}
+            {renderDocumentActions(data?.pachymetry)}
           </div>
         )}
       </div>
@@ -961,19 +1071,36 @@ export function OphthalmicInvestigationsCard({ data, updateData, isEditable = fa
                 onChange={(e) => {
                   const files = Array.from(e.target.files || []);
                   if (files.length > 0) {
-                    const fileNames = files.map(f => f.name).join(', ');
-                    setField(['additionalImages'], fileNames);
-                    console.log('Additional images selected:', fileNames);
+                    void handleAdditionalImagesUpload(files);
                   }
                 }}
                 className="w-full px-3 py-2 bg-[#121212] border border-[#D4A574] rounded text-white text-xs cursor-pointer"
               />
               <p className="text-[#8B8B8B] text-xs mt-2">Supported formats: JPG, PNG, GIF, WebP</p>
+              {additionalImageRefs.length > 0 && (
+                <div className="mt-2 space-y-2">
+                  {additionalImageRefs.map((documentRef, index) => (
+                    <div key={`${documentRef.documentId || documentRef.name || 'img'}-${index}`}>
+                      {renderDocumentActions(documentRef)}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ) : (
-            <p className="text-[#8B8B8B] text-sm">
-              {(data?.additionalImages as string) || 'No images uploaded'}
-            </p>
+            additionalImageRefs.length > 0 ? (
+              <div className="space-y-2">
+                {additionalImageRefs.map((documentRef, index) => (
+                  <div key={`${documentRef.documentId || documentRef.name || 'img'}-${index}`}>
+                    {renderDocumentActions(documentRef)}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[#8B8B8B] text-sm">
+                {(typeof data?.additionalImages === 'string' && data.additionalImages) || 'No images uploaded'}
+              </p>
+            )
           )}
         </div>
       </div>
@@ -996,8 +1123,17 @@ export function OphthalmicInvestigationsCard({ data, updateData, isEditable = fa
   );
 
   return (
-    <ExpandableCard title="Ophthalmological Investigations" expandedContent={expandedContent}>
-      {cardContent}
-    </ExpandableCard>
+    <>
+      <ExpandableCard title="Ophthalmological Investigations" expandedContent={expandedContent}>
+        {cardContent}
+      </ExpandableCard>
+      <DocumentPreviewModal
+        isOpen={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        fileUrl={previewFile}
+        fileType={previewType}
+        fileName={previewName}
+      />
+    </>
   );
 }

@@ -2,6 +2,7 @@
 import { Upload, FileText, Video, Image as ImageIcon, Download, Trash2, Eye, Search, Filter, User } from 'lucide-react';
 import API_ENDPOINTS from '../config/api';
 import { useIsLightTheme } from '../hooks/useTheme';
+import { DocumentPreviewModal } from './DocumentPreviewModal';
 
 interface Document {
   id: string;
@@ -249,6 +250,10 @@ export function DocumentsView({ patientRegistrationId, patientName: initialPatie
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loadingDocs, setLoadingDocs] = useState(false);
   const [patientName, setPatientName] = useState<string>(initialPatientName || '');
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewFile, setPreviewFile] = useState<string | null>(null);
+  const [previewType, setPreviewType] = useState<Document['type']>('other');
+  const [previewName, setPreviewName] = useState('');
 
   useEffect(() => {
     // Fetch documents for the current patient when patientRegistrationId changes
@@ -323,7 +328,10 @@ export function DocumentsView({ patientRegistrationId, patientName: initialPatie
   const handlePreview = (doc: Document) => {
     if (!patientRegistrationId) return;
     const url = getDownloadUrl(doc, true);
-    window.open(url, '_blank');
+    setPreviewFile(url);
+    setPreviewType(doc.type);
+    setPreviewName(doc.name);
+    setPreviewOpen(true);
   };
 
   const handleDownload = async (doc: Document) => {
@@ -575,6 +583,13 @@ export function DocumentsView({ patientRegistrationId, patientName: initialPatie
           </table>
         </div>
       </div>
+      <DocumentPreviewModal
+        isOpen={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        fileUrl={previewFile}
+        fileType={previewType}
+        fileName={previewName}
+      />
     </div>
   );
 }

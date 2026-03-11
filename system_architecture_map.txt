@@ -1,0 +1,916 @@
+EMR DASHBOARD SYSTEM ARCHITECTURE MAP
+Generated from repository inspection only. No application code was changed for this report.
+
+====================================================================
+1. EXECUTIVE SUMMARY
+====================================================================
+
+This repository is a full-stack EMR platform built around a React + Vite frontend, a FastAPI backend, and MongoDB for persistence. The system is not organized as many small backend services; instead, most domain logic lives inside one large FastAPI application file, backend/main.py, with MongoDB collections wired centrally in backend/database.py and Pydantic payload models in backend/models.py.
+
+The main architectural characteristics are:
+- Monolithic backend API surface with many business domains in a single app.
+- Single-page React frontend with large component-driven view switching inside src/App.tsx.
+- MongoDB-centered data model with a dominant patients collection and several module-specific collections.
+- Hybrid billing model where some finance data is embedded inside patient documents and other finance data is stored in separate collections.
+- Queue-driven clinical workflow spanning reception, OPD, doctor review, analytics, pharmacy, and billing.
+- Procurement and vendor management layered into the same application stack.
+- A SaaS/organization provisioning module exists separately in backend/saas_endpoints.py.
+
+At a high level, the application behaves as:
+Frontend components -> centralized endpoint registry in src/config/api.ts -> FastAPI handlers in backend/main.py or backend/saas_endpoints.py -> MongoDB collections defined in backend/database.py.
+
+====================================================================
+2. REPOSITORY STRUCTURE
+====================================================================
+
+Top-level structure relevant to architecture:
+- src/: React frontend application.
+- backend/: FastAPI backend, MongoDB bindings, invoice parsing, SaaS routes, scripts.
+- public/: static assets.
+- build/: built frontend output.
+- backend/agents/: AI-related backend helper modules.
+- vector_db/: document chunk storage / local vector data artifacts.
+- package.json: frontend dependency and build entry.
+- backend/requirements.txt: backend Python dependency manifest.
+
+Important top-level implementation files:
+- src/App.tsx: application shell, routing-by-state, patient workflow coordination, persistence to localStorage.
+- src/config/api.ts: canonical client-side API map.
+- backend/main.py: primary FastAPI application and nearly all route handlers.
+- backend/database.py: Mongo connection setup and collection handles.
+- backend/models.py: Pydantic request/response/domain models.
+- backend/saas_endpoints.py: organization signup/payment/user setup routes.
+- backend/invoice_parser.py: medicine invoice parsing helper used by pharmacy import flow.
+- backend/run_server.py: backend launch helper.
+
+====================================================================
+3. TECHNOLOGY STACK
+====================================================================
+
+Frontend:
+- React 18
+- TypeScript
+- Vite
+- Recharts for analytics visualizations
+- Lucide React icons
+- Radix-style UI primitives under src/components/ui/
+- Immer for deep state updates in App.tsx
+
+Backend:
+- FastAPI
+- Pydantic
+- PyMongo and Motor-style async collection access
+- HTTPX for AI proxy calls
+- bcrypt/passlib for password hashing and auth support
+
+Data layer:
+- MongoDB
+- Atlas or local Mongo connection supported in backend/database.py
+- certifi used for Atlas TLS handling
+
+Secondary capabilities:
+- AI summary/proxy endpoints
+- Slit lamp image storage metadata
+- Vendor, GRN, purchase analytics, stock alert modules
+- SaaS organization onboarding and payment processing
+
+====================================================================
+4. BACKEND ARCHITECTURE
+====================================================================
+
+4.1 Core backend layout
+
+backend/main.py is the operational center of the application. It contains:
+- FastAPI app creation
+- CORS and middleware behavior
+- AI proxy helper logic
+- patient lifecycle routes
+- user/auth routes
+- appointment routes
+- queue routes
+- billing routes
+- pharmacy routes
+- surgery package routes
+- analytics routes
+- slit lamp and AI routes
+- vendor and procurement routes
+- inventory analysis routes
+- temporary runtime performance routes added for measurement work
+
+Architectural implication:
+- Backend cohesion is high at repository level but low at file/module level.
+- Cross-domain coupling is concentrated in one large file.
+- Refactor readiness exists, but domain boundaries are currently encoded mostly by path prefixes and collection usage rather than by separate Python modules.
+
+4.2 Database connection layer
+
+backend/database.py provides:
+- Mongo client initialization
+- db selection using environment variables
+- sync and async collection handles
+- exported collection objects imported directly into route handlers
+
+This means handlers do not pass through a repository/service layer. Instead they call Mongo collections directly. That makes features fast to add but increases repeated query logic and makes transaction-like workflows harder to standardize.
+
+4.3 Models layer
+
+backend/models.py contains permissive domain models for:
+- patients and encounters
+- users and roles
+- pharmacy medicines and billing payloads
+- billing cases/stages
+- surgery packages
+- vendor and purchase records
+
+The backend uses a mix of:
+- typed Pydantic models for some routes
+- raw dict payloads for many routes
+
+Architectural implication:
+- Validation quality varies by module.
+- Some critical flows rely on flexible dict payloads rather than strict schemas.
+- This is convenient for UI iteration but increases risk of shape drift over time.
+
+====================================================================
+5. MONGODB COLLECTION MAP
+====================================================================
+
+Primary collections exported by backend/database.py:
+- patients: central clinical record and embedded billing store.
+- patient_queue: queue and workflow movement across reception/OPD/doctor stages.
+- users: login identities, roles, doctor/staff metadata.
+- pharmacy_medicines: medicine master and stock records.
+- pharmacy_billing: pharmacy sale/billing records.
+- coupon_quotas: worker-based coupon quota tracking.
+- billing_cases: billing workflow/case tracking.
+- surgery_packages: reusable surgery package catalog.
+- billing_invoices: standalone invoice-related storage.
+- initial_surgery_bills: first-stage surgery bill records.
+- final_surgery_bills: final surgery bill records.
+- slit_lamp_images: ophthalmic image metadata.
+- doctor_feedback: AI/doctor feedback capture.
+- presets: reusable text/value preset buckets.
+- vendors: supplier master records.
+- purchase_invoices: GRN/purchase invoice records.
+- vendor_payments: supplier payment ledger.
+
+Observed master/SaaS collections in backend/saas_endpoints.py:
+- organizations
+- organization_users
+
+Central data design observation:
+- patients is the dominant aggregate root for clinical data.
+- billing is split between patient-embedded arrays and dedicated finance collections.
+- procurement/inventory is separated into its own collection group.
+
+====================================================================
+6. DOMAIN MODULES AND MAIN ROUTES
+====================================================================
+
+6.1 Health, AI utility, and runtime measurement
+
+Handlers identified in backend/main.py:
+- POST /evaluate-reading -> evaluate_reading
+- GET /health -> health_check
+- POST /__perf/reset -> reset_perf_metrics
+- GET /__perf/snapshot -> get_perf_metrics_snapshot
+- POST /__perf/frontend -> capture_frontend_perf_metric
+- GET /__perf/explain-summary -> get_perf_explain_summary
+- GET / -> read_root
+
+Purpose:
+- health and root checks
+- clinical reading severity evaluation
+- temporary performance measurement and reporting support
+
+Note:
+- The __perf routes appear to be diagnostic instrumentation rather than core EMR business behavior.
+
+6.2 Clinical analytics
+
+Patient-specific analytics routes:
+- GET /api/analytics/patient/{reg_id}/iop-trend -> patient_iop_trend
+- GET /api/analytics/patient/{reg_id}/visual-acuity -> patient_visual_acuity
+- GET /api/analytics/patient/{reg_id}/visits -> patient_visits
+- GET /api/analytics/patient/{reg_id}/iop-distribution -> patient_iop_distribution
+- GET /api/analytics/patient/{reg_id}/procedures -> patient_procedures_timeline
+
+Primary collection usage:
+- patients
+
+Purpose:
+- derive time-series and clinical trend views from encounter/visit history.
+
+6.3 Patient registration, retrieval, documents, and examination storage
+
+Patient and document routes:
+- POST /patients/new -> create_new_patient
+- GET /patients/recent -> get_recent_patients
+- GET /patients/search -> search_patients
+- GET /patients/all -> get_all_patients
+- GET /patients/{registration_id} -> get_patient_by_registration
+- PUT /patients/{registration_id} -> save_patient_examination
+- POST /patients/{registration_id}/visit -> save_visit_history
+- GET /patients/{registration_id}/visits -> get_patient_visits
+- PUT /patients/{registration_id}/visits/{visit_id} -> update_visit_record
+- PUT /patients/{registration_id}/investigations -> upsert_patient_investigations
+- PUT /patients/{registration_id}/doctor -> upsert_patient_doctor
+- POST /patients/{registration_id}/documents -> upload_patient_documents
+- GET /patients/{registration_id}/documents -> get_patient_documents
+- GET /patients/{registration_id}/documents/{file_id}/download -> download_patient_document
+
+Primary collection usage:
+- patients
+
+Purpose:
+- create base patient record
+- append visit history and stage-specific updates
+- store or retrieve patient-linked files
+- support quick patient lookup for appointments and billing
+
+Key schema observation:
+- The codebase supports both newer encounters-style data and older visits-style history in analytics and retrieval logic.
+
+6.4 User management and authentication
+
+User/auth routes:
+- POST /users/new -> create_new_user
+- GET /users/all -> get_all_users
+- GET /users/{username} -> get_user_by_username
+- POST /auth/login -> login
+
+Primary collection usage:
+- users
+
+Purpose:
+- create staff accounts
+- authenticate users
+- query role-filtered or username-specific user data
+
+6.5 Appointments and queue progression
+
+Appointment routes:
+- POST /appointments -> create_appointment
+- GET /appointments -> get_all_appointments
+- GET /appointments/{appointment_id} -> get_appointment
+- PUT /appointments/{appointment_id} -> update_appointment
+- GET /queue/appointments -> get_queue_appointments
+
+Queue routes:
+- POST /queue/reception -> create_reception_queue
+- GET /queue/reception -> list_reception_queue
+- PUT /queue/reception/{queue_id} -> update_reception_queue
+- POST /queue/opd -> create_opd_queue
+- GET /queue/opd -> list_opd_queue
+- PUT /queue/opd/{queue_id} -> update_opd_queue
+- POST /queue/doctor -> create_doctor_queue
+- GET /queue/doctor -> list_doctor_queue
+- PUT /queue/doctor/{queue_id} -> update_doctor_queue
+- POST /queue/recall/to-reception -> recall_to_reception
+- POST /queue/recall/to-opd -> recall_to_opd
+
+Primary collection usage:
+- patient_queue
+- patients
+- likely embedded appointment records / appointment structures in main workflow logic
+
+Purpose:
+- create appointments
+- move patients through front-desk, OPD, and doctor queues
+- requeue patients back to previous stages when needed
+
+Architectural observation:
+- Queue progression is a first-class operational pattern in the system.
+- Workflow state is managed explicitly via route calls rather than a separate workflow engine.
+
+6.6 Core patient billing and insurance
+
+Billing routes for a single patient:
+- GET /api/billing/patient/{reg_id}/summary -> get_billing_summary
+- GET /api/billing/patient/{reg_id}/insurance -> get_patient_insurance
+- PUT /api/billing/patient/{reg_id}/insurance -> update_patient_insurance
+- GET /api/billing/patient/{reg_id}/invoices -> get_patient_invoices
+- POST /api/billing/patient/{reg_id}/invoices -> create_invoice
+- GET /api/billing/patient/{reg_id}/payments -> get_patient_payments
+- POST /api/billing/patient/{reg_id}/payments -> record_payment
+- GET /api/billing/patient/{reg_id}/claims -> get_insurance_claims
+- POST /api/billing/patient/{reg_id}/claims -> create_claim
+
+Billing workflow/case routes:
+- POST /api/billing/cases -> create_billing_case
+- GET /api/billing/cases/patient/{reg_id} -> get_patient_billing_cases
+- PUT /api/billing/cases/{case_id}/stage -> update_billing_stage
+
+Coupon routes:
+- GET /api/coupons/quota/{worker_id} -> get_worker_coupon_quota
+- POST /api/coupons/refresh -> refresh_worker_quota
+
+Auxiliary invoice update route:
+- POST /api/billing/invoices/{registration_id} -> update_bill_with_dates
+
+Primary collection usage:
+- patients
+- billing_cases
+- billing_invoices
+- coupon_quotas
+
+Purpose:
+- patient finance summary and receivables
+- insurance policy and claim tracking
+- invoice/payment management
+- worker coupon quota logic
+
+Important business note:
+- Billing state is partly patient-centric rather than invoice-centric. Many values are derived from embedded arrays in patient records.
+
+6.7 Surgery billing and surgery package management
+
+Surgery billing routes:
+- POST /api/billing/patient/{reg_id}/surgery-bills/initial -> create_initial_surgery_bill
+- POST /api/billing/patient/{reg_id}/surgery-bills/final -> create_final_surgery_bill
+- GET /api/billing/patient/{reg_id}/surgery-bills -> get_patient_surgery_bills
+- GET /api/billing/patient/{reg_id}/surgery-bills/{bill_id} -> get_surgery_bill_by_id
+- PUT /api/billing/patient/{reg_id}/surgery-bills/{bill_id} -> update_surgery_bill
+- POST /api/billing/patient/{registration_id}/surgery-bills/initial -> update_initial_bill_with_dates
+- POST /api/billing/patient/{registration_id}/surgery-bills/final -> update_final_bill_with_dates
+
+Surgery package routes:
+- POST /api/surgery-packages -> create_surgery_package
+- GET /api/surgery-packages -> get_all_surgery_packages
+- GET /api/surgery-packages/{package_id} -> get_surgery_package
+- PUT /api/surgery-packages/{package_id} -> update_surgery_package
+- DELETE /api/surgery-packages/{package_id} -> delete_surgery_package
+- POST /api/save-surgery-package -> save_surgery_package
+- GET /api/surgery-packages/recent -> get_recent_surgery_packages
+- GET /api/surgery-packages/search -> search_surgery_packages
+
+Patient surgical record routes:
+- GET /api/patients/{registration_id}/surgical-records -> get_surgical_records
+- POST /api/patients/{registration_id}/surgical-records -> add_surgical_record
+
+Primary collection usage:
+- patients
+- surgery_packages
+- initial_surgery_bills
+- final_surgery_bills
+
+Architectural observation:
+- Surgery billing logic exists in both patient-embedded context and dedicated collections.
+- Surgery package management acts like a reusable template/catalog module.
+
+6.8 Pharmacy and medicine inventory
+
+Pharmacy medicine routes:
+- GET /pharmacy/medicines -> get_pharmacy_medicines
+- GET /pharmacy/medicines/{medicine_id} -> get_medicine
+- POST /pharmacy/medicines -> create_medicine
+- PUT /pharmacy/medicines/{medicine_id} -> update_medicine
+- PUT /pharmacy/medicines/{medicine_id}/stock -> update_medicine_stock
+- POST /api/medicines/parse-invoice -> parse_medicine_invoice
+
+Pharmacy billing routes:
+- POST /pharmacy/billing -> create_pharmacy_bill
+- GET /pharmacy/billing/{bill_id} -> get_pharmacy_bill
+- GET /pharmacy/billing/patient/{registration_id} -> get_patient_pharmacy_bills
+- GET /pharmacy/stock-report -> get_stock_report
+- POST /pharmacy/initialize-sample-data -> initialize_sample_pharmacy_data
+
+Primary collection usage:
+- pharmacy_medicines
+- pharmacy_billing
+- patients (for linked patient pharmacy history or identity lookup)
+
+Purpose:
+- medicine master management
+- stock updates
+- invoice OCR/parse-assisted intake
+- pharmacy checkout and patient-linked billing
+- stock reporting
+
+6.9 Dashboard and finance analytics
+
+Dashboard/finance routes:
+- GET /api/billing/dashboard/stats -> get_billing_dashboard_stats
+- GET /api/billing/analytics -> get_billing_analytics
+- GET /billing/dashboard -> billing_dashboard
+
+Primary collection usage:
+- patients
+- pharmacy_billing
+- billing-related collections
+
+Purpose:
+- aggregate cross-patient revenue, unsettled amounts, pending bills, and time-series financial analytics.
+
+Important known behavior:
+- The billing dashboard unsettled amount is derived from surgery bill logic, specifically statuses such as balance_due or partially_paid using patient share values, not from every possible unpaid item across the entire system.
+
+6.10 Slit lamp, AI summary, and presets
+
+Routes:
+- POST /slit-lamp/upload -> upload_slit_lamp_image
+- GET /slit-lamp/patient/{patient_id} -> get_patient_slit_lamp_images
+- POST /ai/generate-summary -> ai_generate_summary
+- POST /ai/save-feedback -> ai_save_feedback
+- GET /api/presets/{category} -> get_presets
+- POST /api/presets/{category} -> save_presets
+
+Primary collection usage:
+- slit_lamp_images
+- doctor_feedback
+- presets
+
+Purpose:
+- ophthalmic image metadata handling
+- AI-generated clinical summaries and human feedback capture
+- reusable preset text/value lists for UI workflows
+
+6.11 Vendor, procurement, and inventory analytics
+
+Vendor routes:
+- POST /vendors -> create_vendor
+- GET /vendors -> get_vendors
+- GET /vendors/ledger -> get_vendor_ledger
+- GET /vendors/outstanding-invoices -> get_outstanding_invoices
+- GET /vendors/overdue-invoices -> get_overdue_invoices
+- GET /vendors/{vendor_id} -> get_vendor
+- PUT /vendors/{vendor_id} -> update_vendor
+- DELETE /vendors/{vendor_id} -> delete_vendor
+- PUT /vendors/pay-invoice/{invoice_id} -> pay_vendor_invoice
+
+Procurement and inventory analysis routes:
+- POST /pharmacy/grn -> create_grn
+- GET /analytics/purchases/monthly -> monthly_purchase_analytics
+- GET /analytics/purchases/yearly -> yearly_purchase_analytics
+- GET /analytics/vendor-trend -> vendor_purchase_trend
+- GET /inventory/expiry-alerts -> get_expiry_alerts
+- GET /inventory/dead-stock -> get_dead_stock
+- GET /analytics/purchase-categories -> purchase_category_analytics
+
+Primary collection usage:
+- vendors
+- purchase_invoices
+- vendor_payments
+- pharmacy_medicines
+
+Purpose:
+- supplier master and outstanding balances
+- goods receipt note capture
+- invoice settlement to vendors
+- purchase trend and inventory health reporting
+
+6.12 SaaS organization onboarding
+
+Implemented in backend/saas_endpoints.py:
+- signup and payment setup flows
+- organization provisioning
+- user creation for organizations
+- master database coordination
+
+Primary collections:
+- organizations
+- organization_users
+
+Architectural observation:
+- This file is the clearest example of separate module routing outside backend/main.py.
+- It suggests a possible direction for future backend modularization.
+
+====================================================================
+7. FRONTEND ARCHITECTURE
+====================================================================
+
+7.1 Application shell
+
+src/App.tsx acts as the central application coordinator.
+
+Key responsibilities:
+- top-level authentication state
+- current view selection using component-state routing rather than React Router
+- user role persistence and localStorage restoration
+- active patient context
+- history/visit navigation
+- patient data mapping between backend responses and UI structures
+- navigation between dashboard, queues, billing, pharmacy, admin, telemedicine, and settings views
+
+Architectural implication:
+- The frontend behaves like a stateful workstation app.
+- Large amounts of workflow orchestration are concentrated in App.tsx.
+- This creates a powerful single control point but also a high-complexity file.
+
+7.2 Endpoint registry
+
+src/config/api.ts is the frontend boundary contract.
+
+It contains grouped endpoint constants for:
+- auth
+- telemedicine
+- patients
+- queues
+- appointments
+- surgical records
+- presets
+- analytics
+- billing
+- pharmacy
+- vendors
+- GRN and purchase analytics
+- inventory alerts
+- surgery packages
+- organization and SaaS
+- master admin and AI summary
+
+Architectural implication:
+- API URL construction is centralized and consistent.
+- Frontend components generally avoid hardcoded URLs.
+- This is one of the stronger architectural patterns in the codebase.
+
+====================================================================
+8. FRONTEND VIEW MAP AND API USAGE
+====================================================================
+
+8.1 Billing dashboard
+
+Component:
+- src/components/BillingDashboardView.tsx
+
+Main behavior:
+- fetches API_ENDPOINTS.BILLING_DASHBOARD.STATS on mount
+- populates total revenue, settled revenue, unsettled revenue, pending bills, and records list
+- switches to analytics subview by rendering BillingAnalyticsView
+
+Role in system:
+- primary finance summary screen
+- read-heavy and aggregate-heavy consumer of backend billing dashboard endpoint
+
+8.2 Billing analytics
+
+Component:
+- src/components/BillingAnalyticsView.tsx
+
+Main behavior:
+- fetches API_ENDPOINTS.BILLING_DASHBOARD.ANALYTICS on mount
+- renders daily/monthly/yearly charts and insurance-approved record lists
+- supports print/export-like rendering through iframe print flow
+
+8.3 Patient billing workspace
+
+Component:
+- src/components/BillingView.tsx
+
+Main behavior observed:
+- loads patient billing summary, insurance, invoices, payments, and claims in parallel
+- creates invoices
+- updates insurance information
+- supports claim and payment workflow UI
+
+Role in system:
+- operational patient-level billing workstation
+- binds together multiple granular finance endpoints
+
+8.4 Pharmacy billing workspace
+
+Component:
+- src/components/PharmacyBillingView.tsx
+
+Main behavior observed:
+- fetches medicines from pharmacy endpoint
+- searches patients using /patients/search
+- manages a cart and billing options including insurance and wave-off logic
+- posts pharmacy bill creation and expects stock effects downstream
+
+Role in system:
+- checkout and dispensing screen connected to both patient identity and medicine inventory
+
+8.5 Medicine management
+
+Component:
+- src/components/MedicineManagementView.tsx
+
+Main behavior observed:
+- loads medicine catalog from GET /pharmacy/medicines
+- uploads invoice files to POST /api/medicines/parse-invoice
+- updates existing medicine stock via PUT /pharmacy/medicines/{id}
+- creates new medicine records via POST /pharmacy/medicines
+
+Role in system:
+- inventory master maintenance plus OCR-assisted invoice import
+
+8.6 Appointment booking
+
+Component:
+- src/components/AppointmentBookingView.tsx
+
+Main behavior observed:
+- fetches doctors with role filtering from users endpoint
+- loads appointments
+- searches patients
+- creates new patient if needed
+- creates appointment
+- transitions toward billing or downstream visit flow after booking
+
+Role in system:
+- patient intake and scheduling entry point
+
+8.7 Clinical analytics view
+
+Component:
+- src/components/AnalyticsView.tsx
+
+Main behavior observed:
+- when a registrationId exists, fetches five patient analytics endpoints in parallel:
+  - IOP trend
+  - visual acuity
+  - visits
+  - IOP distribution
+  - procedures
+- converts IOP values to histogram bins client-side
+
+Role in system:
+- patient-specific analytical visualization layer
+
+8.8 Dashboard view
+
+Component:
+- src/components/DashboardView.tsx
+
+Main behavior observed:
+- fetches doctor details from users endpoint
+- fetches appointments for doctor activity and patient counts
+- fetches recent patients rather than all patients for dashboard reporting
+
+Role in system:
+- high-level user landing view optimized to use smaller recent-patient payloads
+
+8.9 GRN/invoice upload and vendor workflows
+
+Components:
+- src/components/InvoiceUploadView.tsx
+- src/components/VendorListView.tsx
+
+Main behavior observed:
+- InvoiceUploadView fetches vendors, collects invoice and line-item data, and supports GRN submission flow.
+- VendorListView fetches vendor master data, supports add/edit, opens vendor ledger context, and launches payment modal.
+
+Role in system:
+- procurement operations UI for stock acquisition and vendor payments
+
+8.10 Global application patterns
+
+Observed frontend patterns:
+- stateful navigation instead of route-based navigation
+- repeated use of fetch directly inside components
+- API_ENDPOINTS used consistently as the backend contract source
+- several operational views assume workstation-like usage rather than public-web navigation patterns
+
+====================================================================
+9. CORE DATA FLOWS
+====================================================================
+
+9.1 Patient intake to clinical visit
+
+Typical flow:
+1. Front desk creates patient through POST /patients/new if patient does not exist.
+2. Appointment may be created through POST /appointments.
+3. Queue entries are created or updated through reception/OPD/doctor queue endpoints.
+4. Clinical data is written back through PUT /patients/{registration_id}, stage-specific doctor/investigation updates, or POST /patients/{registration_id}/visit.
+5. Patient analytics later read from the same longitudinal patient data.
+
+Primary records involved:
+- patients
+- patient_queue
+- users
+
+9.2 Billing flow for a patient
+
+Typical flow:
+1. BillingView loads summary, insurance, invoices, payments, and claims in parallel.
+2. New invoice is created against the patient.
+3. Payments and claims are recorded separately.
+4. Billing dashboard later aggregates patient billing plus pharmacy and surgery-related amounts.
+
+Primary records involved:
+- patients
+- billing_cases
+- billing_invoices
+- coupon_quotas
+- surgery bill collections
+
+9.3 Surgery billing flow
+
+Typical flow:
+1. Surgery package may be selected or stored from package catalog.
+2. Initial or final surgery bill is created.
+3. Bill state is updated by follow-up endpoints.
+4. Billing dashboard uses these surgery bill states when calculating unsettled and pending values.
+
+Primary records involved:
+- patients
+- surgery_packages
+- initial_surgery_bills
+- final_surgery_bills
+
+9.4 Pharmacy sale and stock flow
+
+Typical flow:
+1. PharmacyBillingView loads current medicine master.
+2. User selects patient and medicines.
+3. POST /pharmacy/billing writes a bill record.
+4. Stock adjustments occur through medicine update logic and/or bill processing.
+5. History can be read back using patient-specific pharmacy billing endpoint.
+
+Primary records involved:
+- pharmacy_medicines
+- pharmacy_billing
+- patients
+
+9.5 Procurement / GRN flow
+
+Typical flow:
+1. Vendor list is loaded from /vendors.
+2. InvoiceUploadView captures invoice metadata and line items.
+3. POST /pharmacy/grn creates GRN / purchase invoice records.
+4. Vendor outstanding and payment routes reflect payable balances.
+5. Purchase analytics and expiry/dead-stock analytics read from procurement and stock data.
+
+Primary records involved:
+- vendors
+- purchase_invoices
+- vendor_payments
+- pharmacy_medicines
+
+9.6 AI-assisted summary flow
+
+Typical flow:
+1. UI submits patient/context payload to /ai/generate-summary.
+2. Backend proxies or generates AI output.
+3. Human feedback is submitted to /ai/save-feedback.
+4. Supporting preset content may come from /api/presets/{category}.
+
+Primary records involved:
+- doctor_feedback
+- presets
+
+====================================================================
+10. BILLING ARCHITECTURE ANALYSIS
+====================================================================
+
+Billing is the most structurally complex subsystem in this repository.
+
+Key reasons:
+- Billing data is not stored in one place.
+- The patients collection contains embedded billing arrays and surgery bill context.
+- Pharmacy sales are stored in a dedicated collection.
+- Billing cases, billing invoices, initial surgery bills, and final surgery bills also exist as separate collections.
+- The dashboard aggregates across these different sources.
+
+Functional consequences:
+- A single financial question may require combining patient-embedded arrays with collection-level records.
+- Read paths become aggregation-heavy.
+- Data consistency rules are spread across handlers instead of enforced by one finance domain layer.
+
+Known dashboard behavior from earlier tracing:
+- The billing dashboard cards are fed by GET /api/billing/dashboard/stats.
+- The unsettled bill value shown in the dashboard is calculated from surgery bill states with statuses such as balance_due or partially_paid and uses patientTotalShare-based values.
+- Therefore the dashboard's unsettled total is not a universal unpaid-balance figure for every charge type in the system.
+
+Architectural risk:
+- Different teams may interpret "revenue", "pending", or "unsettled" differently because they are assembled from mixed storage patterns.
+- Reporting correctness depends heavily on route-level aggregation logic in backend/main.py.
+
+====================================================================
+11. PERFORMANCE-CRITICAL AREAS
+====================================================================
+
+From both static review and earlier runtime measurement work, the most performance-sensitive areas are:
+- GET /api/billing/dashboard/stats
+- GET /api/billing/analytics
+- patient analytics endpoints reading and reshaping historical visits/encounters
+- /pharmacy/medicines when the medicine catalog grows large
+- procurement analytics over purchase invoices and stock aging patterns
+
+Why these areas are heavy:
+- they read across many documents or embedded arrays
+- they perform server-side aggregation and reshaping
+- they often serve dashboard pages that want full records, not only counts
+- the patients collection contains broad documents that may include large nested payloads
+
+Measured context already observed earlier in the session:
+- billing dashboard stats was the slowest measured endpoint during runtime testing
+- that endpoint also had the highest database fan-out in the sampled runtime report
+
+Architectural conclusion:
+- the bottleneck profile is mostly backend aggregation and document-shape complexity rather than frontend request count alone
+
+====================================================================
+12. REFACTOR-READINESS ASSESSMENT
+====================================================================
+
+12.1 Strengths
+
+- API endpoint definitions are centralized on the frontend.
+- Mongo collections are clearly named and exported from one place.
+- Domain intent is visible in path naming: patients, billing, pharmacy, vendors, analytics, queues.
+- The codebase already demonstrates one modular backend split via backend/saas_endpoints.py.
+- UI domains are separated into many components even though App.tsx remains the shell.
+
+12.2 Structural debt
+
+- backend/main.py is too large and mixes many business domains.
+- There is no explicit service/repository layer between route handlers and Mongo collections.
+- Billing logic spans embedded documents and multiple standalone collections.
+- Validation strictness varies because many handlers accept raw dict payloads.
+- App.tsx is a very large orchestration file with view management, persistence, patient mapping, and navigation logic mixed together.
+- Several components fetch directly and independently, which increases duplicated data-loading patterns.
+
+12.3 Best candidate seams for future modularization
+
+Backend modularization seams:
+- patient_routes.py
+- queue_routes.py
+- billing_routes.py
+- pharmacy_routes.py
+- procurement_routes.py
+- analytics_routes.py
+- ai_routes.py
+- admin_routes.py
+
+Service layer candidates:
+- patient_service
+- billing_service
+- surgery_billing_service
+- pharmacy_service
+- vendor_procurement_service
+- analytics_service
+
+Frontend modularization seams:
+- replace state-driven mega-navigation in App.tsx with route-based or feature-based shells
+- extract patient context/store
+- extract billing data hooks
+- extract queue workflow hooks
+- isolate admin/procurement/clinical feature shells
+
+12.4 Highest-risk refactor area
+
+- Billing, because reporting semantics are spread across multiple data sources and handlers.
+
+12.5 Lowest-risk refactor area
+
+- SaaS onboarding routes, because they are already partially isolated.
+
+====================================================================
+13. CURRENT SYSTEM BOUNDARIES
+====================================================================
+
+Logical bounded contexts visible in the current system:
+- Identity and access: users, auth, roles.
+- Patient record management: registration, visits, documents, examination data.
+- Queue/workflow operations: reception, OPD, doctor, recall.
+- Clinical analytics: patient trends and history charts.
+- Billing and insurance: invoices, payments, claims, dashboard analytics.
+- Surgery package and surgical billing.
+- Pharmacy dispensing and medicine inventory.
+- Procurement/vendor finance and GRN handling.
+- AI support and clinical summarization.
+- SaaS organization management.
+
+These contexts are conceptually separate but operationally share the same backend process and database namespace.
+
+====================================================================
+14. FILES MOST IMPORTANT FOR FUTURE ENGINEERING WORK
+====================================================================
+
+Highest-value backend files to understand before refactoring:
+- backend/main.py
+- backend/database.py
+- backend/models.py
+- backend/saas_endpoints.py
+- backend/invoice_parser.py
+
+Highest-value frontend files to understand before refactoring:
+- src/App.tsx
+- src/config/api.ts
+- src/components/BillingView.tsx
+- src/components/BillingDashboardView.tsx
+- src/components/BillingAnalyticsView.tsx
+- src/components/PharmacyBillingView.tsx
+- src/components/MedicineManagementView.tsx
+- src/components/AppointmentBookingView.tsx
+- src/components/DashboardView.tsx
+- src/components/InvoiceUploadView.tsx
+- src/components/VendorListView.tsx
+- src/components/AnalyticsView.tsx
+
+====================================================================
+15. BOTTOM LINE
+====================================================================
+
+This EMR system is a feature-rich full-stack monolith optimized for rapid operational workflow coverage rather than strict modular separation. The strongest architectural backbone is the clear domain naming across endpoints, collections, and components. The main architectural risk is concentration of logic: backend/main.py centralizes many business domains, App.tsx centralizes many UI workflows, and billing spans multiple storage patterns.
+
+If future work includes refactoring, performance optimization, or new feature development, the safest mental model is:
+- treat patients as the primary clinical aggregate
+- treat billing as a hybrid subsystem with special care for reporting semantics
+- treat queue transitions as business workflow state changes
+- treat procurement/pharmacy as a linked but distinct inventory-finance domain
+- treat backend/main.py and src/App.tsx as the highest-leverage files for architectural change planning
+
+End of report.

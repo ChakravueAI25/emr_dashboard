@@ -1,0 +1,285 @@
+BILLING REVENUE DEBUG REPORT
+Generated: 2026-03-10
+Scope: analysis only. No code changes made.
+
+====================================================================
+1. OLD DASHBOARD SOURCE (patients.billing arrays)
+====================================================================
+Logic used:
+- invoices: sum patientResponsibility where status = paid
+- surgery bills: sum patientTotalShare where status in (settled, balance_due, partially_paid)
+
+Results:
+- invoiceRevenue_old: 1681791.00
+- surgeryRevenue_old: 440349.00
+- old_combined_invoice_plus_surgery: 2122140.00
+
+Record counts in patient arrays:
+- patient_invoice_docs: 148
+- patient_surgery_docs: 30
+
+Patient invoice statuses:
+- paid: 129
+- draft: 19
+
+Patient surgery statuses:
+- balance_due: 14
+- settled: 9
+- pending_approval: 6
+- refund_due: 1
+
+====================================================================
+2. NEW STANDALONE SOURCE
+====================================================================
+Collections checked:
+- billing_invoices
+- initial_surgery_bills
+- final_surgery_bills
+- pharmacy_billing
+
+Results:
+- invoiceRevenue_new: 0.00
+- surgeryRevenue_new: 0.00
+- pharmacyRevenue_new: 16501.02
+
+Collection counts:
+- billing_invoices docs: 0
+- initial_surgery_bills + final_surgery_bills docs: 0
+- pharmacy_billing docs: 40
+
+Standalone invoice statuses:
+- none
+
+Standalone surgery statuses:
+- none
+
+Pharmacy statuses:
+- completed: 40
+
+====================================================================
+3. REVENUE DELTAS
+====================================================================
+Invoice delta:
+- invoiceRevenue_new - invoiceRevenue_old = -1681791.00
+
+Surgery delta:
+- surgeryRevenue_new - surgeryRevenue_old = -440349.00
+
+Interpretation:
+- All invoice revenue present in the old patient-array source is missing from the new standalone invoice source.
+- All surgery revenue present in the old patient-array source is missing from the new standalone surgery source.
+- Pharmacy revenue exists in the standalone source, but pharmacy was not part of the old source calculation requested in STEP 1.
+
+====================================================================
+4. MISSING DATA CHECK
+====================================================================
+Invoice ID comparison:
+- invoices_only_in_patient_array_count: 148
+- invoices_only_in_collection_count: 0
+
+Sample invoices_only_in_patient_array:
+- INV-2026-02-00130BFD
+- INV-2026-02-07487EF1
+- INV-2026-02-0ED3AC59
+- INV-2026-02-1333DE34
+- INV-2026-02-1611CD09
+- INV-2026-02-1B4BEE2E
+- INV-2026-02-2040260C
+- INV-2026-02-223EE6E0
+- INV-2026-02-2252F2A8
+- INV-2026-02-22AF56DC
+- INV-2026-02-2E7C3AF3
+- INV-2026-02-2EC38FBC
+- INV-2026-02-36403E03
+- INV-2026-02-4829C577
+- INV-2026-02-4D88516F
+- INV-2026-02-4E3AA2FC
+- INV-2026-02-4E6AB2D2
+- INV-2026-02-5B9A3CA5
+- INV-2026-02-714DBF81
+- INV-2026-02-7199ED5B
+- INV-2026-02-75B621C8
+- INV-2026-02-7F3ADDDC
+- INV-2026-02-8C84D65D
+- INV-2026-02-91F9F8F4
+- INV-2026-02-98BF7D75
+- INV-2026-02-9A6A0BBE
+- INV-2026-02-A64282F9
+- INV-2026-02-A8143166
+- INV-2026-02-A9A70391
+- INV-2026-02-AA5C58CC
+- INV-2026-02-AB9BB7CE
+- INV-2026-02-B0BFA30E
+- INV-2026-02-B16432D8
+- INV-2026-02-BBFD87E6
+- INV-2026-02-BDF29809
+- INV-2026-02-CA6E790C
+- INV-2026-02-CCED9258
+- INV-2026-02-D0E65A2E
+- INV-2026-02-D1C69556
+- INV-2026-02-E2B2BB51
+- INV-2026-03-06B3E003
+- INV-2026-03-06EFFD41
+- INV-2026-03-08F65F47
+- INV-2026-03-0A5034D5
+- INV-2026-03-0A879EDF
+- INV-2026-03-0D4A6FC3
+- INV-2026-03-1027209C
+- INV-2026-03-182E328A
+- INV-2026-03-208903F2
+- INV-2026-03-2251C56B
+- INV-2026-03-230D56C1
+- INV-2026-03-28FCCB56
+- INV-2026-03-2939AB07
+- INV-2026-03-2AA3BA1C
+- INV-2026-03-2B4B9A2C
+- INV-2026-03-30AAC878
+- INV-2026-03-317CADB2
+- INV-2026-03-32C2786A
+- INV-2026-03-35C70FC5
+- INV-2026-03-380A6285
+- INV-2026-03-3ADEB5C6
+- INV-2026-03-3AFA4E13
+- INV-2026-03-3C527CEB
+- INV-2026-03-3E1842CE
+- INV-2026-03-41D07921
+- INV-2026-03-443963B5
+- INV-2026-03-47706EED
+- INV-2026-03-49E34265
+- INV-2026-03-4B42A8CE
+- INV-2026-03-4C6BB9DA
+- INV-2026-03-5082F281
+- INV-2026-03-50FCF2E1
+- INV-2026-03-55351123
+- INV-2026-03-557252D7
+- INV-2026-03-58A880E4
+- INV-2026-03-5A3904C1
+- INV-2026-03-5E9B03E8
+- INV-2026-03-5EC12C51
+- INV-2026-03-5FDA77CD
+- INV-2026-03-62B6B208
+- INV-2026-03-674211DA
+- INV-2026-03-675A7BD5
+- INV-2026-03-68BF5C67
+- INV-2026-03-6CBAD737
+- INV-2026-03-6F5AC51E
+- INV-2026-03-704FB98B
+- INV-2026-03-723DC34D
+- INV-2026-03-76546B33
+- INV-2026-03-79C61DC1
+- INV-2026-03-7CFAF4FD
+- INV-2026-03-7E2956B4
+- INV-2026-03-7ED9071F
+- INV-2026-03-7EDF0CAA
+- INV-2026-03-828BC727
+- INV-2026-03-85934930
+- INV-2026-03-896FEF52
+- INV-2026-03-8AC5BAFB
+- INV-2026-03-8C9AFC60
+- INV-2026-03-8DA09B66
+- INV-2026-03-906CA5A2
+- plus 48 more invoice IDs only in patient array
+
+Surgery bill ID comparison:
+- surgery_only_in_patient_array_count: 30
+- surgery_only_in_collection_count: 0
+
+Surgery IDs only in patient array:
+- SB-FINAL-202602-0AD84F04
+- SB-FINAL-202602-10E57C2A
+- SB-FINAL-202602-2A486C51
+- SB-FINAL-202602-2A75D5C4
+- SB-FINAL-202602-3C575CED
+- SB-FINAL-202602-3F93EC14
+- SB-FINAL-202602-AFC163E8
+- SB-FINAL-202602-B0ABF35F
+- SB-FINAL-202602-BD155380
+- SB-FINAL-202602-BE061B3E
+- SB-FINAL-202602-E5EDC4B6
+- SB-FINAL-202602-FD5231B6
+- SB-FINAL-202603-5F66A558
+- SB-FINAL-202603-BD24EE65
+- SB-FINAL-202603-CB573914
+- SB-FINAL-202603-E4BD0A6D
+- SB-INIT-202602-1FD3CA59
+- SB-INIT-202602-42F231D7
+- SB-INIT-202602-59FF7F90
+- SB-INIT-202602-99470967
+- SB-INIT-202602-99679625
+- SB-INIT-202602-9AFA18D7
+- SB-INIT-202602-9D423B73
+- SB-INIT-202602-9EF36051
+- SB-INIT-202602-BC3131B6
+- SB-INIT-202602-EBFF1F27
+- SB-INIT-202602-ED5B2930
+- SB-INIT-202603-1C87A9CE
+- SB-INIT-202603-94115E3B
+- SB-INIT-202603-F4A1D285
+
+Interpretation:
+- Every invoice and surgery bill discovered for revenue purposes exists only in the old patient arrays.
+- None of those records exist in the new standalone collections.
+
+====================================================================
+5. STATUS MISMATCH CHECK
+====================================================================
+Invoices by status:
+- patient array: paid=129, pending=0, cancelled=0, refunded=0, other(draft)=19
+- standalone collection: paid=0, pending=0, cancelled=0, refunded=0
+
+Surgery by status:
+- patient array: settled=9, balance_due=14, partially_paid=0, pending_approval=6, refund_due=1
+- standalone collection: no records
+
+Interpretation:
+- There is no meaningful status distribution to compare in the new invoice/surgery collections because those collections are empty.
+- The revenue gap is not explained by a status-filter change. It is explained by missing migrated records.
+
+====================================================================
+6. DUPLICATE RECORD CHECK
+====================================================================
+Invoice duplicates:
+- duplicates in patient array: 0
+- duplicates in standalone collection: 0
+
+Surgery duplicates:
+- duplicates in patient array: 0
+- duplicates in standalone collection: 0
+
+Interpretation:
+- Duplicate records are not causing the mismatch.
+
+====================================================================
+7. PHARMACY STATUS CHECK
+====================================================================
+Pharmacy standalone records:
+- completed: 40
+- pharmacyRevenue_new: 16501.02
+
+Interpretation:
+- Pharmacy data exists and is internally consistent for the standalone source.
+- Pharmacy does not explain the invoice/surgery revenue drop.
+- If comparing total dashboard revenue old vs new, pharmacy may add revenue on the new side, but it does not offset the fact that invoice and surgery collections are empty.
+
+====================================================================
+8. FINAL EXPLANATION
+====================================================================
+Primary cause of the revenue mismatch:
+- missing migration data
+
+Supporting findings:
+- billing_invoices contains 0 documents
+- initial_surgery_bills contains 0 documents
+- final_surgery_bills contains 0 documents
+- patients.billing.invoices still contains 148 documents
+- patients.billing.surgeryBills still contains 30 documents
+- old invoice revenue = 1681791.00 and old surgery revenue = 440349.00
+- new invoice revenue = 0.00 and new surgery revenue = 0.00
+
+Not supported as primary causes:
+- status filter difference: no, because the new invoice/surgery collections are empty
+- duplicate records: no duplicates found in either source
+- pharmacy status mismatch: no, pharmacy records are completed and revenue is present
+
+Bottom line:
+The new billing dashboard totals differ from the old totals because historical invoice and surgery data has not been migrated from patient-embedded arrays into the standalone collections. The dashboard is now reading the new source of truth, but that source currently has no migrated invoice or surgery history.

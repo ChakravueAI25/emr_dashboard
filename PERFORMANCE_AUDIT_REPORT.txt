@@ -1,0 +1,410 @@
+PERFORMANCE ARCHITECTURE AUDIT REPORT
+
+Project: EMR Dashboard
+Stack:
+- Backend: FastAPI + MongoDB
+- Frontend: React + TypeScript
+Date: March 10, 2026
+
+Scope
+- No code changes were made.
+- This report is a performance architecture audit based on the current production-oriented code structure.
+
+============================================================
+EXECUTIVE SUMMARY
+============================================================
+
+The billing dashboard is backend-bound, not frontend-bound. On initial page load the React screen makes one request to the billing stats endpoint in src/components/BillingDashboardView.tsx, but that single request fans out into many MongoDB operations inside backend/main.py. The biggest production risk is repeated full-collection and full-array aggregation over embedded billing arrays inside patient documents. That design will degrade sharply as patient count and billing history grow.
+
+The second major risk is incomplete indexing. The code creates only a few indexes in backend/main.py and none centrally in backend/database.py. Core lookup fields like registrationId and billDate are used constantly but are not visibly indexed across all hot collections.
+
+No code was modified.
+
+============================================================
+STEP 1 - BACKEND ENDPOINT ANALYSIS
+============================================================
+
+Billing dashboard endpoints actually used by the UI:
+
+- GET /api/billing/dashboard/stats from src/components/BillingDashboardView.tsx. This is the page-load endpoint.
+- GET /api/billing/analytics from src/components/BillingAnalyticsView.tsx. This loads only after the user switches to the analytics subview.
+- The dashboard screen itself does not call the patient-level billing endpoints on mount. Those belong to the individual billing flow in BillingView, not the dashboard list page.
+
+Billing stats endpoint analysis
+Location: backend/main.py
+Route: GET /api/billing/dashboard/stats
+
+MongoDB calls per request: 9
+
+Call 1:
+- invoice_pipeline on patients
+- Uses: $unwind billing.invoices, then $group for totalRevenue, pendingBills, refunds
+
+Call 2:
+- surgery_pipeline on patients
+- Uses: $unwind billing.surgeryBills, then $group for totalRevenue, settledRevenue, unsettledRevenue, pendingBills, refunds
+
+Call 3:
+- pharmacy_pipeline on pharmacy_billing
+- Uses: $group for totalRevenue and pendingBills
+
+Call 4:
+- pending invoices aggregate
+- Uses: $unwind, $match, $sort, $limit, $project
+
+Call 5:
+- pending surgery aggregate
+- Uses: $unwind, $match, $sort, $limit, $project
+
+Call 6:
+- pending pharmacy find
+- Uses: status filter, billDate sort, limit
+
+Call 7:
+- recent invoices aggregate
+- Uses: $unwind, $sort, $limit, $project
+
+Call 8:
+- recent surgery aggregate
+- Uses: $unwind, $sort, $limit, $project
+
+Call 9:
+- recent pharmacy find
+- Uses: billDate sort and limit
+
+Why this endpoint is slow:
+- Every stats request re-aggregates across all patients and all embedded invoice and surgery arrays.
+- Unwinding embedded arrays inside patients prevents simple top-level indexes from helping much.
+- The endpoint does not precompute or cache KPI totals.
+- It merges records in Python after fetching from multiple sources.
+- It is not an N+1 query pattern in the classic ORM sense, but it is a many-scan fan-out pattern per request, which is worse for dashboard latency.
+
+Billing analytics endpoint analysis
+Location: backend/main.py
+Route: GET /api/billing/analytics
+
+MongoDB calls per request: 4
+
+Call 1:
+- invoice aggregate
+- Uses: $unwind billing.invoices, $match paid, $project, $group by date and service
+
+Call 2:
+- surgery aggregate
+- Uses: $unwind billing.surgeryBills, $match statuses, $project date via substring, $group by date
+
+Call 3:
+- pharmacy aggregate
+- Uses: $match completed, $project date via substring, $group by date
+
+Call 4:
+- insurance aggregate
+- Uses: $unwind billing.surgeryBills, $match insurance fields, $project many fields
+
+Why this endpoint is slow:
+- Full-history scans are performed every time the analytics view is opened.
+- Results are re-aggregated again in Python into daily, monthly, and yearly maps.
+- insuranceApprovedRecords returns an unpaginated historical list, so payload size grows with time.
+- Not an N+1 query issue, but a repeated full-history analytics issue.
+
+Related billing flow endpoints that can still affect overall billing UX:
+
+- GET /api/billing/patient/{reg_id}/summary in backend/main.py does 1 patient lookup plus 1 count on billing_cases.
+- GET /api/billing/patient/{reg_id}/insurance in backend/main.py does 1 patient lookup.
+- GET /api/billing/patient/{reg_id}/invoices in backend/main.py does 1 patient lookup and returns the whole invoices array.
+- GET /api/billing/patient/{reg_id}/surgery-bills in backend/main.py does 1 patient lookup and returns the whole surgeryBills array.
+- GET /api/billing/patient/{reg_id}/payments in backend/main.py does 1 patient lookup and returns the whole payments array.
+- GET /api/billing/patient/{reg_id}/claims in backend/main.py does 1 patient lookup and returns the whole claims array.
+
+Endpoints most likely causing slow billing response times:
+
+- Highest risk: GET /api/billing/dashboard/stats
+- High risk: GET /api/billing/analytics
+- Medium risk: patient-level billing endpoints when a single patient has large embedded billing arrays
+- Medium risk: GET /pharmacy/billing/patient/{registration_id} because it sorts and returns all bills for a patient
+
+============================================================
+STEP 2 - MONGODB QUERY ANALYSIS
+============================================================
+
+Observed patterns in main.py:
+
+- registrationId is the dominant lookup field across patients and billing operations. It is used throughout backend/main.py.
+- created_at and createdAt are used for sorts and recency endpoints.
+- billDate is used for pharmacy billing sorts, pending lists, dead stock, and analytics.
+- vendorId and invoiceDate are used in purchase and vendor analytics.
+- medicineId appears inside pharmacy_billing.items and is used in dead-stock and billing item processing.
+
+Existing explicit indexes are limited:
+
+- purchase_invoices.vendorId
+- purchase_invoices.invoiceDate
+- vendor_payments.invoiceId
+- pharmacy_medicines.name
+
+These are created in backend/main.py.
+
+Queries likely scanning entire collections:
+
+- Billing dashboard stats invoice and surgery pipelines in backend/main.py because they unwind nested arrays across the whole patients collection.
+- Billing analytics pipelines in backend/main.py for the same reason.
+- Pharmacy stock report uses pharmacy_collection.find() with no filter and loops in Python.
+- Pharmacy medicines list in backend/main.py loads all medicines when no category is passed.
+- Purchase vendor ledger and dashboard analytics aggregate over all purchase invoices.
+- Inventory dead stock uses two full aggregates on pharmacy_billing plus a full scan of pharmacy_medicines.
+- Purchase category analytics performs unwind plus lookup by case-normalized medicine name, which is expensive and index-unfriendly.
+
+Queries likely lacking helpful indexes:
+
+- patient_collection.find_one with registrationId everywhere
+- billing_cases_collection.count_documents with registrationId and status in billing summary
+- pharmacy_billing_collection.find with registrationId sorted by billDate in patient pharmacy history
+- pharmacy_billing_collection.find sorted by billDate in billing dashboard recent and pending pharmacy lists
+- appointments_collection.find().sort(createdAt) in dashboard and appointment flows
+- vendors_collection lookups by name in GRN creation are case-insensitive regex-based and unlikely to use a simple index
+- patient search uses contains-regex across multiple fields, which is not index-friendly
+
+Recommended indexes and why:
+
+1. patients.registrationId as a unique index
+Reason:
+- Almost every patient and billing endpoint begins with a lookup or update by registrationId.
+- Without this, many core operations become collection scans.
+
+2. pharmacy_billing.billDate descending
+Reason:
+- Used by recent billing lists, pending pharmacy bills, analytics date filtering, and patient bill history sorting.
+
+3. pharmacy_billing.registrationId plus billDate descending as a compound index
+Reason:
+- Directly supports patient bill history queries that filter by registrationId and then sort by billDate.
+
+4. purchase_invoices.vendorId
+Reason:
+- Vendor invoice lookups, ledger-style views, and pay-invoice flows depend on vendor linkage.
+- A single-field index exists already, but it should be verified in production and possibly extended.
+
+5. purchase_invoices.vendorId plus invoiceDate descending as a compound index
+Reason:
+- Vendor-specific history and trend queries commonly need both.
+
+6. appointments.createdAt descending
+Reason:
+- Appointment listing sorts by createdAt and will otherwise scan or sort in memory at scale.
+
+7. billing_cases.registrationId plus status
+Reason:
+- Billing summary counts active open cases per patient.
+
+8. pharmacy_billing.items.medicineId as a multikey index
+Reason:
+- Dead-stock and sales analytics depend on billed medicine identity from nested items arrays.
+
+9. pharmacy_medicines.name
+Reason:
+- Already present and useful for direct medicine lookups by exact name.
+
+10. pharmacy_medicines.created_at or updated_at if operational screens sort or filter by recency
+Reason:
+- Current inventory flows are likely to need recency-based maintenance and audit queries.
+
+11. purchase_invoices.createdAt if operational dashboards sort recent GRNs by creation time
+Reason:
+- invoiceDate is business date, createdAt is system recency. They solve different query classes.
+
+Field-specific explanation requested:
+
+createdAt
+- Needed for recency-based feeds and administrative lists.
+- Without it, sort-heavy endpoints force in-memory sorts or collection scans.
+
+billDate
+- Needed because billing dashboard and pharmacy patient history sort by billDate and analytics filter by billing date.
+
+registrationId
+- Needed because it is effectively the primary business key across patient and billing flows.
+
+vendorId
+- Needed for vendor ledger, invoice grouping, and pay-invoice operations.
+
+medicineId
+- Needed because pharmacy sales history and dead-stock logic use billed medicine identity inside item arrays.
+
+============================================================
+STEP 3 - API PAYLOAD ANALYSIS
+============================================================
+
+Large-response or over-broad payload endpoints:
+
+- GET /api/billing/analytics in backend/main.py returns daily, monthly, yearly, and a full insuranceApprovedRecords array in one payload. This grows over time and mixes summary data with a potentially large detail list.
+- GET /api/billing/dashboard/stats in backend/main.py returns KPIs, pending list, and records together. For a dashboard, summary cards and table rows are coupled into one response, which prevents independent caching and pagination strategies.
+- GET /pharmacy/medicines in backend/main.py returns all medicines without pagination.
+- GET /patients/{registration_id} returns the full patient document in backend/main.py. In this schema, that can include large nested visits, encounters, documents, billing arrays, and pharmacy history.
+- GET /api/billing/patient/{reg_id}/invoices, payments, claims, and surgery-bills each return full embedded arrays, not summaries.
+- GET /pharmacy/billing/patient/{registration_id} returns each bill with its full items array.
+
+Projection optimization recommendations:
+
+- Split dashboard KPIs from dashboard records. The KPI card response should contain only totals and top-N pending items.
+- Paginate billing records independently at the database layer instead of returning a merged in-memory slice.
+- For billing analytics, return summary series separately from insuranceApprovedRecords, and paginate or date-limit the detail list.
+- For patient billing endpoints, project only needed subfields instead of loading the whole patient document.
+- For pharmacy medicines, return only id, name, stock, category, price on the listing endpoint, and fetch detail fields only when editing a single medicine.
+- For patient detail screens, use summary endpoints instead of full patient document fetches whenever only header data is needed.
+
+============================================================
+STEP 4 - FRONTEND API USAGE
+============================================================
+
+Behavior in src/components/BillingDashboardView.tsx:
+
+- API calls on initial page load: 1
+- That call is GET /api/billing/dashboard/stats
+- Calls are not sequential versus parallel on page load because there is only one request from the frontend.
+- The analytics view is lazy-loaded by state switch and makes its own request only after the user clicks View Analytics.
+
+Frontend efficiency findings:
+
+- The main performance bottleneck is not multiple frontend calls. It is the server work behind the single stats call.
+- The table renders only the current paginated slice, so DOM size is limited on screen.
+- Filtering is done client-side on the fetched records array each render. With the current default limit of 50 this is fine, but it does not scale if the backend starts returning hundreds or thousands of rows.
+- Search, type, and status filters trigger a page reset effect, which adds a small extra render.
+- fetchBillingRecords performs two state updates, one for dashboardStats and one for records. In modern React these are usually batched, so this is a minor concern.
+- The frontend is not doing large sequential fetches on load, so parallel request optimization is not the first lever for this page.
+
+============================================================
+STEP 5 - DATA AGGREGATION COMPLEXITY
+============================================================
+
+Daily sales and revenue totals:
+
+- Billing dashboard stats in backend/main.py is roughly O(total invoices embedded in patients + total surgery bills embedded in patients + total pharmacy bills) per request, with that work repeated across multiple separate pipelines.
+- Billing analytics in backend/main.py is roughly O(all paid invoices + all relevant surgery bills + all completed pharmacy bills + all insurance-approved surgery bills), followed by Python-side regrouping into day, month, and year.
+
+Inventory analytics:
+
+- Pharmacy stock report is O(total medicines) and full-scan.
+- Inventory dead stock is O(recent billed items + current stocked medicines). It runs two unwind-group pipelines over pharmacy_billing and then scans all in-stock medicines.
+- Purchase category analytics is expensive because it does unwind over all products and then a lookup into pharmacy_medicines using lowercased name comparison, which weakens index use and scales badly with millions of purchase lines.
+
+Scalability assessment for millions of records:
+
+- Current embedded-array analytics on patients will not scale well to millions of records because unwind on large patient documents becomes increasingly expensive and hard to index.
+- Recomputing dashboard totals on every request is acceptable for small datasets but not for production growth.
+- Python-side regrouping after large aggregate results is a secondary scaling issue; Mongo should do more of the summarization or the data should be pre-aggregated.
+- The inventory dead-stock and purchase-category analytics will also degrade materially at high volume unless they move to precomputed or incremental summary collections.
+
+============================================================
+STEP 6 - PERFORMANCE RISK ASSESSMENT
+============================================================
+
+Severity ranking:
+
+Critical:
+- Repeated full-history dashboard scans in GET /api/billing/dashboard/stats
+- Embedded billing arrays inside patients combined with $unwind-heavy analytics. This is a data-model scaling problem, not just a missing-index problem.
+
+High:
+- GET /api/billing/analytics returning full summary series plus unbounded insuranceApprovedRecords
+- Missing or unverified indexes on patients.registrationId, pharmacy_billing.registrationId, pharmacy_billing.billDate, billing_cases.registrationId plus status, and appointments.createdAt
+- /pharmacy/medicines returns all medicines with no pagination and is used by MedicineManagementView on mount
+
+Medium:
+- /patients/{registration_id} returns full patient documents even when callers often need only summary/header data
+- Inventory dead-stock and purchase-category analytics use unwind and lookup patterns that will become expensive on large collections
+- Regex-based search endpoints and case-insensitive name matching in GRN flows are not index-friendly
+- Pharmacy bill creation validates and updates stock item-by-item, which increases write latency for large bills
+
+Low:
+- BillingDashboardView client-side filtering and rerenders are not the main source of slowness today
+
+============================================================
+STEP 7 - RECOMMENDED PROFILING TESTS
+============================================================
+
+FastAPI request timing middleware:
+
+- Measure end-to-end API latency per route, including p50, p95, and p99.
+- Record route path, method, total duration, response size, and status code.
+- Add route-specific timing around the billing stats and billing analytics handlers first.
+
+MongoDB explain():
+
+- Run explain with executionStats on the hot queries and aggregate pipelines.
+- Capture totalDocsExamined, totalKeysExamined, executionTimeMillis, winningPlan, and whether SORT or COLLSCAN appears.
+- Prioritize explain on:
+  - GET /api/billing/dashboard/stats pipelines
+  - GET /api/billing/analytics pipelines
+  - GET /pharmacy/billing/patient/{registration_id}
+  - GET /pharmacy/medicines
+  - GET /inventory/dead-stock
+  - GET /billing/dashboard and vendor analytics
+
+Chrome DevTools network and performance profiling:
+
+- Measure TTFB for /api/billing/dashboard/stats and /api/billing/analytics.
+- Compare server wait time versus content download time.
+- Inspect payload size and JSON parse time.
+- Use the Performance tab to measure scripting time, render time, and commit time for BillingDashboardView and BillingAnalyticsView.
+
+Locust load testing:
+
+- Simulate repeated dashboard opens and analytics opens with realistic concurrent users.
+- Track latency percentiles, failure rate, and throughput.
+- Separate read-heavy dashboard tests from write-heavy pharmacy billing tests.
+
+What to measure:
+
+API latency
+- Total request duration, p50, p95, p99, and response payload size
+
+DB query time
+- Per-query elapsed time, docs examined, keys examined, and server-side sort usage
+
+Frontend render time
+- Time from navigation to first paint, time to interactive, JSON parse time, and React commit duration
+
+============================================================
+STEP 8 - OPTIMIZATION STRATEGY
+============================================================
+
+Highest-value improvements:
+
+- Add and verify the missing indexes, especially patients.registrationId, pharmacy_billing.registrationId plus billDate, pharmacy_billing.billDate, billing_cases.registrationId plus status, and appointments.createdAt.
+- Split GET /api/billing/dashboard/stats into separate KPI and records endpoints so summaries can be cached and records can be paginated independently.
+- Stop recomputing all-time dashboard aggregates on every request. Use cached summaries or scheduled rollups.
+- Move analytics off embedded patient arrays toward dedicated billing collections or summary collections. This is the most important long-term architectural fix.
+- Paginate insuranceApprovedRecords and other detail lists instead of returning full history.
+- Paginate /pharmacy/medicines and add search-backed queries instead of full inventory loads.
+- Replace lowercased lookup joins by normalized keys stored at write time, such as medicineId or normalizedName.
+- Push more grouping to Mongo only when supported by indexable fields; otherwise precompute daily and monthly aggregates in background jobs.
+- Use dashboard caching for stable aggregates such as daily totals, monthly totals, vendor ledger snapshots, and low-stock counts.
+- For dead-stock and category analytics, maintain incremental summary tables or nightly materialized collections instead of scanning transactional history repeatedly.
+- Keep frontend requests parallel only where multiple independent endpoints remain after the backend split. For the current billing dashboard page, frontend parallelization is not the primary win because there is only one page-load call today.
+
+============================================================
+BOTTOM LINE
+============================================================
+
+If users report slow billing dashboard loads, the most likely root cause is the backend stats endpoint in backend/main.py, not the React component in src/components/BillingDashboardView.tsx. It performs many full-history MongoDB scans per request, mostly over embedded arrays in patient documents, and the current indexing strategy does not cover the hottest business keys.
+
+Natural next steps:
+
+1. Run explain on the billing stats and billing analytics pipelines and capture executionStats.
+2. Verify and add the recommended indexes in a staging environment, then retest latency.
+3. Split the billing dashboard API into KPI and records endpoints and profile the difference before changing the data model.
+4. Plan a longer-term migration from embedded patient billing arrays to dedicated billing transaction collections or pre-aggregated analytics tables.
+
+============================================================
+REFERENCE FILES REVIEWED
+============================================================
+
+- backend/main.py
+- backend/database.py
+- backend/models.py
+- src/components/BillingDashboardView.tsx
+- src/components/BillingAnalyticsView.tsx
+- src/components/DashboardView.tsx
+- src/components/MedicineManagementView.tsx
+- src/components/InvoiceUploadView.tsx
+- src/config/api.ts

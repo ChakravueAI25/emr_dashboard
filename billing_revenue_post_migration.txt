@@ -1,0 +1,92 @@
+BILLING REVENUE POST-MIGRATION VERIFICATION REPORT
+Generated: 2026-03-10
+Scope: analysis only. No code changes made.
+
+====================================================================
+1. OLD SOURCE VERIFICATION (patients.billing arrays)
+====================================================================
+Logic used:
+- Invoice revenue: sum patientResponsibility where invoice status = paid
+- Surgery revenue: sum patientTotalShare where surgery bill status in (settled, balance_due, partially_paid)
+
+Results:
+- invoiceRevenue_old: 1681791.00
+- surgeryRevenue_old: 440349.00
+
+Record counts from patient arrays:
+- patient_invoice_docs: 148
+- patient_surgery_docs: 30
+
+====================================================================
+2. NEW SOURCE VERIFICATION (standalone billing collections)
+====================================================================
+Collections checked:
+- billing_invoices
+- initial_surgery_bills
+- final_surgery_bills
+
+Logic used:
+- Invoice revenue: sum patientResponsibility from billing_invoices where status = paid
+- Surgery revenue: sum patientTotalShare from final_surgery_bills where status in (settled, balance_due, partially_paid)
+
+Results:
+- invoiceRevenue_new: 1681791.00
+- surgeryRevenue_new: 440349.00
+
+Standalone collection counts:
+- billing_invoices_count: 148
+- initial_surgery_bills_count: 14
+- final_surgery_bills_count: 16
+
+====================================================================
+3. TOTAL COMPARISON
+====================================================================
+Invoice comparison:
+- invoiceRevenue_old: 1681791.00
+- invoiceRevenue_new: 1681791.00
+- invoice_delta: 0.00
+
+Surgery comparison:
+- surgeryRevenue_old: 440349.00
+- surgeryRevenue_new: 440349.00
+- surgery_delta: 0.00
+
+Combined totals:
+- combined_old_total: 2122140.00
+- combined_new_total: 2122140.00
+- combined_delta: 0.00
+
+Interpretation:
+- Invoice revenue matches exactly between old and new sources.
+- Surgery revenue matches exactly between old and new sources.
+- Combined revenue matches exactly between old and new sources.
+
+====================================================================
+4. ID MIGRATION VERIFICATION
+====================================================================
+Invoice ID coverage:
+- missing_invoice_ids_count: 0
+- missing_invoice_ids: []
+
+Surgery bill ID coverage:
+- missing_surgery_bill_ids_count: 0
+- missing_surgery_bill_ids: []
+
+Interpretation:
+- Every invoice ID present in patients.billing.invoices exists in billing_invoices.invoiceId.
+- Every surgery bill ID present in patients.billing.surgeryBills exists in either initial_surgery_bills.billId or final_surgery_bills.billId.
+
+====================================================================
+5. FINAL CONCLUSION
+====================================================================
+The historical billing migration successfully preserved revenue totals.
+
+Evidence:
+- invoiceRevenue_old == invoiceRevenue_new
+- surgeryRevenue_old == surgeryRevenue_new
+- combined_old_total == combined_new_total
+- missing_invoice_ids_count == 0
+- missing_surgery_bill_ids_count == 0
+
+Bottom line:
+The standalone billing collections now reproduce the same invoice and surgery revenue totals as the original patient-array source. No invoice IDs or surgery bill IDs are missing after migration, so the historical backfill is complete for the revenue paths that were verified.

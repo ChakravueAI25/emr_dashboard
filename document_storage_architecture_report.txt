@@ -1,0 +1,208 @@
+Document Upload / Storage Architecture Report
+============================================
+
+Scope
+-----
+This report describes how patient document uploads currently work in the backend, where files are stored, what metadata is persisted, how downloads are served, and the main operational limitations of the current design.
+
+Implementation Summary
+----------------------
+The current implementation is a simple local-disk file store with MongoDB metadata embedded inside each patient record.
+
+Backend routes in backend/main.py:
+- POST /patients/{registration_id}/documents
+- GET /patients/{registration_id}/documents
+- GET /patients/{registration_id}/documents/{file_id}/download
+
+Frontend API references in src/config/api.ts:
+- PATIENT_DOCUMENTS(registrationId)
+- PATIENT_DOCUMENT_DOWNLOAD(registrationId, docId, inline)
+
+No separate document collection, object storage service, CDN, or attachment service is used. The patient document remains the only metadata index for uploaded files.
+
+Upload Flow
+-----------
+Route: POST /patients/{registration_id}/documents
+Function: upload_patient_documents(...)
+
+Observed behavior:
+1. The backend looks up the patient by registrationId.
+2. It builds a patient-specific upload folder using:
+   os.path.join(os.getcwd(), 'backend', 'uploads', registration_id)
+3. The folder is created with os.makedirs(..., exist_ok=True).
+4. For each uploaded file:
+   - A UUID is generated for file_id.
+   - The original extension is preserved.
+   - The stored filename becomes: {uuid}{original_extension}
+   - The whole uploaded payload is read into memory with await f.read().
+   - The bytes are written directly to disk with open(path, 'wb').
+5. A metadata object is built and pushed into patient.documents.
+6. The API returns the saved metadata entries.
+
+Disk Storage Layout
+-------------------
+Files are stored in per-patient folders under a local uploads directory.
+
+Configured path pattern:
+- backend/uploads/{registration_id}/
+
+Actual resolved path depends on the process working directory because the code uses os.getcwd(). This means the storage root is not fixed to the backend source file location.
+
+Important operational detail:
+- If the server is started from the project root, files go to: <project-root>/backend/uploads/{registration_id}
+- If the server is started from the backend directory, files go to: <project-root>/backend/backend/uploads/{registration_id}
+
+Observed current on-disk location in this workspace:
+- backend/backend/uploads/
+
+Observed current folder breakdown:
+- REG-2026-161209: 1 file, 2814 bytes
+- REG-2026-287387: 1 file, 47038 bytes
+- REG-2026-397638: 1 file, 13414 bytes
+- REG-2026-895496: 1 file, 2814 bytes
+- REG-2026-952920: 1 file, 3000 bytes
+
+Observed current storage totals:
+- Patient folders: 5
+- Uploaded files: 5
+- Total bytes: 69080
+- Total size: 0.0659 MB
+
+Metadata Stored In MongoDB
+--------------------------
+The patient model in backend/models.py defines:
+- documents_id: List[str] = []
+- documents: List[dict] = []
+
+The upload route only writes to patient.documents. It does not write to documents_id.
+
+Each uploaded file stores a metadata object like this inside the patient document:
+- id: generated UUID
+- name: original filename from client
+- stored_name: UUID + original extension
+- path: absolute or working-directory-derived disk path
+- size: byte length of uploaded content
+- type: lowercase extension without the leading dot
+- uploadedDate: UTC ISO timestamp
+- uploadedBy: form field value or default 'Reception'
+
+Example logical shape:
+{
+  "id": "uuid",
+  "name": "report.pdf",
+  "stored_name": "uuid.pdf",
+  "path": "...\\backend\\uploads\\REG-...\\uuid.pdf",
+  "size": 2814,
+  "type": "pdf",
+  "uploadedDate": "2026-03-10T...",
+  "uploadedBy": "Reception"
+}
+
+Read / Listing Flow
+-------------------
+Route: GET /patients/{registration_id}/documents
+Function: get_patient_documents(...)
+
+Behavior:
+- Reads only the documents field from the patient record.
+- Returns patient.documents as JSON.
+- Sanitizes ObjectId and datetime values before returning.
+
+There is no pagination, filtering, sorting, or projection beyond the top-level documents field.
+
+Download / Preview Flow
+-----------------------
+Route: GET /patients/{registration_id}/documents/{file_id}/download
+Function: download_patient_document(...)
+
+Behavior:
+1. Reads patient.documents from MongoDB.
+2. Finds a matching document by either:
+   - metadata.id == file_id, or
+   - stored_name starts with file_id
+3. Resolves the disk path using:
+   - metadata.path if present, otherwise
+   - os.path.join(upload_root, stored_name)
+4. Returns 404 if the file does not exist on disk.
+5. Uses FileResponse to serve the file.
+
+Preview behavior:
+- If inline is truthy, the API attempts browser preview for:
+  - images: png, jpg, jpeg, gif
+  - videos: mp4, webm, ogg
+  - pdf
+- Otherwise it forces application/octet-stream download.
+
+This is a direct file-system read at request time. No signed URLs, no tokenized download layer, and no separate access-control wrapper are present in this route.
+
+Current Architecture Characteristics
+------------------------------------
+What the implementation does well:
+- Very simple and easy to understand.
+- Low dependency footprint.
+- File names on disk are randomized with UUIDs.
+- Metadata is colocated with the patient record, so patient fetch patterns remain straightforward.
+- Browser preview support exists for common media/document types.
+
+What the implementation currently depends on:
+- A writable local filesystem on the application host.
+- Stable working-directory assumptions.
+- The patient record as the source of truth for document metadata.
+
+Limitations And Risks
+---------------------
+1. Storage root is working-directory dependent.
+   Because upload_root uses os.getcwd(), the actual file location changes depending on how the server process is started. This is why the workspace currently contains backend/backend/uploads instead of a guaranteed backend/uploads path.
+
+2. File metadata stores raw filesystem paths.
+   The path field persists server-local absolute or cwd-derived paths into MongoDB. That couples database records to one host layout and makes migration or multi-instance deployment harder.
+
+3. Metadata is embedded in patient documents instead of a dedicated collection.
+   This is fine at small scale but can bloat patient records, complicate partial document queries, and make document-specific indexing/reporting harder.
+
+4. No file type validation.
+   The code preserves extensions but does not verify MIME type, content type, or allowed extensions.
+
+5. No file size limit enforcement.
+   The route reads each upload fully into memory with await f.read() before writing it. Large files can increase memory pressure.
+
+6. Blocking disk I/O inside async route.
+   The handler is async but writes files using standard synchronous open(..., 'wb') and write calls. Under heavier upload load, that can block worker execution.
+
+7. No delete / cleanup lifecycle.
+   There is no corresponding delete endpoint or garbage collection path. If patient metadata is removed manually or becomes inconsistent, orphaned files can remain on disk.
+
+8. No deduplication or versioning.
+   Re-uploading the same logical document creates another physical file and another metadata entry.
+
+9. No antivirus / content scanning.
+   Files are accepted and stored directly.
+
+10. No authorization checks are visible in these routes.
+    The routes are patient-specific but there is no explicit role/auth guard in the upload/list/download handlers themselves.
+
+11. Multi-worker / multi-instance scaling is limited.
+    Local disk storage works on one host, but multiple app instances would need a shared filesystem or object storage backend to see the same files.
+
+12. documents_id appears unused.
+    The model includes documents_id, but the current upload flow does not populate or read it.
+
+Estimated Operational Impact
+----------------------------
+Current observed storage footprint in this workspace is small: 5 files totaling about 0.066 MB.
+
+At larger scale, storage grows linearly with uploaded file volume because:
+- files are stored uncompressed as-is,
+- there is no deduplication,
+- there is no retention cleanup,
+- metadata remains embedded in patient documents.
+
+The more immediate scaling concern is not current disk usage but architecture coupling:
+- host-local storage,
+- path persistence in MongoDB,
+- memory-bound upload handling,
+- record growth inside patient documents.
+
+Bottom Line
+-----------
+The current patient document system is a local-disk attachment mechanism with patient-embedded Mongo metadata. It is suitable for small-scale single-host deployment, but it is not yet robust for larger-scale or multi-instance production use without stabilizing the storage root, separating metadata from host-specific paths, and adding upload validation plus lifecycle management.

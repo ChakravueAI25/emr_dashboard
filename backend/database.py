@@ -1,5 +1,6 @@
 import os
 from pymongo import MongoClient
+from pymongo.errors import OperationFailure
 from motor.motor_asyncio import AsyncIOMotorClient
 import certifi
 from dotenv import load_dotenv
@@ -48,6 +49,51 @@ presets_collection = db["presets"]
 vendors_collection = db["vendors"]
 purchase_invoices_collection = db["purchase_invoices"]
 vendor_payments_collection = db["vendor_payments"]
+patient_documents_collection = db["patient_documents"]
+
+
+def _create_index_safe(collection, keys, **kwargs):
+    """Create an index without failing when an equivalent index already exists."""
+    try:
+        collection.create_index(keys, **kwargs)
+    except OperationFailure as exc:
+        message = str(exc).lower()
+        if "already exists" in message or "equivalent index" in message:
+            return
+        raise
+
+
+def _ensure_billing_indexes():
+    # billing_invoices indexes
+    _create_index_safe(billing_invoices_collection, [("invoiceId", 1)], unique=True)
+    _create_index_safe(billing_invoices_collection, [("registrationId", 1)])
+    _create_index_safe(billing_invoices_collection, [("status", 1)])
+    _create_index_safe(billing_invoices_collection, [("createdAt", -1)])
+
+    # initial_surgery_bills indexes
+    _create_index_safe(initial_surgery_bills_collection, [("billId", 1)], unique=True)
+    _create_index_safe(initial_surgery_bills_collection, [("registrationId", 1)])
+    _create_index_safe(initial_surgery_bills_collection, [("status", 1)])
+    _create_index_safe(initial_surgery_bills_collection, [("createdAt", -1)])
+
+    # final_surgery_bills indexes
+    _create_index_safe(final_surgery_bills_collection, [("billId", 1)], unique=True)
+    _create_index_safe(final_surgery_bills_collection, [("registrationId", 1)])
+    _create_index_safe(final_surgery_bills_collection, [("status", 1)])
+    _create_index_safe(final_surgery_bills_collection, [("createdAt", -1)])
+
+    # pharmacy_billing indexes
+    _create_index_safe(pharmacy_billing_collection, [("registrationId", 1)])
+    _create_index_safe(pharmacy_billing_collection, [("status", 1)])
+    _create_index_safe(pharmacy_billing_collection, [("billDate", -1)])
+
+    # patient_documents indexes
+    _create_index_safe(patient_documents_collection, [("registrationId", 1)])
+    _create_index_safe(patient_documents_collection, [("fileId", 1)], unique=True)
+    _create_index_safe(patient_documents_collection, [("uploadedDate", -1)])
+
+
+_ensure_billing_indexes()
 
 # Async Client (Motor) for non-blocking I/O
 async_client = AsyncIOMotorClient(MONGO_URI, **client_kwargs)

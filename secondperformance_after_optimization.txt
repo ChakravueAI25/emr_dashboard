@@ -1,0 +1,116 @@
+RUNTIME PERFORMANCE MEASUREMENT REPORT AFTER BILLING DASHBOARD OPTIMIZATION
+
+Target server: http://127.0.0.1:8012
+Measurement timestamp: 2026-03-10
+Scope: performance measurement only. No code changes made during this step.
+
+====================================================================
+STEP 1 - TEST FLOW EXECUTED
+====================================================================
+1. POST /__perf/reset
+2. GET /api/billing/dashboard/stats (3 requests)
+3. GET /__perf/snapshot
+
+====================================================================
+STEP 2 - API RESPONSE TIMES FOR 3 DASHBOARD REQUESTS
+====================================================================
+Endpoint:
+- /api/billing/dashboard/stats
+
+Observed API response times:
+- request_1: 323.202 ms
+- request_2: 260.010 ms
+- request_3: 267.119 ms
+
+Average API response time:
+- 283.444 ms
+
+====================================================================
+STEP 3 - BACKEND PERFORMANCE METRICS
+====================================================================
+Collections accessed by /api/billing/dashboard/stats:
+- billing_invoices
+- final_surgery_bills
+- pharmacy_billing
+
+Average Mongo query count:
+- 6.0
+
+Average database time:
+- 279.012 ms
+
+Approximate total database time across the 3 measured requests:
+- 837.036 ms
+
+Payload size:
+- request_1: 14016 bytes
+- request_2: 14016 bytes
+- request_3: 14016 bytes
+- average payload size: 14016.0 bytes
+
+Observed request fan-out:
+- Invoice KPI aggregation: 1 query
+- Surgery KPI aggregation: 1 query
+- Pharmacy KPI aggregation: 1 query
+- Invoice recent/pending facet query: 1 query
+- Surgery recent/pending facet query: 1 query
+- Pharmacy recent/pending facet query: 1 query
+- Total: 6 Mongo queries per dashboard request
+
+====================================================================
+STEP 4 - SLOWEST MONGO OPERATION
+====================================================================
+Slowest aggregation/query captured for /api/billing/dashboard/stats:
+- collection: billing_invoices
+- query type: aggregate
+- label: billing.dashboard.invoice_views
+- duration: 117.257 ms
+- returned docs: 1
+- pipeline length: 1
+
+Interpretation:
+- The slowest section after optimization is the faceted invoice view query that serves both recent and pending invoice records.
+- None of the old patient-array unwinds appear in the captured dashboard metrics.
+
+====================================================================
+STEP 5 - COMPARISON WITH PREVIOUS PERFORMANCE REPORT
+====================================================================
+Previous report source:
+- secondperformance.txt
+
+Previous dashboard metrics:
+- average API response time: 3267.120 ms
+- average Mongo queries: 9.0
+- average total DB time: 3263.587 ms
+
+Current dashboard metrics:
+- average API response time: 283.444 ms
+- average Mongo queries: 6.0
+- average total DB time: 279.012 ms
+
+Measured deltas:
+- API time delta: -2983.676 ms
+- Mongo query delta: -3.0
+- DB time delta: -2984.575 ms
+
+Improvement percentage estimate:
+- API latency improved by approximately 91.32%
+- DB time improved by approximately 91.45%
+- Mongo query count reduced by approximately 33.33%
+
+====================================================================
+STEP 6 - CONCLUSION
+====================================================================
+The billing dashboard performance improved materially after the billing architecture and query optimizations.
+
+Evidence:
+- Dashboard fan-out dropped from 9 Mongo queries to 6 Mongo queries.
+- Average API latency dropped from 3267.120 ms to 283.444 ms.
+- Average total database time dropped from 3263.587 ms to 279.012 ms.
+- Collections accessed are now standalone billing collections instead of the old patients collection array scans.
+- The slowest remaining dashboard operation is the invoice facet query, not the old patient-array recent surgery/invoice unwinds.
+
+Bottom line:
+- The optimized billing dashboard is behaving close to the expected target of approximately 6 Mongo queries.
+- Response time is substantially lower than the previous measurement.
+- The recent improvements successfully reduced both database fan-out and end-to-end latency.

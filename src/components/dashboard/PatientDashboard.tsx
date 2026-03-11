@@ -411,7 +411,7 @@ export const PatientDashboard = ({
                             isViewingPastVisit: visitIndex > 0
                         })}
                         {renderCard('IOPCard', IOPCard, { data: memoizedData?.iop, updateData: updateActivePatientData, isEditable: userRole === ROLES.PATIENT || (!isPatientDischarged && (userRole === ROLES.OPD || userRole === ROLES.DOCTOR)) })}
-                        {renderCard('OphthalmicInvestigationsCard', OphthalmicInvestigationsCard, { data: memoizedData?.ophthalmicInvestigations, updateData: updateActivePatientData, isEditable: userRole === ROLES.PATIENT || (!isPatientDischarged && (userRole === ROLES.OPD || userRole === ROLES.DOCTOR)) })}
+                        {renderCard('OphthalmicInvestigationsCard', OphthalmicInvestigationsCard, { data: memoizedData?.ophthalmicInvestigations, updateData: updateActivePatientData, isEditable: userRole === ROLES.PATIENT || (!isPatientDischarged && (userRole === ROLES.OPD || userRole === ROLES.DOCTOR)), patientRegistrationId: memoizedData?.patientDetails?.registrationId })}
                         {renderCard('SystemicInvestigationsCard', SystemicInvestigationsCard, { data: memoizedData?.systemicInvestigations, updateData: updateActivePatientData, isEditable: userRole === ROLES.PATIENT || (!isPatientDischarged && (userRole === ROLES.OPD || userRole === ROLES.DOCTOR)) })}
                     </div>
 

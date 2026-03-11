@@ -1,0 +1,855 @@
+BILLING FLOW VERIFICATION REPORT
+Repository inspected: backend/main.py, backend/database.py
+Scope: analysis only. No application code was changed.
+
+====================================================================
+1. SUMMARY
+====================================================================
+
+The billing architecture in backend/main.py is hybrid and inconsistent.
+
+There are two active storage patterns:
+1. Patient-embedded billing data in patients.billing.* arrays.
+2. Standalone billing collections such as billing_invoices, initial_surgery_bills, final_surgery_bills, billing_cases, and pharmacy_billing.
+
+The main issue is not just that billing is hybrid. The issue is that different endpoints write to different storage models, while most read endpoints only read one side of that storage. As a result, billing data can be created successfully but remain invisible to the dashboard or patient billing APIs depending on which endpoint was used.
+
+Key conclusion:
+- Core patient invoice, payment, claim, and surgery-bill APIs mostly use patients.billing arrays.
+- Alternate invoice and dated surgery-bill APIs use standalone collections.
+- Pharmacy billing writes both to pharmacy_billing and to a mirrored patient.pharmacyBills array.
+- Billing dashboard and billing analytics do not read billing_invoices, initial_surgery_bills, or final_surgery_bills.
+- There is no single source of truth for billing.
+
+====================================================================
+2. STEP 1 - BILLING WRITE FUNCTIONS
+====================================================================
+
+2.1 Primary billing write functions
+
+Route: PUT /api/billing/patient/{reg_id}/insurance
+Function: update_patient_insurance
+Writes to:
+- patients
+Fields updated:
+- billing.insurance
+- updatedAt
+Patient document updated: yes
+Notes:
+- Insurance data is stored only inside the patient document.
+
+Route: POST /api/billing/patient/{reg_id}/invoices
+Function: create_invoice
+Writes to:
+- coupon_quotas when coupon discount is used
+- billing_cases when invoice is marked as a surgery/insurance case
+- patients
+Fields updated:
+- coupon_quotas.remaining
+- coupon_quotas.used
+- billing_cases.{caseId, registrationId, procedureName, totalEstimatedAmount, insuranceApprovedAmount, preSurgeryPaidAmount, status, createdAt, updatedAt, stages[]}
+- patients.billing.invoices[]
+- patients.billing reset to default object if legacy billing shape is not a dict
+Patient document updated: yes
+Notes:
+- No write is made to billing_invoices_collection here.
+- This is one of the clearest hybrid inconsistencies in the file.
+
+Route: POST /api/billing/patient/{reg_id}/surgery-bills/initial
+Function: create_initial_surgery_bill
+Writes to:
+- patients
+Fields updated:
+- patients.billing.surgeryBills[]
+- patients.billing reset to default object if legacy billing shape is not a dict
+Inserted bill fields include:
+- billId
+- billType
+- status
+- createdAt
+- updatedAt
+- registrationId
+- patientName
+- surgeryName
+- surgeryBreakdown
+- totalSurgeryCost
+- hasInsurance
+- insuranceType
+- insuranceCompany
+- insuranceTPA
+- estimatedInsuranceCoverage
+- securityDeposit
+- securityDepositPaid
+- securityDepositPaymentMethod
+- securityDepositDate
+- estimatedPatientShare
+- notes
+- createdBy
+Patient document updated: yes
+Notes:
+- No write is made to initial_surgery_bills_collection in this function.
+
+Route: POST /api/billing/patient/{reg_id}/surgery-bills/final
+Function: create_final_surgery_bill
+Writes to:
+- patients
+Fields updated:
+- patients.billing.surgeryBills[] for the new final bill
+- patients.billing.surgeryBills.$.status for linked initial bill
+- patients.billing.surgeryBills.$.linkedFinalBillId
+- patients.billing.surgeryBills.$.updatedAt
+- patients.billing reset to default object if legacy billing shape is not a dict
+Inserted bill fields include:
+- billId
+- billType
+- linkedInitialBillId
+- status
+- createdAt
+- updatedAt
+- registrationId
+- patientName
+- surgeryName
+- surgeryBreakdown
+- totalSurgeryCost
+- hasInsurance
+- insuranceType
+- insuranceCompany
+- insuranceTPA
+- insuranceApprovedAmount
+- insuranceClaimReference
+- insuranceApprovalDate
+- securityDepositPaid
+- patientTotalShare
+- balancePayable
+- refundAmount
+- finalPaymentAmount
+- finalPaymentMethod
+- finalPaymentDate
+- notes
+- createdBy
+Patient document updated: yes
+Notes:
+- No write is made to final_surgery_bills_collection in this function.
+
+Route: PUT /api/billing/patient/{reg_id}/surgery-bills/{bill_id}
+Function: update_surgery_bill
+Writes to:
+- patients
+Fields updated:
+- billing.surgeryBills.$.<every key provided in request body>
+- billing.surgeryBills.$.updatedAt
+Patient document updated: yes
+Notes:
+- This function dynamically updates whichever fields are provided.
+
+Route: POST /api/billing/patient/{reg_id}/payments
+Function: record_payment
+Writes to:
+- patients
+- billing_cases when caseId and stageName are provided
+Fields updated:
+- patients.billing.payments[]
+- patients.billing reset to default object if legacy billing shape is not a dict
+- billing_cases.stages[]
+- billing_cases.updatedAt
+- billing_cases.preSurgeryPaidAmount when stageName = pre_surgery
+- patients.billing.invoices[] rewritten after recalculating invoice status
+Patient document updated: yes
+Notes:
+- Payment storage is only patient-embedded.
+- There is no standalone payments collection.
+- Invoice status reconciliation happens only against patients.billing.invoices.
+
+Route: POST /api/billing/cases
+Function: create_billing_case
+Writes to:
+- billing_cases
+Fields updated:
+- billing_cases full case document insertion
+- createdAt
+- updatedAt
+- stages[] defaulted when absent
+Patient document updated: no
+Notes:
+- billing case is standalone only.
+
+Route: PUT /api/billing/cases/{case_id}/stage
+Function: update_billing_stage
+Writes to:
+- billing_cases
+Fields updated:
+- stages[]
+- insuranceApprovedAmount when insurance_approval is approved
+- preSurgeryPaidAmount when pre_surgery is paid
+- updatedAt
+Patient document updated: no
+Notes:
+- Updates only the standalone case record.
+
+Route: POST /api/billing/patient/{reg_id}/claims
+Function: create_claim
+Writes to:
+- patients
+Fields updated:
+- patients.billing.claims[]
+- patients.billing reset to default object if legacy billing shape is not a dict
+Inserted claim fields include:
+- id
+- dateFiled
+- service
+- billed
+- approved
+- status
+- invoiceId
+- notes
+- createdAt
+Patient document updated: yes
+Notes:
+- Claims are patient-embedded only.
+
+Route: POST /pharmacy/billing
+Function: create_pharmacy_bill
+Writes to:
+- pharmacy_billing
+- pharmacy_medicines
+- patients
+Fields updated:
+- pharmacy_billing full bill document insertion
+- pharmacy_medicines.stock decremented for each item
+- pharmacy_medicines.updated_at
+- patients.pharmacyBills[]
+- patients.lastPharmacyPurchase
+- patients inserted if registrationId = WAVEOFF-STAFF and missing
+Patient document updated: yes
+Notes:
+- This is a true dual-write path.
+- Collection and patient mirror can diverge.
+
+Route: POST /api/billing/invoices/{registration_id}
+Function: update_bill_with_dates
+Writes to:
+- billing_invoices
+Fields updated:
+- registrationId
+- dateOfSurgery
+- dateOfDischarge
+- items[]
+- totalAmount
+- updatedAt
+- claimNumber when supplied
+- insuranceAmount when supplied
+- patientAmount when supplied
+- createdAt on insert
+Patient document updated: no
+Notes:
+- This writes to standalone billing_invoices only.
+- It does not update patients.billing.invoices.
+
+Route: POST /api/billing/patient/{registration_id}/surgery-bills/initial
+Function: update_initial_bill_with_dates
+Writes to:
+- initial_surgery_bills
+Fields updated:
+- registrationId
+- billType
+- dateOfSurgery
+- dateOfDischarge
+- items[]
+- totalAmount
+- estimatedCoverage
+- claimNumber
+- insuranceProvider
+- createdAt
+Patient document updated: no
+Notes:
+- This route path overlaps the earlier initial surgery bill route name-space but writes to a different storage model.
+
+Route: POST /api/billing/patient/{registration_id}/surgery-bills/final
+Function: update_final_bill_with_dates
+Writes to:
+- final_surgery_bills
+Fields updated:
+- registrationId
+- billType
+- dateOfSurgery
+- dateOfDischarge
+- items[]
+- totalAmount
+- refundAmount
+- claimNumber
+- insuranceProvider
+- createdAt
+Patient document updated: no
+Notes:
+- This also overlaps existing surgery-bill route space while writing to a separate collection.
+
+2.2 Billing-adjacent write function
+
+Route: POST /api/coupons/refresh
+Function: refresh_worker_quota
+Writes to:
+- coupon_quotas
+Fields updated:
+- limit
+- remaining
+- last_refreshed_by
+- last_refreshed_at
+Patient document updated: no
+Notes:
+- This is quota administration rather than direct invoice storage, but it affects invoice discount behavior.
+
+====================================================================
+3. STEP 2 - BILLING READ FUNCTIONS
+====================================================================
+
+Route: GET /api/billing/patient/{reg_id}/summary
+Function: get_billing_summary
+Collections read:
+- patients
+- billing_cases
+Aggregation used: no
+Notes:
+- Reads patients.billing.invoices for totalOutstanding, totalPaid, pendingClaims, deductibleMet.
+- Reads billing_cases via count_documents for active open cases.
+
+Route: GET /api/billing/patient/{reg_id}/insurance
+Function: get_patient_insurance
+Collections read:
+- patients
+Aggregation used: no
+Notes:
+- Reads patients.billing.insurance only.
+
+Route: GET /api/billing/patient/{reg_id}/invoices
+Function: get_patient_invoices
+Collections read:
+- patients
+Aggregation used: no
+Notes:
+- Reads patients.billing.invoices only.
+- Does not read billing_invoices.
+
+Route: GET /api/billing/patient/{reg_id}/surgery-bills
+Function: get_patient_surgery_bills
+Collections read:
+- patients
+Aggregation used: no
+Notes:
+- Reads patients.billing.surgeryBills only.
+- Does not read initial_surgery_bills or final_surgery_bills.
+
+Route: GET /api/billing/patient/{reg_id}/surgery-bills/{bill_id}
+Function: get_surgery_bill_by_id
+Collections read:
+- patients
+Aggregation used: no
+Notes:
+- Reads patients.billing.surgeryBills only.
+
+Route: GET /api/coupons/quota/{worker_id}
+Function: get_worker_coupon_quota
+Collections read:
+- coupon_quotas
+Aggregation used: no
+Notes:
+- Billing-adjacent read used during coupon discount flow.
+
+Route: GET /api/billing/patient/{reg_id}/payments
+Function: get_patient_payments
+Collections read:
+- patients
+Aggregation used: no
+Notes:
+- Reads patients.billing.payments only.
+
+Route: GET /api/billing/cases/patient/{reg_id}
+Function: get_patient_billing_cases
+Collections read:
+- billing_cases
+Aggregation used: no
+Notes:
+- Reads standalone case records only.
+
+Route: GET /api/billing/patient/{reg_id}/claims
+Function: get_insurance_claims
+Collections read:
+- patients
+Aggregation used: no
+Notes:
+- Reads patients.billing.claims only.
+
+Route: GET /pharmacy/billing/{bill_id}
+Function: get_pharmacy_bill
+Collections read:
+- pharmacy_billing
+Aggregation used: no
+Notes:
+- Reads standalone pharmacy bill record only.
+
+Route: GET /pharmacy/billing/patient/{registration_id}
+Function: get_patient_pharmacy_bills
+Collections read:
+- pharmacy_billing
+Aggregation used: no
+Notes:
+- Uses a sorted collection query.
+- Does not read patients.pharmacyBills mirror.
+
+Route: GET /api/billing/dashboard/stats
+Function: get_billing_dashboard_stats
+Collections read:
+- patients
+- pharmacy_billing
+Aggregation used: yes
+Notes:
+- Aggregates invoices and surgery bills from embedded patient arrays.
+- Aggregates pharmacy revenue from standalone collection.
+- Does not read billing_invoices, initial_surgery_bills, or final_surgery_bills.
+
+Route: GET /api/billing/analytics
+Function: get_billing_analytics
+Collections read:
+- patients
+- pharmacy_billing
+Aggregation used: yes
+Notes:
+- Aggregates paid invoices, surgery bills, pharmacy bills, and insurance-approved surgery values.
+- Does not read billing_invoices, initial_surgery_bills, or final_surgery_bills.
+
+3.1 Write endpoints that also perform immediate reads
+
+These are write endpoints, but they also read after writing to build a response:
+- update_bill_with_dates reads billing_invoices after upsert.
+- update_initial_bill_with_dates reads initial_surgery_bills after insert.
+- update_final_bill_with_dates reads final_surgery_bills after insert.
+- record_payment reads patients and billing_cases during reconciliation.
+- create_invoice reads coupon_quotas and patient document before writing.
+
+====================================================================
+4. STEP 3 - DASHBOARD AGGREGATION LOGIC
+====================================================================
+
+Endpoint analyzed:
+- GET /api/billing/dashboard/stats
+- Function: get_billing_dashboard_stats
+
+4.1 Collections used
+
+Directly queried collections:
+- patients
+- pharmacy_billing
+
+Billing collections not used by this endpoint:
+- billing_invoices
+- initial_surgery_bills
+- final_surgery_bills
+- billing_cases
+
+4.2 Aggregation pipelines used
+
+Pipeline 1: invoice_pipeline on patients
+Stages:
+- $unwind $billing.invoices
+- $group totals for:
+  - totalRevenue: sum patientResponsibility where status = paid
+  - pendingBills: count where status != paid
+  - refunds: sum patientResponsibility where status = refunded
+
+Pipeline 2: surgery_pipeline on patients
+Stages:
+- $unwind $billing.surgeryBills
+- $group totals for:
+  - totalRevenue: sum patientTotalShare where status in [settled, balance_due, partially_paid]
+  - settledRevenue: sum patientTotalShare where status = settled
+  - unsettledRevenue: sum patientTotalShare where status in [balance_due, partially_paid]
+  - pendingBills: count where status = balance_due
+  - refunds: sum refundAmount
+
+Pipeline 3: pharmacy_pipeline on pharmacy_billing
+Stages:
+- $group totals for:
+  - totalRevenue: sum totalAmount where status = completed
+  - pendingBills: count where status != completed
+
+Pipeline 4: pending invoices hover-card pipeline on patients
+Stages:
+- $unwind $billing.invoices
+- $match status != paid
+- $sort by invoice date descending
+- $limit 5
+- $project patient name, registrationId, invoice
+
+Pipeline 5: pending surgery hover-card pipeline on patients
+Stages:
+- $unwind $billing.surgeryBills
+- $match status != settled
+- $sort by createdAt descending
+- $limit 5
+- $project patient name, registrationId, bill
+
+Pipeline 6: recent invoices pipeline on patients
+Stages:
+- $unwind $billing.invoices
+- $sort by invoice date descending
+- $limit limit
+- $project patient identity and invoice
+
+Pipeline 7: recent surgery pipeline on patients
+Stages:
+- $unwind $billing.surgeryBills
+- $sort by createdAt descending
+- $limit limit
+- $project patient identity and bill
+
+Non-aggregation collection reads:
+- pending_pharm_docs via find on pharmacy_billing with status != completed, sorted by billDate desc, limited to 5
+- recent_pharmacy via find on pharmacy_billing sorted by billDate desc, limited to limit
+
+4.3 Number of Mongo queries executed by this endpoint
+
+Static query count from code path:
+- 7 aggregation queries
+- 2 regular collection queries
+- Total: 9 Mongo queries
+
+Query list in execution order:
+1. invoice KPI aggregate
+2. surgery KPI aggregate
+3. pharmacy KPI aggregate
+4. pending invoice aggregate
+5. pending surgery aggregate
+6. pending pharmacy find
+7. recent invoices aggregate
+8. recent surgery aggregate
+9. recent pharmacy find
+
+4.4 How total revenue is calculated
+
+Total revenue = paid invoice revenue + surgery revenue + completed pharmacy revenue
+
+More precisely:
+- Invoice contribution: sum of patients.billing.invoices.patientResponsibility where invoice status = paid
+- Surgery contribution: sum of patients.billing.surgeryBills.patientTotalShare where surgery status is one of settled, balance_due, partially_paid
+- Pharmacy contribution: sum of pharmacy_billing.totalAmount where status = completed
+
+Important observation:
+- Surgery revenue is counted even when not fully settled if status is balance_due or partially_paid.
+- Therefore totalRevenue is not identical to cash collected.
+
+4.5 How pending bills is calculated
+
+Pending bills count = unpaid invoice count + balance-due surgery count + non-completed pharmacy bill count
+
+More precisely:
+- Invoices: count of patients.billing.invoices where status != paid
+- Surgery: count of patients.billing.surgeryBills where status = balance_due
+- Pharmacy: count of pharmacy_billing records where status != completed
+
+Important observation:
+- Surgery status partially_paid contributes to unsettledRevenue but not to pendingBills count.
+- That means unsettled revenue and pending bill count are not aligned measures.
+
+4.6 How unsettled bills is calculated
+
+Unsettled revenue is calculated only from embedded surgery bills in patients.billing.surgeryBills.
+
+Formula:
+- sum patientTotalShare where surgery bill status in [balance_due, partially_paid]
+
+Important observation:
+- Unsettled bill does not include unpaid invoices.
+- Unsettled bill does not include unpaid pharmacy bills.
+- Unsettled bill does not include standalone final_surgery_bills or initial_surgery_bills.
+- The dashboard's unsettled value is therefore a surgery-specific unsettled patient-share metric, not a universal outstanding-balance metric.
+
+====================================================================
+5. STEP 4 - HYBRID BILLING STORAGE DETECTION
+====================================================================
+
+5.1 Embedded billing storage in patients
+
+Embedded patient paths used by core billing APIs:
+- patients.billing.insurance
+- patients.billing.invoices[]
+- patients.billing.surgeryBills[]
+- patients.billing.payments[]
+- patients.billing.claims[]
+- patients.pharmacyBills[]
+- patients.lastPharmacyPurchase
+
+Endpoints relying on embedded patient billing:
+- get_billing_summary
+- get_patient_insurance
+- update_patient_insurance
+- get_patient_invoices
+- create_invoice
+- get_patient_surgery_bills
+- get_surgery_bill_by_id
+- create_initial_surgery_bill
+- create_final_surgery_bill
+- update_surgery_bill
+- get_patient_payments
+- record_payment
+- get_insurance_claims
+- create_claim
+- get_billing_dashboard_stats
+- get_billing_analytics
+
+5.2 Standalone billing storage
+
+Standalone collections involved:
+- billing_invoices
+- billing_cases
+- initial_surgery_bills
+- final_surgery_bills
+- pharmacy_billing
+- coupon_quotas
+
+Endpoints relying on standalone storage:
+- create_billing_case -> billing_cases
+- get_patient_billing_cases -> billing_cases
+- update_billing_stage -> billing_cases
+- update_bill_with_dates -> billing_invoices
+- update_initial_bill_with_dates -> initial_surgery_bills
+- update_final_bill_with_dates -> final_surgery_bills
+- create_pharmacy_bill -> pharmacy_billing
+- get_pharmacy_bill -> pharmacy_billing
+- get_patient_pharmacy_bills -> pharmacy_billing
+- get_worker_coupon_quota -> coupon_quotas
+- refresh_worker_quota -> coupon_quotas
+- get_billing_summary also reads billing_cases for active case count
+
+5.3 Hybrid status conclusion
+
+Billing is definitively hybrid.
+
+But the hybrid model is incomplete, because:
+- not all write paths update both storage models
+- not all read paths reconcile both storage models
+- the dashboard only reads a subset of the standalone data
+- duplicate route namespaces exist for surgery-bill writes with different storage targets
+
+====================================================================
+6. STEP 5 - DATA CONSISTENCY RISKS
+====================================================================
+
+Risk 1: invoice data has two storage models with no synchronization
+- create_invoice writes patients.billing.invoices only.
+- update_bill_with_dates writes billing_invoices only.
+- get_patient_invoices reads only patients.billing.invoices.
+- dashboard and analytics also read only patients.billing.invoices.
+Impact:
+- An invoice saved through update_bill_with_dates can exist in billing_invoices but remain invisible to patient invoice history, billing summary calculations, dashboard stats, and billing analytics.
+
+Risk 2: surgery bills also have two storage models with no synchronization
+- create_initial_surgery_bill and create_final_surgery_bill write patients.billing.surgeryBills.
+- update_initial_bill_with_dates writes initial_surgery_bills only.
+- update_final_bill_with_dates writes final_surgery_bills only.
+- get_patient_surgery_bills and dashboard/analytics read only patients.billing.surgeryBills.
+Impact:
+- Dated surgery bills stored in standalone collections may never appear in patient surgery-bill history or dashboard revenue calculations.
+
+Risk 3: pharmacy billing is dual-written with no reconciliation path
+- create_pharmacy_bill writes pharmacy_billing and also pushes the same bill into patients.pharmacyBills.
+- get_patient_pharmacy_bills reads pharmacy_billing only.
+- dashboard stats and analytics read pharmacy_billing only.
+- no endpoint reads patients.pharmacyBills for authoritative billing history.
+Impact:
+- Patient mirror can drift from collection truth.
+- Patient document stores redundant billing copies with no visible consumption path in billing reads.
+
+Risk 4: billing summary is incomplete relative to total billing state
+- get_billing_summary reads only patients.billing.invoices and billing_cases active count.
+- It does not include standalone billing_invoices.
+- It does not include pharmacy_billing.
+- It does not include standalone initial_surgery_bills/final_surgery_bills.
+Impact:
+- Patient summary can under-report actual billing exposure depending on which billing flow was used.
+
+Risk 5: dashboard metrics are not source-of-truth metrics for all billing types
+- unsettledRevenue uses only embedded surgery bills.
+- pendingBills counts invoices, surgery balance_due, and non-completed pharmacy bills, but not standalone invoice/surgery collections.
+Impact:
+- Dashboard numbers depend on storage path rather than full business reality.
+
+Risk 6: partially_paid surgery bills affect revenue but not pending count the same way
+- totalRevenue includes balance_due and partially_paid surgery patient share.
+- unsettledRevenue includes balance_due and partially_paid surgery patient share.
+- pendingBills counts only balance_due surgery bills.
+Impact:
+- KPI definitions are internally inconsistent.
+
+Risk 7: patient upsert on billing writes can create partial patient records
+- create_invoice, create_initial_surgery_bill, create_final_surgery_bill, record_payment, create_claim use patient upsert behavior.
+Impact:
+- If registrationId does not already represent a complete patient record, billing writes may create minimal or malformed patient documents with only billing sections.
+
+Risk 8: no standalone payment or claim collections
+- payments and claims exist only in patient embedded arrays.
+Impact:
+- Finance auditability and reporting outside patient documents are harder to implement.
+- Future hybrid migration would need new standalone storage or a strong patient-centric source-of-truth decision.
+
+Risk 9: route namespace overlap hides different storage semantics
+- POST /api/billing/patient/{registration_id}/surgery-bills/initial exists as both create_initial_surgery_bill and update_initial_bill_with_dates path shape family.
+- POST /api/billing/patient/{registration_id}/surgery-bills/final exists similarly.
+Impact:
+- Similar route families are serving different persistence models, which increases integration confusion.
+
+====================================================================
+7. STEP 6 - FUNCTIONS THAT MUST CHANGE FOR FULL HYBRID BILLING
+====================================================================
+
+If billing becomes intentionally and consistently hybrid, the following functions in backend/main.py would need modification.
+
+7.1 Write functions that currently update only patient-embedded billing
+
+File: backend/main.py
+Function: update_patient_insurance
+Reason:
+- Insurance is only stored in patients.billing.insurance. A hybrid model would need either a standalone insurance/coverage store or a defined synchronization strategy.
+
+File: backend/main.py
+Function: create_invoice
+Reason:
+- Writes only to patients.billing.invoices while alternate invoice flow writes to billing_invoices.
+- Must either also write billing_invoices or delegate to a unified invoice service.
+
+File: backend/main.py
+Function: create_initial_surgery_bill
+Reason:
+- Writes only to patients.billing.surgeryBills while alternate initial-bill flow writes to initial_surgery_bills.
+- Must reconcile both stores or choose one source of truth.
+
+File: backend/main.py
+Function: create_final_surgery_bill
+Reason:
+- Writes only to patients.billing.surgeryBills while alternate final-bill flow writes to final_surgery_bills.
+- Must reconcile both stores or choose one source of truth.
+
+File: backend/main.py
+Function: update_surgery_bill
+Reason:
+- Updates only embedded surgery bill array, not standalone surgery bill collections.
+
+File: backend/main.py
+Function: record_payment
+Reason:
+- Writes payment only into patients.billing.payments and updates invoice status only inside patients.billing.invoices.
+- Would need to update standalone invoice/billing entities too.
+
+File: backend/main.py
+Function: create_claim
+Reason:
+- Writes claim only into patients.billing.claims.
+- A fully hybrid model would need a collection-level claim source or a synchronized write path.
+
+7.2 Write functions that currently update only standalone billing collections
+
+File: backend/main.py
+Function: update_bill_with_dates
+Reason:
+- Writes only to billing_invoices and never updates patients.billing.invoices.
+- Dashboard and patient invoice readers will miss this data unless the function also updates the patient billing array or source-of-truth readers are changed.
+
+File: backend/main.py
+Function: update_initial_bill_with_dates
+Reason:
+- Writes only to initial_surgery_bills and is invisible to patient surgery-bill readers and dashboard calculations.
+
+File: backend/main.py
+Function: update_final_bill_with_dates
+Reason:
+- Writes only to final_surgery_bills and is invisible to patient surgery-bill readers and dashboard calculations.
+
+7.3 Dual-write function that needs explicit ownership rules
+
+File: backend/main.py
+Function: create_pharmacy_bill
+Reason:
+- Writes to pharmacy_billing and also mirrors into patients.pharmacyBills.
+- A full hybrid model must define whether patient mirror is cache, audit copy, or deprecated redundancy.
+
+7.4 Read functions that must be changed to reconcile hybrid billing sources
+
+File: backend/main.py
+Function: get_billing_summary
+Reason:
+- Reads embedded invoices and billing cases only.
+- Must reconcile standalone invoices, surgery bills, pharmacy bills, and any future standalone payments/claims.
+
+File: backend/main.py
+Function: get_patient_invoices
+Reason:
+- Reads only patients.billing.invoices and ignores billing_invoices.
+
+File: backend/main.py
+Function: get_patient_surgery_bills
+Reason:
+- Reads only patients.billing.surgeryBills and ignores initial_surgery_bills and final_surgery_bills.
+
+File: backend/main.py
+Function: get_surgery_bill_by_id
+Reason:
+- Same issue as get_patient_surgery_bills.
+
+File: backend/main.py
+Function: get_patient_payments
+Reason:
+- Currently reads only embedded payments; would need a hybrid reconciliation plan if standalone payments are introduced.
+
+File: backend/main.py
+Function: get_insurance_claims
+Reason:
+- Currently reads only embedded claims; would need a hybrid reconciliation plan if standalone claims are introduced.
+
+File: backend/main.py
+Function: get_billing_dashboard_stats
+Reason:
+- Dashboard currently ignores billing_invoices, initial_surgery_bills, and final_surgery_bills.
+- Must be updated if those collections are part of authoritative billing storage.
+
+File: backend/main.py
+Function: get_billing_analytics
+Reason:
+- Analytics currently aggregate only embedded invoices/surgery bills plus pharmacy_billing.
+- Must be updated to include whichever standalone billing collections are authoritative.
+
+====================================================================
+8. STEP 7 - FINAL VERIFICATION CONCLUSION
+====================================================================
+
+Billing write paths:
+- Embedded patient writes: insurance, invoices, surgery bills, payments, claims.
+- Standalone writes: billing_cases, billing_invoices, initial_surgery_bills, final_surgery_bills, pharmacy_billing, coupon_quotas.
+- Dual-write path: pharmacy billing also mirrors to patients.pharmacyBills.
+
+Billing read paths:
+- Patient-level reads mostly use patients.billing arrays.
+- Case reads use billing_cases.
+- Pharmacy reads use pharmacy_billing.
+- Dashboard and analytics use patients billing arrays plus pharmacy_billing.
+- Standalone billing_invoices, initial_surgery_bills, and final_surgery_bills are not part of dashboard calculations.
+
+Dashboard aggregation logic:
+- Uses 9 Mongo queries total.
+- Uses 7 aggregation pipelines and 2 standard queries.
+- Revenue, pending bills, and unsettled bills are computed from mixed but incomplete billing sources.
+- Unsettled bill specifically means surgery patient-share still due, not overall unpaid billing.
+
+Hybrid billing status:
+- Hybrid storage definitely exists.
+- It is not unified.
+- It has no clear source-of-truth contract.
+
+Primary consistency risks:
+- invoice split across patient arrays and billing_invoices
+- surgery bill split across patient arrays and initial/final standalone collections
+- pharmacy dual-write without reconciliation
+- dashboard and summaries that ignore part of stored billing data
+
+Most important file requiring future architectural work:
+- backend/main.py
+
+Bottom line:
+The backend already behaves like a partially hybrid billing system, but it is not consistently implemented as one. The dominant operational source of truth today is still the patient document for invoices, surgery bills, payments, and claims, while standalone invoice and surgery bill collections are written by alternate endpoints that most billing reads do not consume. Any move to a fully hybrid design will require synchronized write logic and read-side reconciliation across nearly every billing handler in backend/main.py.

@@ -1,0 +1,516 @@
+EMR Document Preview Flow Report
+Date: 2026-03-11
+Scope: Analysis only. No application code modified.
+
+============================================================
+1. FRONTEND DOCUMENT VIEWS
+============================================================
+
+A. Primary document vault
+
+File: src/components/DocumentsView.tsx
+Component: DocumentsView
+Purpose: Main patient document UI. Lists uploaded patient documents, filters/searches them, opens preview, and downloads files.
+Relevant UI elements:
+- Upload icon and upload section
+- Eye icon for preview
+- Download icon for download
+- Document table showing file name, category, size, uploaded date, and uploader
+
+File: src/components/DocumentsView.tsx
+Component: Uploader (inner component)
+Purpose: Handles actual patient document uploads for the selected patient.
+Relevant UI elements:
+- Native file input
+- Upload Files button
+- Use Camera button (mobile camera input)
+- Open Camera button (desktop capture)
+- Capture & Upload button inside camera modal
+
+B. Investigation image/file entry views
+
+File: src/components/OphthalmicInvestigationsCard.tsx
+Component: OphthalmicInvestigationsCard
+Purpose: Stores ophthalmic investigation file selections inside patient form state. This is not the same as the patient document vault and does not call the patient document API.
+Relevant UI elements:
+- Upload OCT Image file input
+- Upload HVF Image file input
+- Upload Pachymetry & Colour Vision Images drag/drop style file input
+- Upload Images input for Additional Images
+Notes:
+- No Eye icon or Download icon
+- No server-backed preview or download flow found
+- Some uploads only store file names; pachymetry/colour vision stores base64 plus file name
+
+File: src/components/dashboard/PatientDashboard.tsx
+Component: PatientDashboard
+Purpose: Container that renders OphthalmicInvestigationsCard and other clinical cards. It does not itself implement upload/preview/download logic.
+Relevant role:
+- Hosts OphthalmicInvestigationsCard and therefore is a UI location where investigation image preview would logically be expected
+
+C. Other named files from the request
+
+File: src/components/SystemicInvestigationsCard.tsx
+Component: SystemicInvestigationsCard
+Purpose: Shows and edits systemic investigation values and statuses.
+Relevant UI elements:
+- No file upload input
+- No preview icon
+- No download icon
+Conclusion:
+- Not part of the document upload/preview flow
+
+File: src/components/ExpandableCard.tsx
+Component: ExpandableCard
+Purpose: Generic modal/wrapper used by many cards.
+Relevant UI elements:
+- No file logic
+- Only hosts expanded content from child cards
+Conclusion:
+- Supports where preview could be shown, but contains no file handling itself
+
+File: src/components/MedicationPrescribedCard.tsx
+Component: MedicationPrescribedCard
+Purpose: Medication entry/prescription card.
+Relevant UI elements:
+- No file upload input
+- No preview/download logic found
+
+File: src/components/VitalSignsCard.tsx
+Component: VitalSignsCard
+Purpose: Presenting complaints and vital signs card.
+Relevant UI elements:
+- No file upload input
+- No preview/download logic found
+
+D. Additional file-related views outside the requested list
+
+File: src/components/SlitLampView.tsx
+Component: SlitLampView
+Purpose: Captures slit-lamp images from a live camera, previews the captured frame locally, and uploads the image to a dedicated slit-lamp endpoint.
+Relevant UI elements:
+- Capture button
+- Local image preview via img tag after capture
+- Save to Record button
+Notes:
+- This is a real upload flow, but separate from patient documents
+- No frontend retrieval/listing UI found for saved slit-lamp images
+
+File: src/components/PatientDetailsCard.tsx
+Component: PatientDetailsCard
+Purpose: Displays/edit patient demographics and profile picture area.
+Relevant UI elements:
+- Hidden file input for gallery selection
+- Hidden file input for camera capture
+- Existing img preview for patientData.profilePic
+Notes:
+- Inputs have no onChange handler in this component
+- No upload API call found here
+- Preview only works if profilePic is already present in state
+
+============================================================
+2. FRONTEND UPLOAD LOGIC
+============================================================
+
+A. Patient documents
+
+File: src/components/DocumentsView.tsx
+Component: Uploader
+Upload function: handleFiles(files)
+Mechanism:
+- Creates FormData
+- Appends each file as files
+- Appends uploaded_by
+- POSTs to API_ENDPOINTS.PATIENT_DOCUMENTS(patientRegistrationId)
+Exact API endpoint:
+- POST /patients/{registration_id}/documents
+
+File: src/components/DocumentsView.tsx
+Component: Uploader
+Upload function: capturePhotoAndUpload()
+Mechanism:
+- Captures current desktop camera frame
+- Converts frame to blob and File object
+- Creates FormData
+- Appends files and uploaded_by=camera
+- POSTs to API_ENDPOINTS.PATIENT_DOCUMENTS(patientRegistrationId)
+Exact API endpoint:
+- POST /patients/{registration_id}/documents
+
+File: src/components/DocumentsView.tsx
+Component: Uploader
+Upload function: handleMobileCapture(files)
+Mechanism:
+- Delegates to handleFiles(files)
+Exact API endpoint:
+- POST /patients/{registration_id}/documents
+
+B. Ophthalmic investigation files
+
+File: src/components/OphthalmicInvestigationsCard.tsx
+Component: OphthalmicInvestigationsCard
+Upload function: inline onChange handlers for OCT/HVF/Additional Images, plus handlePachymetryAndColourVisionUpload()
+Mechanism:
+- OCT: stores file.name into ophthalmicInvestigations.oct.image
+- HVF: stores file.name into ophthalmicInvestigations.hvf.image
+- Pachymetry/Colour Vision: converts file to base64 using FileReader, stores base64 into pachymetry.image and colourVision.image, also stores fileName
+- Additional Images: stores comma-separated file names in additionalImages
+Exact API endpoint used:
+- None found
+Conclusion:
+- These are local form-state uploads, not backend document uploads
+
+C. Slit lamp imaging
+
+File: src/components/SlitLampView.tsx
+Component: SlitLampView
+Upload function: saveRecord()
+Mechanism:
+- Captures image as base64 data URL
+- Sends JSON payload with patientId, patientName, doctorName, image, notes, eyeSide
+Exact API endpoint:
+- POST /slit-lamp/upload
+
+D. Invoice parsing upload
+
+File: src/components/MedicineManagementView.tsx
+Component: MedicineManagementView
+Upload function: handleInvoiceUpload(e)
+Mechanism:
+- Creates FormData with file
+- POSTs to medicine invoice parsing endpoint
+Exact API endpoint:
+- POST /api/medicines/parse-invoice
+Notes:
+- This is unrelated to patient document preview, but it is a file upload path in the codebase
+
+E. Profile picture inputs
+
+File: src/components/PatientDetailsCard.tsx
+Component: PatientDetailsCard
+Upload function:
+- No upload handler found in this component
+Mechanism:
+- Hidden file inputs exist, but no onChange logic is wired here
+Exact API endpoint:
+- None found
+Notes:
+- Local preview element exists, but upload flow is incomplete in this file
+
+============================================================
+3. FRONTEND LISTING LOGIC
+============================================================
+
+A. Patient document listing
+
+File: src/components/DocumentsView.tsx
+Component: DocumentsView
+Listing function: useEffect -> fetchDocs()
+Mechanism:
+- GET patient details first for patient name
+- GET patient documents
+- Maps backend documents to frontend Document rows
+Exact API endpoints:
+- GET /patients/{registration_id}
+- GET /patients/{registration_id}/documents
+
+Additional listing refresh after upload:
+- Uploader onUploaded callback triggers re-fetch from GET /patients/{registration_id}/documents
+
+B. Slit lamp image listing
+
+Frontend status:
+- API constant exists: SLIT_LAMP_PATIENT_IMAGES(id) => GET /slit-lamp/patient/{id}
+- No frontend consumer found in the current code scan
+Conclusion:
+- Backend supports listing, but no frontend listing UI was found
+
+C. Ophthalmic investigations
+
+Frontend status:
+- No backend listing route used
+- Stored values are read from in-memory/patient state and displayed as text fields
+Examples:
+- data.pachymetry.fileName shown as uploaded file text
+- data.additionalImages shown as plain text list of names
+Conclusion:
+- This is state rendering, not API-backed file listing
+
+============================================================
+4. FRONTEND DOWNLOAD AND PREVIEW LOGIC
+============================================================
+
+A. Patient document preview
+
+File: src/components/DocumentsView.tsx
+Component: DocumentsView
+Preview function: handlePreview(doc)
+Exact logic:
+- const url = getDownloadUrl(doc, true)
+- window.open(url, '_blank')
+Endpoint used:
+- GET /patients/{registration_id}/documents/{file_id}/download?inline=1
+
+Important observation:
+- Frontend is not forcing download for preview.
+- The preview button explicitly requests inline mode with ?inline=1.
+
+B. Patient document download
+
+File: src/components/DocumentsView.tsx
+Component: DocumentsView
+Download function: handleDownload(doc)
+Exact logic:
+- const url = getDownloadUrl(doc, false)
+- fetch(url)
+- const blob = await resp.blob()
+- createObjectURL(blob)
+- create temporary anchor
+- set a.download = doc.name
+- click anchor
+Endpoint used:
+- GET /patients/{registration_id}/documents/{file_id}/download
+
+C. Slit lamp preview
+
+File: src/components/SlitLampView.tsx
+Component: SlitLampView
+Preview behavior:
+- After capture, the component immediately renders <img src={capturedImage} />
+Type of preview:
+- Local in-browser preview of the just-captured image only
+- Not a server download/preview route
+
+D. Patient profile picture preview
+
+File: src/components/PatientDetailsCard.tsx
+Component: PatientDetailsCard
+Preview behavior:
+- Renders <img src={patientData.profilePic} /> if profilePic exists
+Type of preview:
+- Local/state-backed image preview only
+- No upload/download route found in this component
+
+============================================================
+5. WHY PATIENT DOCUMENT PREVIEW MAY NOT BE WORKING
+============================================================
+
+Frontend behavior is correct for preview intent:
+- Preview button uses handlePreview(doc)
+- handlePreview(doc) calls getDownloadUrl(doc, true)
+- getDownloadUrl(doc, true) resolves to:
+  /patients/{registration_id}/documents/{file_id}/download?inline=1
+- The frontend then calls window.open(url, '_blank')
+
+So the frontend is not using ?inline=false and is not deliberately forcing a download on preview clicks.
+
+The likely failure is on the backend response headers:
+- In inline mode, the backend calls:
+  FileResponse(str(path), media_type=media_type, filename=match.get('name'))
+- The route does not explicitly set Content-Disposition: inline
+- Because filename is supplied, FileResponse commonly defaults to attachment disposition unless content_disposition_type='inline' is explicitly provided
+
+Result:
+- Even though the frontend requests ?inline=1 and the backend sets a previewable media_type, the response may still arrive as an attachment, causing the browser to download instead of preview
+
+Additional mismatch that can also affect preview:
+- Frontend treats avi and mov as video documents
+- Backend inline media-type logic only handles mp4, webm, ogg, pdf, png, jpg, jpeg, gif
+- avi and mov are not assigned a previewable media_type in the backend route
+- Such files will fall back to application/octet-stream behavior
+
+============================================================
+6. BACKEND PREVIEW SUPPORT
+============================================================
+
+A. Patient document upload route
+
+File: backend/main.py
+Route:
+- POST /patients/{registration_id}/documents
+Behavior:
+- Verifies patient exists
+- Saves files under backend/uploads/{registration_id}/
+- Generates UUID fileId and storedName
+- Stores metadata in patient_documents collection
+- Returns serialized saved metadata
+Stored metadata fields include:
+- fileId
+- registrationId
+- name
+- storedName
+- size
+- type
+- uploadedDate
+- uploadedBy
+
+B. Patient document list route
+
+File: backend/main.py
+Route:
+- GET /patients/{registration_id}/documents
+Behavior:
+- Reads from patient_documents collection sorted by uploadedDate descending
+- Falls back to legacy patient.documents if collection has no rows
+- Returns sanitized serialized metadata
+
+C. Patient document download/preview route
+
+File: backend/main.py
+Route:
+- GET /patients/{registration_id}/documents/{file_id}/download
+Signature:
+- download_patient_document(registration_id, file_id, inline: bool | None = None)
+Behavior:
+- Looks up document in patient_documents collection
+- Falls back to legacy patient.documents structure
+- Resolves path from storedName or legacy path
+- Validates that file exists on disk
+- Determines media_type from extension
+
+Inline support:
+- Yes, the route accepts ?inline=1
+- If inline is truthy, it returns FileResponse with the detected media_type
+
+Exact backend inline logic:
+- if ext in ('png', 'jpg', 'jpeg', 'gif'): media_type = image/*
+- elif ext in ('mp4', 'webm', 'ogg'): media_type = video/*
+- elif ext == 'pdf': media_type = application/pdf
+- if inline: return FileResponse(str(path), media_type=media_type, filename=match.get('name'))
+- else: return FileResponse(str(path), media_type='application/octet-stream', filename=match.get('name'))
+
+Important limitation:
+- The code does not explicitly set Content-Disposition: inline
+- Therefore preview support is partial/incomplete even when ?inline=1 is present
+
+D. Slit lamp backend support
+
+File: backend/main.py
+Routes:
+- POST /slit-lamp/upload
+- GET /slit-lamp/patient/{patient_id}
+Behavior:
+- Stores image as base64 string in MongoDB
+- Lists previously stored images for a patient
+Notes:
+- This is independent from patient document download/preview
+- No dedicated download route found because images are stored inline in MongoDB documents
+
+============================================================
+7. PREVIEW-CAPABLE FILE TYPE LOGIC
+============================================================
+
+A. Backend preview-capable extensions
+
+File: backend/main.py
+Logic in download_patient_document():
+- Images: png, jpg, jpeg, gif
+- Videos: mp4, webm, ogg
+- Documents: pdf
+
+B. Frontend document type classification
+
+File: src/components/DocumentsView.tsx
+Logic when mapping listed documents:
+- video if d.type is mp4, avi, or mov
+- pdf if d.type is pdf
+- image if d.type is png, jpg, or jpeg
+- otherwise other
+
+Observations:
+- Backend preview supports gif, webm, ogg, but frontend document-type mapping does not classify those as image/video buckets
+- Frontend classifies avi and mov as video, but backend preview logic does not handle avi or mov
+- This mismatch can make some files appear previewable in the UI while not actually receiving preview-friendly responses
+
+C. Ophthalmic investigations file types
+
+File: src/components/OphthalmicInvestigationsCard.tsx
+Accepted file types:
+- OCT image: image/*
+- HVF image: image/*
+- Pachymetry/Colour Vision: .png, .jpg, .jpeg, .pdf, image/png, image/jpeg, application/pdf
+- Additional Images: image/*
+Notes:
+- No backend preview logic found for these specific fields
+- File support here only affects local selection/storage in patient state
+
+============================================================
+8. UI LOCATIONS WHERE PREVIEW SHOULD WORK
+============================================================
+
+A. Already intended to preview through a backend route
+
+1. src/components/DocumentsView.tsx
+- Patient document table
+- Eye icon next to each listed document
+- This is the primary place where document preview is expected to work today
+
+B. Likely should support preview but currently does not have a complete API-backed preview flow
+
+2. src/components/OphthalmicInvestigationsCard.tsx
+- OCT image upload area
+- HVF image upload area
+- Pachymetry & Colour Vision upload area
+- Additional Images section
+Reason:
+- Users can attach image/PDF-related investigation artifacts, but there is no real preview/download action after selection or save
+
+3. src/components/dashboard/PatientDashboard.tsx
+- Because it hosts OphthalmicInvestigationsCard, investigation previews would need to be available through this dashboard experience
+
+C. Local-only preview locations already working in-browser
+
+4. src/components/SlitLampView.tsx
+- Captured image preview before save
+- This is not the patient documents preview route, but it is a functioning local preview location
+
+5. src/components/PatientDetailsCard.tsx
+- Profile picture preview if patientData.profilePic is already present
+- This is local/state-based preview, not document-route preview
+
+============================================================
+9. COMPLETE SUMMARY
+============================================================
+
+All upload components found:
+- src/components/DocumentsView.tsx -> Uploader -> POST /patients/{registration_id}/documents
+- src/components/DocumentsView.tsx -> capturePhotoAndUpload -> POST /patients/{registration_id}/documents
+- src/components/OphthalmicInvestigationsCard.tsx -> local file handlers only -> no API endpoint
+- src/components/SlitLampView.tsx -> saveRecord -> POST /slit-lamp/upload
+- src/components/MedicineManagementView.tsx -> handleInvoiceUpload -> POST /api/medicines/parse-invoice
+- src/components/PatientDetailsCard.tsx -> hidden file inputs present, but no upload handler found in this component
+
+All listing components/routes found:
+- src/components/DocumentsView.tsx -> GET /patients/{registration_id}/documents
+- backend/main.py -> GET /patients/{registration_id}/documents
+- backend/main.py -> GET /slit-lamp/patient/{patient_id}
+- No frontend consumer found for slit-lamp listing route
+
+All preview/download components found:
+- src/components/DocumentsView.tsx -> Eye icon preview via window.open(GET /patients/{registration_id}/documents/{file_id}/download?inline=1)
+- src/components/DocumentsView.tsx -> Download icon via fetch(GET /patients/{registration_id}/documents/{file_id}/download) + blob + temporary anchor
+- src/components/SlitLampView.tsx -> local img preview of captured image only
+- src/components/PatientDetailsCard.tsx -> local img preview of profilePic only
+
+Frontend click logic for preview:
+- Preview button in DocumentsView does not force download
+- It explicitly calls the document download route with ?inline=1 and opens a new tab
+
+Backend inline preview support:
+- Route exists: GET /patients/{registration_id}/documents/{file_id}/download
+- Query support exists: ?inline=1
+- Media type detection exists for pdf, png, jpg, jpeg, gif, mp4, webm, ogg
+- Code does not explicitly set Content-Disposition: inline
+- This is the main architectural reason preview can still fail and download instead
+
+Components needing preview functionality or stronger preview support:
+- src/components/DocumentsView.tsx -> existing preview path needs stronger backend inline response behavior
+- src/components/OphthalmicInvestigationsCard.tsx -> uploaded investigation artifacts have no actual preview/download UX
+- src/components/dashboard/PatientDashboard.tsx -> will need investigation preview access because it hosts the investigation card
+
+Final conclusion:
+- The only complete patient document upload/list/download/preview chain is DocumentsView <-> /patients/{registration_id}/documents <-> /patients/{registration_id}/documents/{file_id}/download
+- The frontend preview button already requests inline mode correctly
+- The backend route supports inline as a query flag and sets media types, but does not explicitly return Content-Disposition: inline
+- That response-header gap is the most likely reason the eye/preview action is not working as intended
+- Ophthalmic investigation uploads are separate and mostly local/state-based, so they currently do not participate in the backend document preview architecture

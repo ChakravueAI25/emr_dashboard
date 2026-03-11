@@ -1,0 +1,216 @@
+RUNTIME PERFORMANCE MEASUREMENT REPORT
+
+Target server: http://127.0.0.1:8011
+Measurement timestamp: 2026-03-10 17:35:46
+Sample billing registrationId: REG-2026-402990
+Sample pharmacy registrationId: REG-2026-402990
+
+STEP 1 - API LATENCY MEASUREMENT
+
+/api/billing/dashboard/stats
+  average: 3267.12 ms
+  p50: 3078.775 ms
+  p95: 4036.889 ms
+  p99: 4382.03 ms
+  samples: 11
+  average response size: 12230.0 bytes
+
+/api/billing/analytics
+  average: 561.461 ms
+  p50: 546.795 ms
+  p95: 700.736 ms
+  p99: 747.38 ms
+  samples: 10
+  average response size: 7698.0 bytes
+
+/pharmacy/medicines
+  average: 254.678 ms
+  p50: 72.056 ms
+  p95: 947.563 ms
+  p99: 1226.754 ms
+  samples: 10
+  average response size: 21626.0 bytes
+
+/pharmacy/billing/patient/{registration_id}
+  average: 123.932 ms
+  p50: 24.023 ms
+  p95: 573.154 ms
+  p99: 931.968 ms
+  samples: 10
+  average response size: 542.0 bytes
+
+/api/billing/patient/{reg_id}/summary
+  average: 50.054 ms
+  p50: 47.859 ms
+  p95: 60.522 ms
+  p99: 67.866 ms
+  samples: 10
+  average response size: 94.0 bytes
+
+STEP 2 - MONGODB QUERY TIMING
+
+Total Mongo operations recorded: 179
+Queries > 100 ms: 113
+Queries > 500 ms: 26
+Queries > 1000 ms: 12
+
+Slowest Mongo query
+  collection: patients
+  query type: aggregate
+  label: billing.dashboard.recent_surgery
+  duration: 1967.396 ms
+  returned docs: 30
+  path: /api/billing/dashboard/stats
+
+Top slow Mongo operations
+  /api/billing/dashboard/stats | patients | aggregate | billing.dashboard.recent_surgery | 1967.396 ms | returned 30
+  /api/billing/dashboard/stats | patients | aggregate | billing.dashboard.recent_surgery | 1496.128 ms | returned 30
+  /api/billing/dashboard/stats | patients | aggregate | billing.dashboard.recent_invoices | 1411.636 ms | returned 50
+  /pharmacy/medicines | pharmacy_medicines | find | pharmacy.medicines.list | 1292.904 ms | returned 96
+  /api/billing/dashboard/stats | patients | aggregate | billing.dashboard.recent_invoices | 1216.882 ms | returned 50
+  /api/billing/dashboard/stats | patients | aggregate | billing.dashboard.recent_surgery | 1073.736 ms | returned 30
+  /api/billing/dashboard/stats | patients | aggregate | billing.dashboard.recent_invoices | 1065.956 ms | returned 50
+  /api/billing/dashboard/stats | patients | aggregate | billing.dashboard.recent_surgery | 1035.399 ms | returned 30
+  /api/billing/dashboard/stats | patients | aggregate | billing.dashboard.recent_invoices | 1021.893 ms | returned 50
+  /pharmacy/billing/patient/{registration_id} | pharmacy_billing | find | pharmacy.billing.patient_history | 1020.695 ms | returned 1
+
+STEP 3 - MONGODB EXPLAIN ANALYSIS
+
+billingDashboardStats
+  dashboard.invoice_pipeline
+    collection: patients
+    executionTimeMillis: 57
+    totalDocsExamined: 24088
+    totalKeysExamined: 0
+    winningPlanStage: PROJECTION_DEFAULT
+  dashboard.surgery_pipeline
+    collection: patients
+    executionTimeMillis: 56
+    totalDocsExamined: 24088
+    totalKeysExamined: 0
+    winningPlanStage: PROJECTION_DEFAULT
+  dashboard.pharmacy_pipeline
+    collection: pharmacy_billing
+    executionTimeMillis: 0
+    totalDocsExamined: 36
+    totalKeysExamined: 0
+    winningPlanStage: COLLSCAN
+
+billingAnalytics
+  analytics.invoice_pipeline
+    collection: patients
+    executionTimeMillis: 62
+    totalDocsExamined: 24088
+    totalKeysExamined: 0
+    winningPlanStage: PROJECTION_DEFAULT
+  analytics.surgery_pipeline
+    collection: patients
+    executionTimeMillis: 62
+    totalDocsExamined: 24088
+    totalKeysExamined: 0
+    winningPlanStage: PROJECTION_DEFAULT
+  analytics.pharmacy_pipeline
+    collection: pharmacy_billing
+    executionTimeMillis: 0
+    totalDocsExamined: 36
+    totalKeysExamined: 0
+    winningPlanStage: PROJECTION_DEFAULT
+  analytics.insurance_pipeline
+    collection: patients
+    executionTimeMillis: 63
+    totalDocsExamined: 24088
+    totalKeysExamined: 0
+    winningPlanStage: PROJECTION_DEFAULT
+
+STEP 4 - PAYLOAD SIZE MEASUREMENT
+
+/api/billing/dashboard/stats
+  samples: 11
+  average size bytes: 13211.0
+  max size bytes: 13211
+  average serialization ms: 0.237
+  average records returned: 50.0
+
+/api/billing/analytics
+  samples: 10
+  average size bytes: 8517.0
+  max size bytes: 8517
+  average serialization ms: 0.219
+  average records returned: 41.0
+
+/pharmacy/medicines
+  samples: 10
+  average size bytes: 23550.0
+  max size bytes: 23550
+  average serialization ms: 0.336
+  average records returned: 96.0
+
+STEP 5 - FRONTEND REQUEST TIMING
+
+BillingDashboardView.tsx load path analysis
+  component behavior: one fetch call on mount to /api/billing/dashboard/stats
+  browser-submitted frontend metrics: none recorded during this run
+  synthetic client probe metrics below were measured against the same endpoint path used by BillingDashboardView.tsx
+  TTFB
+  average: 3302.424 ms
+  p50: 3080.048 ms
+  p95: 4094.5 ms
+  p99: 4406.008 ms
+  Content download
+  average: 0.049 ms
+  p50: 0.05 ms
+  p95: 0.054 ms
+  p99: 0.056 ms
+  JSON parse
+  average: 0.134 ms
+  p50: 0.135 ms
+  p95: 0.152 ms
+  p99: 0.155 ms
+  React render time: direct in-browser render timing was not captured in this workspace because no browser automation channel was available for the authenticated billing-dashboard view
+  React render proxy: client-side network and parse timings were measured; component-side render cost remains comparatively small relative to server latency for this page
+
+STEP 6 - ENDPOINT FAN-OUT ANALYSIS
+
+Endpoint: /api/billing/dashboard/stats
+  Mongo queries executed: 9.0
+  Collections accessed: patients, pharmacy_billing
+  Total DB time: 3263.587 ms
+  Python processing: 3.296 ms
+  Serialization: 0.237 ms
+  Total API time: 3267.12 ms
+
+STEP 7 - IDENTIFIED BOTTLENECKS
+
+1. Slowest endpoint by average latency: /api/billing/dashboard/stats at 3267.12 ms
+2. Slowest Mongo query: billing.dashboard.recent_surgery on patients at 1967.396 ms
+3. Largest API payload: /pharmacy/medicines at 23550 bytes
+4. Highest DB fan-out: /api/billing/dashboard/stats averaging 9.0 Mongo operations per request
+
+Severity ranking
+  1. Endpoint latency: /api/billing/dashboard/stats
+  2. Mongo query: billing.dashboard.recent_surgery
+  3. Fan-out: /api/billing/dashboard/stats
+  4. Payload size: /pharmacy/medicines
+
+Raw endpoint probe notes
+  /api/billing/dashboard/stats
+    samples: 10
+    average total ms: 3302.474
+    average size bytes: 12230.0
+  /api/billing/analytics
+    samples: 10
+    average total ms: 576.481
+    average size bytes: 7698.0
+  /pharmacy/medicines
+    samples: 10
+    average total ms: 273.988
+    average size bytes: 21626.0
+  /pharmacy/billing/patient/{registration_id}
+    samples: 10
+    average total ms: 140.608
+    average size bytes: 542.0
+  /api/billing/patient/{reg_id}/summary
+    samples: 10
+    average total ms: 66.381
+    average size bytes: 94.0
+
