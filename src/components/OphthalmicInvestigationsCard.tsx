@@ -50,7 +50,7 @@ export function OphthalmicInvestigationsCard({ data, updateData, isEditable = fa
     type: saved?.type || getFileExtension(saved?.name),
   });
 
-  const uploadFilesToPatientDocuments = async (files: File[]) => {
+  const uploadFilesToPatientDocuments = async (files: File[], category: string) => {
     if (!patientRegistrationId || patientRegistrationId === 'Not Assigned') {
       console.error('Cannot upload investigation documents without a patient registration ID');
       return [] as InvestigationDocumentRef[];
@@ -59,6 +59,7 @@ export function OphthalmicInvestigationsCard({ data, updateData, isEditable = fa
     const formData = new FormData();
     files.forEach((file) => formData.append('files', file));
     formData.append('uploaded_by', 'doctor');
+    formData.append('category', category);
 
     const response = await fetch(API_ENDPOINTS.PATIENT_DOCUMENTS(patientRegistrationId), {
       method: 'POST',
@@ -74,9 +75,9 @@ export function OphthalmicInvestigationsCard({ data, updateData, isEditable = fa
     return (body.saved || []).map(createDocumentRef);
   };
 
-  const handleSingleDocumentUpload = async (file: File, section: 'oct' | 'hvf') => {
+  const handleSingleDocumentUpload = async (file: File, section: 'oct' | 'hvf', category: string) => {
     try {
-      const [saved] = await uploadFilesToPatientDocuments([file]);
+      const [saved] = await uploadFilesToPatientDocuments([file], category);
       if (!saved) return;
       setField([section, 'documentId'], saved.documentId);
       setField([section, 'name'], saved.name);
@@ -91,7 +92,7 @@ export function OphthalmicInvestigationsCard({ data, updateData, isEditable = fa
     if (!file) return;
 
     try {
-      const [saved] = await uploadFilesToPatientDocuments([file]);
+      const [saved] = await uploadFilesToPatientDocuments([file], 'pachymetry');
       if (!saved) return;
       setField(['pachymetry', 'documentId'], saved.documentId);
       setField(['pachymetry', 'name'], saved.name);
@@ -108,7 +109,7 @@ export function OphthalmicInvestigationsCard({ data, updateData, isEditable = fa
     if (!files.length) return;
 
     try {
-      const saved = await uploadFilesToPatientDocuments(files);
+      const saved = await uploadFilesToPatientDocuments(files, 'investigation_images');
       const next = [...additionalImageRefs, ...saved];
       setField(['additionalImages'], next);
     } catch (err) {
@@ -371,7 +372,7 @@ export function OphthalmicInvestigationsCard({ data, updateData, isEditable = fa
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file) {
-                  void handleSingleDocumentUpload(file, 'oct');
+                  void handleSingleDocumentUpload(file, 'oct', 'ophthalmic_oct');
                 }
               }}
               className="w-full px-3 py-2 bg-[#1a1a1a] border border-[#D4A574] rounded text-white text-xs cursor-pointer"
@@ -591,7 +592,7 @@ export function OphthalmicInvestigationsCard({ data, updateData, isEditable = fa
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file) {
-                  void handleSingleDocumentUpload(file, 'hvf');
+                  void handleSingleDocumentUpload(file, 'hvf', 'ophthalmic_hvf');
                 }
               }}
               className="w-full px-3 py-2 bg-[#1a1a1a] border border-[#D4A574] rounded text-white text-xs cursor-pointer"

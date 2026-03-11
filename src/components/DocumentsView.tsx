@@ -15,6 +15,15 @@ interface Document {
   stage?: string; // Which stage uploaded this: reception, opd, doctor
 }
 
+const categoryTitles: Record<string, string> = {
+  ophthalmic_oct: 'OCT Images',
+  ophthalmic_hvf: 'HVF Scans',
+  pachymetry: 'Pachymetry Reports',
+  investigation_images: 'Investigation Images',
+  reports: 'Reports',
+  general: 'General Documents',
+};
+
 function Uploader({ patientRegistrationId, onUploaded }: { patientRegistrationId: string; onUploaded?: (saved: any[]) => void }) {
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -320,6 +329,22 @@ export function DocumentsView({ patientRegistrationId, patientName: initialPatie
     return matchesSearch && matchesFilter;
   });
 
+  const groupedDocuments = filteredDocuments.reduce<Record<string, Document[]>>((acc, doc) => {
+    const category = doc.category || 'general';
+    if (!acc[category]) {
+      acc[category] = [];
+    }
+    acc[category].push(doc);
+    return acc;
+  }, {});
+
+  const groupedDocumentEntries = [
+    ...Object.keys(categoryTitles)
+      .filter(category => groupedDocuments[category]?.length)
+      .map(category => [category, groupedDocuments[category]] as const),
+    ...Object.entries(groupedDocuments).filter(([category]) => !(category in categoryTitles)),
+  ];
+
   const getDownloadUrl = (doc: Document, inline = false) => {
     if (!patientRegistrationId) return '#';
     return API_ENDPOINTS.PATIENT_DOCUMENT_DOWNLOAD(patientRegistrationId, doc.id, inline);
@@ -524,63 +549,77 @@ export function DocumentsView({ patientRegistrationId, patientName: initialPatie
           <h3 className="text-[var(--theme-text)] font-bold">Documents ({filteredDocuments.length})</h3>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="bg-[var(--theme-accent)]/10">
-                <th className="text-left p-3 text-[var(--theme-text)] border-r border-[var(--theme-border)] font-bold uppercase tracking-wider">Type</th>
-                <th className="text-left p-3 text-[var(--theme-text)] border-r border-[var(--theme-border)] font-bold uppercase tracking-wider">Name</th>
-                <th className="text-left p-3 text-[var(--theme-text)] border-r border-[var(--theme-border)] font-bold uppercase tracking-wider">Category</th>
-                <th className="text-left p-3 text-[var(--theme-text)] border-r border-[var(--theme-border)] font-bold uppercase tracking-wider">Size</th>
-                <th className="text-left p-3 text-[var(--theme-text)] border-r border-[var(--theme-border)] font-bold uppercase tracking-wider">Uploaded</th>
-                <th className="text-left p-3 text-[var(--theme-text)] border-r border-[var(--theme-border)] font-bold uppercase tracking-wider">Uploaded By</th>
-                <th className="text-center p-3 text-[var(--theme-text)] font-bold uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredDocuments.map((doc, index) => (
-                <tr
-                  key={doc.id}
-                  className={`border-b border-[var(--theme-border)] hover:bg-[var(--theme-accent)]/5 transition-colors ${index % 2 === 0 ? 'bg-[var(--theme-bg)]' : 'bg-[var(--theme-bg-tertiary)]'
-                    }`}
-                >
-                  <td className="p-3 border-r border-[var(--theme-border)]">
-                    <div className="flex items-center justify-center">
-                      {getFileIcon(doc.type)}
-                    </div>
-                  </td>
-                  <td className="p-3 border-r border-[var(--theme-border)]">
-                    <span className="text-[var(--theme-text)] font-medium">{doc.name}</span>
-                  </td>
-                  <td className="p-3 border-r border-[var(--theme-border)]">
-                    <span className="text-[var(--theme-text-muted)]">{doc.category}</span>
-                  </td>
-                  <td className="p-3 border-r border-[var(--theme-border)]">
-                    <span className="text-[var(--theme-text-muted)]">{doc.size}</span>
-                  </td>
-                  <td className="p-3 border-r border-[var(--theme-border)]">
-                    <span className="text-[var(--theme-text-muted)]">{doc.uploadedDate}</span>
-                  </td>
-                  <td className="p-3 border-r border-[var(--theme-border)]">
-                    <span className="text-[var(--theme-text-muted)]">{doc.uploadedBy}</span>
-                  </td>
-                  <td className="p-3">
-                    <div className="flex items-center justify-center gap-2">
-                      <button onClick={() => handlePreview(doc)} className="p-1.5 rounded hover:bg-[var(--theme-accent)]/20 transition-colors group">
-                        <Eye className="w-4 h-4 text-[var(--theme-text-muted)] group-hover:text-[var(--theme-accent)]" />
-                      </button>
-                      <button onClick={() => handleDownload(doc)} className="p-1.5 rounded hover:bg-blue-500/20 transition-colors group">
-                        <Download className="w-4 h-4 text-[var(--theme-text-muted)] group-hover:text-blue-500" />
-                      </button>
-                      <button className="p-1.5 rounded hover:bg-red-500/20 transition-colors group">
-                        <Trash2 className="w-4 h-4 text-[var(--theme-text-muted)] group-hover:text-red-500" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="p-4 space-y-6">
+          {groupedDocumentEntries.length === 0 ? (
+            <div className="rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg)] p-6 text-center text-[var(--theme-text-muted)] text-sm">
+              No documents found.
+            </div>
+          ) : (
+            groupedDocumentEntries.map(([category, docs]) => (
+              <div key={category} className="rounded-lg border border-[var(--theme-border)] overflow-hidden">
+                <div className="px-4 py-3 border-b border-[var(--theme-border)] bg-[var(--theme-accent)]/5">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    {categoryTitles[category] || category}
+                  </h3>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-[var(--theme-accent)]/10">
+                        <th className="text-left p-3 text-gray-900 dark:text-white border-r border-[var(--theme-border)] font-bold uppercase tracking-wider">Type</th>
+                        <th className="text-left p-3 text-gray-900 dark:text-white border-r border-[var(--theme-border)] font-bold uppercase tracking-wider">Name</th>
+                        <th className="text-left p-3 text-gray-900 dark:text-white border-r border-[var(--theme-border)] font-bold uppercase tracking-wider">Size</th>
+                        <th className="text-left p-3 text-gray-900 dark:text-white border-r border-[var(--theme-border)] font-bold uppercase tracking-wider">Uploaded</th>
+                        <th className="text-left p-3 text-gray-900 dark:text-white border-r border-[var(--theme-border)] font-bold uppercase tracking-wider">Uploaded By</th>
+                        <th className="text-center p-3 text-gray-900 dark:text-white font-bold uppercase tracking-wider">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {docs.map((doc, index) => (
+                        <tr
+                          key={doc.id}
+                          className={`border-b border-[var(--theme-border)] hover:bg-[var(--theme-accent)]/5 transition-colors ${index % 2 === 0 ? 'bg-[var(--theme-bg)]' : 'bg-[var(--theme-bg-tertiary)]'
+                            }`}
+                        >
+                          <td className="p-3 border-r border-[var(--theme-border)]">
+                            <div className="flex items-center justify-center">
+                              {getFileIcon(doc.type)}
+                            </div>
+                          </td>
+                          <td className="p-3 border-r border-[var(--theme-border)]">
+                            <span className="text-[var(--theme-text)] font-medium">{doc.name}</span>
+                          </td>
+                          <td className="p-3 border-r border-[var(--theme-border)]">
+                            <span className="text-[var(--theme-text-muted)]">{doc.size}</span>
+                          </td>
+                          <td className="p-3 border-r border-[var(--theme-border)]">
+                            <span className="text-[var(--theme-text-muted)]">{doc.uploadedDate}</span>
+                          </td>
+                          <td className="p-3 border-r border-[var(--theme-border)]">
+                            <span className="text-[var(--theme-text-muted)]">{doc.uploadedBy}</span>
+                          </td>
+                          <td className="p-3">
+                            <div className="flex items-center justify-center gap-2">
+                              <button onClick={() => handlePreview(doc)} className="p-1.5 rounded hover:bg-[var(--theme-accent)]/20 transition-colors group">
+                                <Eye className="w-4 h-4 text-[var(--theme-text-muted)] group-hover:text-[var(--theme-accent)]" />
+                              </button>
+                              <button onClick={() => handleDownload(doc)} className="p-1.5 rounded hover:bg-blue-500/20 transition-colors group">
+                                <Download className="w-4 h-4 text-[var(--theme-text-muted)] group-hover:text-blue-500" />
+                              </button>
+                              <button className="p-1.5 rounded hover:bg-red-500/20 transition-colors group">
+                                <Trash2 className="w-4 h-4 text-[var(--theme-text-muted)] group-hover:text-red-500" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
       <DocumentPreviewModal

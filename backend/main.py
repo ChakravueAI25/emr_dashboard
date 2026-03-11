@@ -104,6 +104,7 @@ def _serialize_document_metadata(document: dict) -> dict:
         "stored_name": document.get("storedName") or document.get("stored_name"),
         "size": document.get("size"),
         "type": document.get("type"),
+        "category": document.get("category", "general"),
         "uploadedDate": uploaded_date,
         "uploadedBy": document.get("uploadedBy"),
     }
@@ -1104,7 +1105,12 @@ async def login(credentials: dict = Body(...)):
 
 
 @app.post("/patients/{registration_id}/documents")
-async def upload_patient_documents(registration_id: str, files: list[UploadFile] = File(...), uploaded_by: str = Form(None)):
+async def upload_patient_documents(
+    registration_id: str,
+    files: list[UploadFile] = File(...),
+    uploaded_by: str = Form(None),
+    category: str = Form("general"),
+):
     """Upload one or more files and attach them to the patient document identified by registration_id.
     Files are saved under uploads/{registration_id}/ and metadata is stored in patient_documents.
     """
@@ -1138,6 +1144,7 @@ async def upload_patient_documents(registration_id: str, files: list[UploadFile]
             "storedName": safe_name,
             "size": len(content),
             "type": ext.lower().lstrip('.'),
+            "category": category or "general",
             "uploadedDate": datetime.utcnow(),
             "uploadedBy": uploaded_by or "Reception",
         }

@@ -90,6 +90,7 @@ def _ensure_billing_indexes():
     # patient_documents indexes
     _create_index_safe(patient_documents_collection, [("registrationId", 1)])
     _create_index_safe(patient_documents_collection, [("fileId", 1)], unique=True)
+    _create_index_safe(patient_documents_collection, [("category", 1)])
     _create_index_safe(patient_documents_collection, [("uploadedDate", -1)])
 
 
