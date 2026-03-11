@@ -3898,9 +3898,30 @@ async def get_billing_dashboard_stats(page: int = 1, limit: int = 50):
                         "$cond": [{"$eq": ["$status", "paid"]}, {"$ifNull": ["$patientResponsibility", 0]}, 0]
                     }
                 },
+                # Outstanding balance on unpaid invoices (excludes refunded)
+                "unsettledRevenue": {
+                    "$sum": {
+                        "$cond": [
+                            {"$and": [
+                                {"$ne": ["$status", "paid"]},
+                                {"$ne": ["$status", "refunded"]}
+                            ]},
+                            {"$ifNull": ["$patientResponsibility", 0]},
+                            0
+                        ]
+                    }
+                },
+                # Count matches pending list filter: not paid AND not refunded
                 "pendingBills": {
                     "$sum": {
-                        "$cond": [{"$ne": ["$status", "paid"]}, 1, 0]
+                        "$cond": [
+                            {"$and": [
+                                {"$ne": ["$status", "paid"]},
+                                {"$ne": ["$status", "refunded"]}
+                            ]},
+                            1,
+                            0
+                        ]
                     }
                 },
                 "refundAmount": {
@@ -3914,6 +3935,7 @@ async def get_billing_dashboard_stats(page: int = 1, limit: int = 50):
         final_surgery_pipeline = [
             {"$group": {
                 "_id": None,
+                # Total surgery value = settled + outstanding (all non-draft bills)
                 "totalSurgeryRevenue": {
                     "$sum": {
                         "$cond": [
@@ -3923,15 +3945,26 @@ async def get_billing_dashboard_stats(page: int = 1, limit: int = 50):
                         ]
                     }
                 },
+                # Settled = fully closed (settled) + amount already paid on partial bills
+                # For partially_paid: amount_collected = patientTotalShare - balancePayable
+                # For balance_due: nothing collected yet
                 "settledRevenue": {
                     "$sum": {
                         "$cond": [
                             {"$eq": ["$status", "settled"]},
                             {"$ifNull": ["$patientTotalShare", 0]},
-                            0
+                            {"$cond": [
+                                {"$eq": ["$status", "partially_paid"]},
+                                {"$subtract": [
+                                    {"$ifNull": ["$patientTotalShare", 0]},
+                                    {"$ifNull": ["$balancePayable", 0]}
+                                ]},
+                                0
+                            ]}
                         ]
                     }
                 },
+                # Unsettled = remaining balance owed on unpaid/partial surgery bills
                 "unsettledRevenue": {
                     "$sum": {
                         "$cond": [
@@ -3961,6 +3994,12 @@ async def get_billing_dashboard_stats(page: int = 1, limit: int = 50):
                         "$cond": [{"$eq": ["$status", "completed"]}, "$totalAmount", 0]
                     }
                 },
+                # Outstanding balance on incomplete pharmacy bills
+                "unsettledRevenue": {
+                    "$sum": {
+                        "$cond": [{"$ne": ["$status", "completed"]}, "$totalAmount", 0]
+                    }
+                },
                 "pendingBills": {
                     "$sum": {
                         "$cond": [{"$ne": ["$status", "completed"]}, 1, 0]
@@ -3975,19 +4014,21 @@ async def get_billing_dashboard_stats(page: int = 1, limit: int = 50):
         pharm_stats = timed_aggregate(pharmacy_billing_collection, pharmacy_pipeline, label="billing.dashboard.pharmacy_kpi")
 
         # Sum up results
-        total_revenue = (inv_stats[0]["totalRevenue"] if inv_stats else 0) + \
-                        (final_surg_stats[0]["totalSurgeryRevenue"] if final_surg_stats else 0) + \
-                        (pharm_stats[0]["totalRevenue"] if pharm_stats else 0)
-        
-        # Calculate settled vs unsettled
-        # settled = invoice(paid) + surgery(settled) + pharmacy(completed)
-        # unsettled = surgery(balance_due/partially)
+        # Calculate settled vs unsettled first, then derive total so settled + unsettled = total always
+        # settled = invoices paid + surgery fully settled + surgery partially paid (amount already collected) + pharmacy completed
+        # unsettled = unpaid invoices + surgery balancePayable (balance_due + partially_paid remainder) + incomplete pharmacy
+        # Invariant: total_revenue == settled_revenue + unsettled_revenue
         
         settled_revenue = (inv_stats[0]["totalRevenue"] if inv_stats else 0) + \
                           (final_surg_stats[0]["settledRevenue"] if final_surg_stats and "settledRevenue" in final_surg_stats[0] else 0) + \
                           (pharm_stats[0]["totalRevenue"] if pharm_stats else 0)
                           
-        unsettled_revenue = (final_surg_stats[0]["unsettledRevenue"] if final_surg_stats and "unsettledRevenue" in final_surg_stats[0] else 0)
+        unsettled_revenue = (inv_stats[0]["unsettledRevenue"] if inv_stats and "unsettledRevenue" in inv_stats[0] else 0) + \
+                            (final_surg_stats[0]["unsettledRevenue"] if final_surg_stats and "unsettledRevenue" in final_surg_stats[0] else 0) + \
+                            (pharm_stats[0]["unsettledRevenue"] if pharm_stats and "unsettledRevenue" in pharm_stats[0] else 0)
+
+        # Total = settled + unsettled (guaranteed equality)
+        total_revenue = settled_revenue + unsettled_revenue
 
         pending_bills_count = (inv_stats[0]["pendingBills"] if inv_stats else 0) + \
                               (final_surg_stats[0]["pendingBills"] if final_surg_stats else 0) + \
@@ -3998,8 +4039,7 @@ async def get_billing_dashboard_stats(page: int = 1, limit: int = 50):
                         (final_surg_stats[0]["refunds"] if final_surg_stats else 0)
         
         # --- 2. Fetch Recent Records + Pending Bills (faceted source queries) ---
-        hover_limit = 5
-        fetch_limit = max(limit, hover_limit)
+        fetch_limit = max(limit, 5)
 
         invoice_views = timed_aggregate(
             billing_invoices_collection,
@@ -4009,10 +4049,10 @@ async def get_billing_dashboard_stats(page: int = 1, limit: int = 50):
                         {"$sort": {"createdAt": -1}},
                         {"$limit": fetch_limit},
                     ],
+                    # Matches unsettled calc exactly: NOT paid AND NOT refunded
                     "pending": [
-                        {"$match": {"status": {"$ne": "paid"}}},
+                        {"$match": {"status": {"$nin": ["paid", "refunded"]}}},
                         {"$sort": {"createdAt": -1}},
-                        {"$limit": hover_limit},
                     ],
                 }}
             ],
@@ -4054,10 +4094,13 @@ async def get_billing_dashboard_stats(page: int = 1, limit: int = 50):
                         {"$sort": {"createdAt": -1}},
                         {"$limit": fetch_limit},
                     ],
+                    # Matches unsettled calc exactly: only FINAL bills with balance_due or partially_paid
                     "pending": [
-                        {"$match": {"status": {"$ne": "settled"}}},
+                        {"$match": {
+                            "billType": "final",
+                            "status": {"$in": ["balance_due", "partially_paid"]}
+                        }},
                         {"$sort": {"createdAt": -1}},
-                        {"$limit": hover_limit},
                     ],
                 }}
             ],
@@ -4072,10 +4115,10 @@ async def get_billing_dashboard_stats(page: int = 1, limit: int = 50):
                         {"$sort": {"billDate": -1}},
                         {"$limit": fetch_limit},
                     ],
+                    # Matches unsettled calc exactly: status != completed
                     "pending": [
                         {"$match": {"status": {"$ne": "completed"}}},
                         {"$sort": {"billDate": -1}},
-                        {"$limit": hover_limit},
                     ],
                 }}
             ],
@@ -4102,13 +4145,12 @@ async def get_billing_dashboard_stats(page: int = 1, limit: int = 50):
             })
 
         for bill in pending_surg_docs:
+            # Use balancePayable with 0 fallback — matches unsettledRevenue $ifNull["$balancePayable", 0] exactly
             pending_list.append({
                 "id": str(bill.get("billId", "")),
                 "patientName": bill.get("patientName", "Unknown"),
                 "registrationId": bill.get("registrationId", ""),
-                "amount": float(
-                    bill.get("balancePayable", bill.get("estimatedPatientShare", bill.get("patientTotalShare", 0)))
-                ),
+                "amount": float(bill.get("balancePayable") or 0),
                 "type": "Surgery",
                 "date": bill.get("createdAt")
             })
@@ -4123,9 +4165,8 @@ async def get_billing_dashboard_stats(page: int = 1, limit: int = 50):
                 "date": d.get("billDate")
             })
             
-        # Sort pending list by date desc and take top 5
+        # Sort pending list by date desc — no cap so sum(amounts) == unsettledRevenue
         pending_list.sort(key=lambda x: str(x.get("date", "")), reverse=True)
-        pending_list = pending_list[:hover_limit]
 
         # Completed Today (approximate for MVP: just use date match)
         today_str = datetime.utcnow().strftime("%Y-%m-%d")
