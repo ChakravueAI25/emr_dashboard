@@ -284,6 +284,28 @@ interface FinalSettlementSummary {
   refundAmount: number;
 }
 
+interface SurgeryBillRecord {
+  billId?: string;
+  billType?: string;
+  status?: string;
+  registrationId?: string;
+  patientName?: string;
+  surgeryName?: string;
+  surgeryBreakdown?: SurgeryParticular[];
+  totalSurgeryCost?: number;
+  totalAmount?: number;
+  securityDeposit?: number;
+  securityDepositPaid?: number;
+  insuranceType?: InsuranceCategory | string;
+  insuranceCompany?: string;
+  insuranceProvider?: string;
+  insuranceTPA?: string;
+  claimNumber?: string;
+  dateOfSurgery?: string;
+  dateOfDischarge?: string;
+  createdAt?: string;
+}
+
 const COMMON_SERVICES = [
   { id: 'S1', name: 'Consultation Fee', category: 'Service', price: 500 },
   { id: 'S2', name: 'Follow-up Visit', category: 'Service', price: 300 },
@@ -372,6 +394,9 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
   const [existingSurgeryBills, setExistingSurgeryBills] = useState<any[]>([]);
   const [showBillHistory, setShowBillHistory] = useState(false);
   const [finalSettlementData, setFinalSettlementData] = useState<FinalSettlementSummary | null>(null);
+  const [showPendingInitialBillsModal, setShowPendingInitialBillsModal] = useState(false);
+  const [pendingInitialBills, setPendingInitialBills] = useState<SurgeryBillRecord[]>([]);
+  const [isLoadingPendingInitialBills, setIsLoadingPendingInitialBills] = useState(false);
 
   // Calculated amounts for final bill
   const totalSurgeryCost = items.filter(i => i.category === 'Surgery').reduce((sum, i) => sum + i.total, 0);
@@ -383,6 +408,75 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
   const [dateOfSurgery, setDateOfSurgery] = useState('');
   const [dateOfDischarge, setDateOfDischarge] = useState('');
   const [showSurgerySelectionModal, setShowSurgerySelectionModal] = useState(false);
+
+  const normalizeCurrencyValue = (value: unknown) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
+  const normalizeSurgeryBreakdown = (breakdown: any): SurgeryParticular[] => {
+    if (!Array.isArray(breakdown)) {
+      return [];
+    }
+
+    return breakdown.map((particular: any, index: number) => {
+      const cost = normalizeCurrencyValue(particular?.cost ?? particular?.amount);
+      const qty = normalizeCurrencyValue(particular?.qty ?? 1) || 1;
+      const netAmt = normalizeCurrencyValue(particular?.netAmt ?? cost * qty);
+      const grossAmt = normalizeCurrencyValue(particular?.grossAmt ?? netAmt);
+
+      return {
+        sNo: index + 1,
+        particular: String(particular?.particular || particular?.description || `Item ${index + 1}`),
+        cost,
+        qty,
+        netAmt,
+        grossAmt,
+      };
+    });
+  };
+
+  const createSurgeryItemFromInitialBill = (initialBill: SurgeryBillRecord): BillingItem => {
+    const surgeryBreakdown = normalizeSurgeryBreakdown(initialBill.surgeryBreakdown);
+    const fallbackTotal = surgeryBreakdown.reduce((sum, item) => sum + normalizeCurrencyValue(item.grossAmt), 0);
+    const totalAmount = normalizeCurrencyValue(initialBill.totalSurgeryCost ?? initialBill.totalAmount ?? fallbackTotal);
+
+    return {
+      id: `pending-initial-${initialBill.billId || Date.now()}`,
+      name: initialBill.surgeryName || 'Surgery Bill',
+      category: 'Surgery',
+      price: totalAmount,
+      quantity: 1,
+      discount: 0,
+      tax: 0,
+      total: totalAmount,
+      surgeryBreakdown,
+      totalGrossAmt: totalAmount,
+      mouDiscount: 0,
+      receivedAmt: totalAmount,
+      isExpanded: false,
+    };
+  };
+
+  const formatSurgeryBillDate = (value?: string) => {
+    if (!value) return '--';
+
+    const parsedDate = new Date(value);
+    if (Number.isNaN(parsedDate.getTime())) {
+      return value;
+    }
+
+    return parsedDate.toLocaleDateString('en-GB');
+  };
+
+  const formatSurgeryBillStatus = (status?: string) => {
+    if (!status) return 'Pending';
+
+    return status
+      .split('_')
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
+  };
 
   // Fetch saved surgery packages when component mounts
   useEffect(() => {
@@ -583,8 +677,8 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
   };
 
   // Fetch existing surgery bills for the patient
-  const fetchSurgeryBills = async () => {
-    if (!currentRegId) return;
+  const fetchSurgeryBills = async (): Promise<SurgeryBillRecord[]> => {
+    if (!currentRegId) return [];
     try {
       const response = await fetch(API_ENDPOINTS.BILLING_SURGERY.GET_BILLS(currentRegId));
       if (response.ok) {
@@ -596,11 +690,42 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
         if (pendingInitial) {
           setExistingInitialBill(pendingInitial);
           setDateOfDischarge(pendingInitial.dateOfDischarge || '');
+        } else {
+          setExistingInitialBill(null);
         }
+
+        return bills;
       }
     } catch (err) {
       console.error('Error fetching surgery bills:', err);
     }
+
+    setExistingSurgeryBills([]);
+    return [];
+  };
+
+  const handleOpenPendingInitialBillsModal = async () => {
+    if (!patient || !currentRegId) {
+      showAlert('Please select a patient first');
+      return;
+    }
+
+    setShowPendingInitialBillsModal(true);
+    setIsLoadingPendingInitialBills(true);
+
+    try {
+      const bills = await fetchSurgeryBills();
+      const pendingBills = bills.filter((bill) => bill.billType === 'initial' && bill.status !== 'settled');
+      setPendingInitialBills(pendingBills);
+    } finally {
+      setIsLoadingPendingInitialBills(false);
+    }
+  };
+
+  const closePendingInitialBillsModal = () => {
+    setShowPendingInitialBillsModal(false);
+    setPendingInitialBills([]);
+    setIsLoadingPendingInitialBills(false);
   };
 
   const fetchPatientDetails = async () => {
@@ -895,10 +1020,26 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
     .reduce((sum, advance) => sum + Number(advance.amount || 0), 0);
   const isAdvanceSystemEnabled = !govtInsuranceEnabled;
   const standardBalanceAfterAdvance = Math.max(0, grandTotal - advanceAppliedAmount);
-  const isFinalSettlementSummaryVisible = surgeryBillStage === 'final' && finalSettlementData !== null;
-  const finalSettlementPatientShare = finalSettlementData?.patientShare ?? 0;
-  const finalSettlementSecurityDeposit = finalSettlementData?.securityDeposit ?? 0;
-  const finalSettlementBalancePayable = Math.max(0, finalSettlementData?.balancePayable ?? 0);
+  const liveFinalSettlementSummary = surgeryBillStage === 'final'
+    ? {
+        totalSurgeryCost,
+        insuranceApprovedAmount,
+        patientShare: patientTotalShare,
+        securityDeposit,
+        balancePayable,
+        refundAmount,
+      }
+    : null;
+  const currentFinalSettlementSummary = surgeryBillStage === 'final'
+    ? finalSettlementData ?? liveFinalSettlementSummary
+    : null;
+  const isFinalSettlementSummaryVisible = currentFinalSettlementSummary !== null;
+  const finalSettlementPatientShare = currentFinalSettlementSummary?.patientShare ?? 0;
+  const finalSettlementSecurityDeposit = currentFinalSettlementSummary?.securityDeposit ?? 0;
+  const finalSettlementBalancePayable = Math.max(0, currentFinalSettlementSummary?.balancePayable ?? 0);
+  const amountToCollect = surgeryBillStage === 'final'
+    ? balancePayable
+    : grandTotal;
   const summaryCollectAmount = isFinalSettlementSummaryVisible
     ? finalSettlementBalancePayable
     : govtInsuranceEnabled
@@ -1133,7 +1274,7 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
       return;
     }
 
-    if (!existingInitialBill && !surgeryBillStage) {
+    if (!existingInitialBill) {
       showAlert('No initial bill found. Please create an initial bill first.');
       return;
     }
@@ -1222,17 +1363,27 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
   };
 
   // Load existing initial bill data when continuing to final bill
-  const handleContinueToFinalBill = (initialBill: any) => {
+  const handleContinueToFinalBill = (initialBill: SurgeryBillRecord) => {
+    const loadedSurgeryItem = createSurgeryItemFromInitialBill(initialBill);
+
     setExistingInitialBill(initialBill);
+    setShowPendingInitialBillsModal(false);
     setSurgeryBillStage('final');
     setIsSurgeryBillingMode(true); // Enable surgery billing mode
     setFinalSettlementData(null);
-    setSecurityDeposit(initialBill.securityDeposit || 0);
-    setInsuranceCategory(initialBill.insuranceType);
-    setInsuranceCompany(initialBill.insuranceCompany);
-    setInsuranceTPA(initialBill.insuranceTPA);
+    setInsuranceApprovedAmount(0);
+    setSecurityDeposit(normalizeCurrencyValue(initialBill.securityDeposit ?? initialBill.securityDepositPaid));
+    setInsuranceCategory((initialBill.insuranceType as InsuranceCategory) || null);
+    setInsuranceCompany(initialBill.insuranceCompany || initialBill.insuranceProvider || '');
+    setInsuranceTPA(initialBill.insuranceTPA || '');
+    setClaimNumber(initialBill.claimNumber || '');
+    setDateOfSurgery(initialBill.dateOfSurgery || '');
     setDateOfDischarge(initialBill.dateOfDischarge || '');
     setGovtInsuranceEnabled(true);
+    setItems((prevItems) => {
+      const nonSurgeryItems = prevItems.filter((item) => item.category !== 'Surgery');
+      return [...nonSurgeryItems, loadedSurgeryItem];
+    });
 
     // Scroll to the surgery billing section
     setTimeout(() => {
@@ -2171,11 +2322,9 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
         : govtInsuranceEnabled
           ? patientPayable
           : grandTotal;
-      const currentCollectedAmount = isFinalSettlementSummaryVisible
-        ? finalSettlementBalancePayable
-        : govtInsuranceEnabled
-          ? patientPayable
-          : Math.max(0, grandTotal - effectiveAdvanceAmount);
+      const currentCollectedAmount = status === 'paid'
+        ? amountToCollect
+        : 0;
 
       // Prepare items with surgery breakdown for surgery items
       const itemsWithBreakdown = items.map(item => {
@@ -2531,6 +2680,14 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
               Collect Advance
             </Button>
           )}
+          <Button
+            className="bg-[#1a1a1a] border border-[#D4A574] text-[#D4A574] hover:bg-[#2a2a2a] font-bold h-[38px] disabled:opacity-50"
+            onClick={handleOpenPendingInitialBillsModal}
+            disabled={!patient}
+          >
+            <Calendar className="w-4 h-4 mr-2" />
+            View Initial Bills
+          </Button>
           <Button
             className="bg-[#D4A574] text-[#0a0a0a] hover:bg-[#C9955E] font-bold h-[38px]"
             onClick={() => setShowCompanyTpaModal(true)}
@@ -3098,11 +3255,11 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
                 <>
                   <div className="flex justify-between text-sm">
                     <span className="text-[#8B8B8B] font-medium">Total Surgery Cost</span>
-                    <span className="text-white font-bold tracking-tight">₹{finalSettlementData.totalSurgeryCost.toLocaleString('en-IN')}</span>
+                    <span className="text-white font-bold tracking-tight">₹{currentFinalSettlementSummary.totalSurgeryCost.toLocaleString('en-IN')}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-blue-400 font-medium">Insurance Approved Amount</span>
-                    <span className="text-blue-400 font-bold tracking-tight">₹{finalSettlementData.insuranceApprovedAmount.toLocaleString('en-IN')}</span>
+                    <span className="text-blue-400 font-bold tracking-tight">₹{currentFinalSettlementSummary.insuranceApprovedAmount.toLocaleString('en-IN')}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-[#8B8B8B] font-medium">Patient's Total Share</span>
@@ -3192,9 +3349,9 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
               <Button
                 className="w-full bg-[#D4A574] text-[#0a0a0a] hover:bg-[#C9955E] h-12 font-bold text-base shadow-xl shadow-[#D4A574]/20 rounded-xl"
                 onClick={() => handleSaveBill('paid')}
-                disabled={items.length === 0 || (isFinalSettlementSummaryVisible && summaryCollectAmount <= 0)}
+                disabled={items.length === 0 || amountToCollect <= 0}
               >
-                COLLECT ₹{summaryCollectAmount.toLocaleString('en-IN')}
+                COLLECT ₹{amountToCollect.toLocaleString('en-IN')}
               </Button>
               <Button
                 className="w-full bg-transparent border border-[#D4A574]/40 text-[#D4A574] hover:bg-[#1a1a1a] h-11 font-bold text-sm rounded-xl"
@@ -3375,6 +3532,75 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
               >
                 {isSavingAdvance ? 'Saving...' : 'Collect Advance'}
               </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPendingInitialBillsModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 px-4">
+          <div className="w-full max-w-6xl bg-[#0f0f0f] border border-[#D4A574]/40 rounded-2xl shadow-2xl shadow-black/50 overflow-hidden">
+            <div className="flex items-start justify-between gap-4 px-6 py-5 border-b border-[#D4A574]/20">
+              <div>
+                <h3 className="text-xl font-bold text-white">Pending Initial Bills</h3>
+                <p className="text-sm text-[#8B8B8B] mt-1">Select an initial surgery bill to continue the final settlement workflow.</p>
+              </div>
+              <button
+                type="button"
+                className="text-[#8B8B8B] hover:text-white transition-colors"
+                onClick={closePendingInitialBillsModal}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              {isLoadingPendingInitialBills ? (
+                <div className="py-16 flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-full border-2 border-[#D4A574] border-t-transparent animate-spin"></div>
+                </div>
+              ) : pendingInitialBills.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-[#D4A574]/20 bg-[#111111] py-16 px-6 text-center">
+                  <p className="text-lg font-semibold text-white">No pending initial bills found</p>
+                  <p className="text-sm text-[#8B8B8B] mt-2">This patient does not have any unsettled initial surgery bills right now.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-2xl border border-[#D4A574]/20">
+                  <table className="min-w-full divide-y divide-[#D4A574]/10">
+                    <thead className="bg-[#111111]">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.18em] text-[#8B8B8B]">Bill ID</th>
+                        <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.18em] text-[#8B8B8B]">Patient Name</th>
+                        <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.18em] text-[#8B8B8B]">Surgery Name</th>
+                        <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.18em] text-[#8B8B8B]">Security Deposit</th>
+                        <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.18em] text-[#8B8B8B]">Date Created</th>
+                        <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.18em] text-[#8B8B8B]">Status</th>
+                        <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.18em] text-[#8B8B8B]">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#D4A574]/10 bg-[#0a0a0a]">
+                      {pendingInitialBills.map((bill) => (
+                        <tr key={bill.billId} className="hover:bg-[#141414] transition-colors">
+                          <td className="px-4 py-4 text-sm font-mono text-white">{bill.billId || '--'}</td>
+                          <td className="px-4 py-4 text-sm text-white">{bill.patientName || patient?.name || '--'}</td>
+                          <td className="px-4 py-4 text-sm text-white">{bill.surgeryName || 'Surgery Bill'}</td>
+                          <td className="px-4 py-4 text-sm text-white">₹{normalizeCurrencyValue(bill.securityDeposit ?? bill.securityDepositPaid).toLocaleString('en-IN')}</td>
+                          <td className="px-4 py-4 text-sm text-[#8B8B8B]">{formatSurgeryBillDate(bill.createdAt)}</td>
+                          <td className="px-4 py-4 text-sm text-[#D4A574]">{formatSurgeryBillStatus(bill.status)}</td>
+                          <td className="px-4 py-4">
+                            <Button
+                              className="bg-[#D4A574] text-[#0a0a0a] hover:bg-[#C9955E] h-9 text-xs font-bold"
+                              onClick={() => handleContinueToFinalBill(bill)}
+                            >
+                              Continue Final Settlement
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         </div>

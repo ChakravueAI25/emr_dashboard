@@ -674,7 +674,7 @@ export function OptometryCard({
             <tbody>
               {['D.V', 'ADD'].map((rowKey, rowIdx) => (
                 <tr key={rowKey} className={rowIdx % 2 === 0 ? 'bg-[#121212]' : 'bg-[#1a1a1a]'}>
-                  <td className="p-2 text-white border-r border-[#D4A574] text-xs font-medium">{rowKey}</td>
+                  <td className="p-2 text-white border-r border-[#D4A574] text-xs font-medium">{rowKey === 'D.V' ? 'UR' : 'DR'}</td>
                   {['rightEye', 'leftEye'].map((eye) =>
                     ['sph', 'cyl', 'axis', 'prism', 'va'].map((field) => {
                       const cellValue = getCellValue(autoRefraction, rowKey, eye, field);
@@ -755,13 +755,15 @@ export function OptometryCard({
             <thead>
               <tr className="bg-[#0a0a0a]">
                 <th className="text-left p-3 text-[#8B8B8B] border-r border-[#D4A574] text-xs"></th>
-                <th className="text-center p-2 text-[#D4A574] border-r border-[#D4A574] text-xs font-normal" colSpan={2}>Right Eye</th>
-                <th className="text-center p-2 text-[#D4A574] text-xs font-normal" colSpan={2}>Left Eye</th>
+                <th className="text-center p-2 text-[#D4A574] border-r border-[#D4A574] text-xs font-normal" colSpan={3}>Right Eye</th>
+                <th className="text-center p-2 text-[#D4A574] text-xs font-normal" colSpan={3}>Left Eye</th>
               </tr>
               <tr className="bg-[#0a0a0a]">
                  <th className="text-left p-3 text-[#8B8B8B] border-r border-[#D4A574] text-xs"></th>
+                 <th className="text-center p-2 text-[#8B8B8B] border-r border-[#D4A574] text-xs font-normal">D</th>
                  <th className="text-center p-2 text-[#8B8B8B] border-r border-[#D4A574] text-xs font-normal">AXIS</th>
                  <th className="text-center p-2 text-[#8B8B8B] border-r border-[#D4A574] text-xs font-normal">mm</th>
+                 <th className="text-center p-2 text-[#8B8B8B] border-r border-[#D4A574] text-xs font-normal">D</th>
                  <th className="text-center p-2 text-[#8B8B8B] border-r border-[#D4A574] text-xs font-normal">AXIS</th>
                  <th className="text-center p-2 text-[#8B8B8B] text-xs font-normal">mm</th>
               </tr>
@@ -773,6 +775,13 @@ export function OptometryCard({
                 <tr key={rowKey} className={i % 2 === 0 ? 'bg-[#121212]' : 'bg-[#1a1a1a]'}>
                   <td className="p-3 text-white border-r border-[#D4A574] text-xs font-medium">{rowLabel}</td>
                   {/* Right Eye */}
+                  <td className="p-1 text-center border-r border-[#D4A574]">
+                    <NumericInput
+                      value={String((keratometry as any)?.rightEye?.[rowKey]?.d || '')}
+                      onChange={() => {}}
+                      isEditable={false}
+                    />
+                  </td>
                   <td className="p-1 text-center border-r border-[#D4A574]">
                     {renderCell(
                       'axis', 
@@ -788,6 +797,13 @@ export function OptometryCard({
                     )}
                   </td>
                   {/* Left Eye */}
+                  <td className="p-1 text-center border-r border-[#D4A574]">
+                    <NumericInput
+                      value={String((keratometry as any)?.leftEye?.[rowKey]?.d || '')}
+                      onChange={() => {}}
+                      isEditable={false}
+                    />
+                  </td>
                   <td className="p-1 text-center border-r border-[#D4A574]">
                     {renderCell(
                       'axis', 

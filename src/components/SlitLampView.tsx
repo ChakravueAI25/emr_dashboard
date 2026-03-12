@@ -13,6 +13,7 @@ interface SlitLampViewProps {
 export function SlitLampView({ onBack, patientId, patientName, doctorName }: SlitLampViewProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
@@ -20,6 +21,24 @@ export function SlitLampView({ onBack, patientId, patientName, doctorName }: Sli
   const [isSaving, setIsSaving] = useState(false);
   const [notes, setNotes] = useState('');
   const [eyeSide, setEyeSide] = useState<'Left' | 'Right' | 'Both'>('Both');
+
+  const stopCamera = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+    }
+
+    if (videoRef.current) {
+      try {
+        videoRef.current.pause();
+      } catch {
+        // Ignore pause failures during teardown.
+      }
+      videoRef.current.srcObject = null;
+    }
+
+    streamRef.current = null;
+    setStream(null);
+  }, []);
 
   // Load available cameras
   useEffect(() => {
@@ -43,10 +62,17 @@ export function SlitLampView({ onBack, patientId, patientName, doctorName }: Sli
     if (!selectedDeviceId) return;
 
     async function startCamera() {
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-      }
+      stopCamera();
+
       try {
+        if ('permissions' in navigator && typeof navigator.permissions.query === 'function') {
+          const permissionStatus = await navigator.permissions.query({ name: 'camera' as PermissionName });
+          if (permissionStatus.state === 'denied') {
+            showAlert('Camera access is blocked in the browser. Enable camera permission for this site and reopen the slit-lamp screen.');
+            return;
+          }
+        }
+
         const newStream = await navigator.mediaDevices.getUserMedia({
           video: { 
             deviceId: { exact: selectedDeviceId },
@@ -54,27 +80,31 @@ export function SlitLampView({ onBack, patientId, patientName, doctorName }: Sli
             height: { ideal: 1080 }
           }
         });
+
+        streamRef.current = newStream;
         setStream(newStream);
         if (videoRef.current) {
-          videoRef.current.srcObject = newStream;
+          videoRef.current.srcObject = streamRef.current;
         }
       } catch (err) {
         console.error("Camera access error:", err);
+        showAlert('Could not access the camera. Check browser permission settings and verify no other app is using the device.');
       }
     }
-    startCamera();
 
+    startCamera();
+  }, [selectedDeviceId, stopCamera]);
+
+  useEffect(() => {
     return () => {
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-      }
+      stopCamera();
     };
-  }, [selectedDeviceId]);
+  }, [stopCamera]);
 
   // Ensure video plays when stream changes
   useEffect(() => {
-    if (videoRef.current && stream) {
-      videoRef.current.srcObject = stream;
+    if (videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
       videoRef.current.play().catch(e => console.error("Play error:", e));
     }
   }, [stream]);
@@ -141,7 +171,7 @@ export function SlitLampView({ onBack, patientId, patientName, doctorName }: Sli
     <div className="h-[calc(100vh-100px)] flex flex-col p-6 animate-in fade-in zoom-in-95 duration-500">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <Button onClick={onBack} className="flex items-center justify-center w-10 h-10 p-0 bg-[var(--theme-accent)] text-white force-text-white rounded-full shadow-lg hover:opacity-90 transition-all flex-shrink-0">
+           <Button onClick={() => { stopCamera(); onBack(); }} className="flex items-center justify-center w-10 h-10 p-0 bg-[var(--theme-accent)] text-white force-text-white rounded-full shadow-lg hover:opacity-90 transition-all flex-shrink-0">
              <ChevronLeft className="w-5 h-5" />
           </Button>
           <div>
