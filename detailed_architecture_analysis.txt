@@ -1,0 +1,590 @@
+SYSTEM ARCHITECTURE OVERVIEW
+EMR React TypeScript Codebase Analysis
+Date: 2026-03-11
+
+Scope
+- Analysis only.
+- No application code was modified.
+- Analysis is based on the current frontend codebase and the way it integrates with backend APIs.
+
+============================================================
+SYSTEM ARCHITECTURE OVERVIEW
+============================================================
+
+1. Application Entry Structure
+
+1.1 main.tsx
+- The React application bootstraps from main.tsx.
+- The root render tree is:
+  ThemeProvider -> App
+- This means theming is the only explicit global context visible at the root.
+- There is no React Router, Redux store, Zustand store, or other global app-state framework initialized in main.tsx.
+
+1.2 App.tsx as the central application controller
+- App.tsx is the real application shell and orchestration layer.
+- It is responsible for:
+  - authentication state
+  - current view selection
+  - active patient context
+  - visit history navigation state
+  - role selection and portal loading
+  - patient data mapping between backend and UI card structures
+  - loading major feature views based on a currentView union
+
+1.3 Root component hierarchy
+- The effective runtime hierarchy is:
+  ThemeProvider
+    App
+      Sidebar (when not fullscreen)
+      Navbar (when not fullscreen)
+      Main content region
+        either role portal, dashboard, patient chart, or module view
+
+1.4 Routing model
+- The application is not route-driven through URL paths.
+- It uses an internal view-state machine based on `currentView` in App.tsx.
+- `currentView` is a discriminated string union containing entries such as:
+  - dashboard
+  - analytics
+  - individual-billing
+  - documents
+  - appointments
+  - appointment-queue
+  - reception-queue
+  - opd-queue
+  - doctor-queue
+  - pharmacy-finance
+  - vendor-ledger
+  - vendor-list
+- Views are loaded through a large conditional rendering block in App.tsx.
+
+1.5 Global state pattern
+- Global state is primarily local React state inside App.tsx, persisted selectively to localStorage.
+- Key state variables include:
+  - isAuthenticated
+  - userRole
+  - currentUsername
+  - currentView
+  - activePatientData
+  - visitIndex
+  - totalVisits
+  - patientHistory
+  - lastSavedRegistrationId
+  - lastAppointmentPatientData
+  - vendorLedgerContext
+- This is a centralized shell-state pattern, but not a formal global state store.
+
+1.6 How views are loaded
+- The app renders different views based on `currentView` and `userRole`.
+- Important examples:
+  - authenticated receptionist + currentView=dashboard -> ReceptionistPortal
+  - authenticated doctor + currentView=dashboard -> DoctorPortal
+  - authenticated opd + currentView=dashboard -> OpdPortal
+  - currentView=documents -> DocumentsView
+  - currentView=individual-billing -> IndividualBillingView
+  - currentView=pharmacy-finance -> PharmacyFinanceDashboardView
+  - currentView=vendor-list -> VendorListView
+  - currentView=vendor-ledger -> VendorLedgerView
+- PatientDashboard is used both inside role portals and directly in the shared patient-documentation area.
+
+Architectural conclusion
+- App.tsx is the true composition root, state hub, and navigation controller.
+- Any new major module must integrate into App.tsx because that file owns the top-level view lifecycle.
+
+============================================================
+NAVIGATION FLOW
+============================================================
+
+2. Navigation architecture
+
+2.1 Sidebar definition
+- Global navigation is defined in Sidebar.tsx.
+- Sidebar renders icon-based buttons rather than a text menu.
+- Visibility is role-sensitive.
+- Navigation options are conditionally shown using flags such as:
+  - isReception
+  - isOpd
+  - isDoctor
+  - isClinical
+  - showBillingAndPharmacy
+  - hideSpecificQueues
+
+2.2 How views are switched
+- Sidebar buttons call `onViewChange(view)`.
+- App.tsx passes `setCurrentView` or a wrapper handler into Sidebar.
+- App.tsx contains `handleViewChange`, which enforces:
+  - authentication gating
+  - role-based access control for queues
+  - reset behavior when changing between patient-centric and non-patient views
+  - profile/login special-case behavior
+
+2.3 Main dashboard layout controller
+- App.tsx controls the main layout.
+- It decides when to render:
+  - Sidebar
+  - Navbar
+  - fullscreen login/payment/org flows
+  - role portals
+  - standalone module views
+- Therefore App.tsx is the component that controls the main dashboard layout.
+
+2.4 Secondary navigation inside portals
+- ReceptionistPortal.tsx has its own horizontal navigation for:
+  - Operations Hub
+  - Appointment booking
+- DoctorPortal.tsx has a portal header and internal tab model, though currently it only exposes Operations Hub in its navItems array.
+- This means the app uses two navigation levels:
+  - global application navigation via Sidebar
+  - role-local navigation inside portals
+
+2.5 How new modules are added to navigation
+- To add a new top-level module under the current architecture, the codebase requires changes in at least two places:
+  1. Sidebar.tsx
+     - add a new button/icon and call `onViewChange('new-view-name')`
+     - decide role visibility rules
+  2. App.tsx
+     - extend the `currentView` union type
+     - add the conditional rendering branch for the new module
+- If the module is portal-specific rather than global, a third integration point is needed:
+  3. Portal component, such as ReceptionistPortal.tsx or DoctorPortal.tsx
+
+Navigation conclusion
+- Sidebar.tsx defines global entry points.
+- App.tsx is the switchboard.
+- Portal components provide role-focused sub-navigation.
+
+============================================================
+MODULE STRUCTURE
+============================================================
+
+3. Role-based portals
+
+3.1 How roles are separated
+- Roles are determined during login and normalized into values such as receptionist, opd, doctor, patient.
+- After authentication, App.tsx routes users by role when `currentView === 'dashboard'`.
+- The dashboard entry is role aware:
+  - receptionist -> ReceptionistPortal
+  - doctor -> DoctorPortal
+  - opd -> OpdPortal
+  - other authenticated users -> generic dashboard/unified operations flow
+
+3.2 Entry point for each role
+- Receptionist entry point: ReceptionistPortal.tsx
+- Doctor entry point: DoctorPortal.tsx
+- OPD entry point: OpdPortal.tsx
+- Shared patient chart entry point: PatientDashboard.tsx
+
+3.3 PatientDashboard as the core clinical workspace
+- PatientDashboard is the central EMR chart renderer.
+- It imports many card components and orchestrates them by role.
+- It receives:
+  - activePatientData
+  - userRole
+  - updateActivePatientData
+  - save handlers
+  - visit navigation handlers
+- It computes card visibility from `CARD_ACCESS[userRole]`.
+- It uses `renderCard` to apply role-specific blur/editability logic.
+
+3.4 Portal responsibilities
+- ReceptionistPortal
+  - operations overview
+  - booking workflow
+  - reception-side patient dashboard editing
+- DoctorPortal
+  - operations overview
+  - doctor patient dashboard editing
+  - visit history navigation
+- PatientDashboard
+  - card orchestration
+  - role-based editing behavior
+  - data sanitization for missing nested structures
+
+4. Operational modules
+
+4.1 AppointmentBookingView.tsx
+- Standalone feature view.
+- Combines patient search, doctor lookup, time-slot calculation, and booking workflow.
+- Fetches doctors and appointments directly from APIs.
+- Can pass selected patient context toward billing.
+- Structurally independent as a view, but operationally coupled to:
+  - API_ENDPOINTS
+  - patient search
+  - billing handoff
+
+4.2 AppointmentQueueView.tsx
+- Standalone operational queue view.
+- Pulls appointments from the backend.
+- Filters by lifecycle state, date, and search query.
+- Pushes appointments to reception workflow by calling queue APIs.
+- Independent as a UI screen, but coupled to appointment status semantics and queue endpoints.
+
+4.3 DoctorQueueView.tsx
+- Queue + clinical handoff module.
+- Pulls doctor queue items from backend.
+- Converts queue payloads into PatientData shape for PatientDashboard.
+- This is a key coupling point between operational workflow and clinical documentation.
+
+4.4 ReceptionQueueView.tsx
+- Similar queue-to-chart handoff pattern.
+- Builds a minimal PatientData object for reception editing.
+- Completes reception and moves patient forward to OPD queue.
+
+4.5 IndividualBillingView.tsx
+- Large, self-contained billing module.
+- Manages patient billing, service items, surgery billing packages, insurance structures, and transaction-related UI.
+- Highly feature-rich and mostly independent in presentation, but tightly coupled to:
+  - patient registration context
+  - billing APIs
+  - surgery pricing assumptions
+
+4.6 DocumentsView.tsx
+- Dedicated document management view.
+- Handles:
+  - file upload
+  - camera capture upload
+  - category grouping
+  - ophthalmic investigation timeline
+  - preview
+  - download
+  - delete
+- Independent as a module, but strongly coupled to current patient registration context from App.tsx.
+
+4.7 MedicineManagementView.tsx
+- Inventory/procurement-facing module.
+- Supports:
+  - medicine master listing
+  - add/edit stock items
+  - invoice parsing/import
+  - stock update workflow
+- Independent module with direct backend API integration.
+
+4.8 VitalSignsCard.tsx
+- Despite the name, it functions as the Presenting Complaints card.
+- Uses structured complaint arrays and history fields.
+- Embedded in PatientDashboard, not a standalone view.
+
+4.9 IOPCard.tsx
+- Clinical card with both compact and expanded representations.
+- Uses EditableText and ExpandableCard.
+- Contains charting via Recharts.
+- Strongly integrated into PatientDashboard and shared patient data model.
+
+4.10 OphthalmicInvestigationsCard.tsx
+- Rich clinical card.
+- Supports structured findings plus backend-backed document uploads for OCT/HVF/pachymetry/investigation images.
+- Reuses Documents API and preview modal logic.
+- This is a clear example of a card-level module coupled to the shared document subsystem.
+
+4.11 SystemicInvestigationsCard.tsx
+- Clinical card for vitals and other investigation fields.
+- Structured similarly to IOP and ophthalmic cards.
+- Embedded in PatientDashboard.
+
+4.12 Video consultations
+- TelemedicineView is loaded as a top-level view through App.tsx.
+- It receives patient context and doctor identity from shell state.
+- This is structurally independent as a feature screen but depends on selected patient context.
+
+4.13 Independence vs coupling
+
+Mostly independent feature views
+- AppointmentBookingView
+- AppointmentQueueView
+- IndividualBillingView
+- DocumentsView
+- MedicineManagementView
+- PharmacyFinanceDashboardView
+- VendorListView
+- VendorLedgerView
+
+Tightly coupled chart modules
+- VitalSignsCard
+- IOPCard
+- OphthalmicInvestigationsCard
+- SystemicInvestigationsCard
+- MedicationPrescribedCard
+- Other PatientDashboard cards
+
+Reason
+- Standalone views own their own fetch, filter, and UI workflows.
+- Card modules depend on the shared `PatientData` structure and `updateActivePatientData` callback owned upstream.
+
+4.14 Reusable UI patterns across modules
+- Expandable card pattern for chart cards
+- Inline-edit pattern through EditableText
+- CardHeader for visual consistency
+- Search/filter bar pattern across queue and finance views
+- API_ENDPOINTS usage for centralized backend URLs
+
+============================================================
+COMPONENT PATTERNS
+============================================================
+
+5. Dashboard structure
+
+5.1 DashboardView.tsx
+- DashboardView is the generic dashboard renderer.
+- It fetches:
+  - user details
+  - appointment metrics
+  - recent patient information
+- It uses backend APIs directly, not local-only state.
+- It conditionally delegates to role-specific dashboard variants:
+  - ReceptionistDashboardView
+  - OpdDashboardView
+- For other roles it renders a widget-heavy dashboard with charts and KPI blocks.
+
+5.2 UnifiedOperationsHub.tsx
+- This is an operational aggregator, not a passive visual dashboard.
+- It fetches:
+  - appointments
+  - doctor queue
+  - OPD queue
+- It merges those sources into live operational statistics and patient lists.
+- It can select/check in a patient and enrich appointment data with registration identifiers from queues.
+- It functions as the bridge between scheduling/queue data and clinical workflow entry.
+
+5.3 Widget/card structure
+- Cards in DashboardView are mostly direct JSX blocks rather than a generalized card DSL.
+- PatientDashboard cards are more structured and use reusable components.
+- Dashboard data is API-driven, not generated from a central client-side store.
+
+6. Reusable component patterns
+
+6.1 ExpandableCard.tsx
+- This is the core reusable shell for patient chart cards.
+- Pattern:
+  - compact preview tile inside dashboard grid
+  - click to open large modal
+  - optional visit navigation controls
+  - optional side action panel
+- This is the dominant UI composition pattern for EMR documentation cards.
+
+6.2 EditableText.tsx
+- Inline-edit primitive used across cards.
+- Pattern:
+  - display mode when not editing
+  - input mode on click or imperative ref startEditing
+  - save on Enter / blur-like explicit flow
+  - optional severity evaluation via backend evaluate-reading API
+- This is the primary reusable editing mechanism across the patient chart.
+
+6.3 MedicationPrescribedCard.tsx
+- Uses ExpandableCard + EditableText + CardHeader.
+- Demonstrates the standard card architecture clearly:
+  - small summary list in compact mode
+  - full editable detail grid in expanded mode
+  - child component emits changes upward through updateData
+
+6.4 Component reuse strategy
+- Reuse is strongest at the pattern level rather than through deeply abstracted business logic.
+- Common reusable layers are:
+  - layout wrapper: ExpandableCard
+  - editable field primitive: EditableText
+  - visual heading: CardHeader
+  - common iconography and styling vocabulary
+- Business logic remains mostly inside each module or card.
+
+6.5 Parent-child data flow pattern
+- Parent component holds canonical state.
+- Child receives `data` and `updateData` props.
+- Child computes field-level updates and sends path-based mutations upward.
+- This is consistent across many chart cards.
+
+Architectural implication
+- New modules should follow this pattern:
+  - standalone top-level views for independent business areas
+  - card-level components only when they belong inside PatientDashboard or another composed workspace
+
+============================================================
+DATA FLOW
+============================================================
+
+7. Patient data flow analysis
+
+7.1 Central patient state location
+- Canonical active patient state lives in App.tsx as `activePatientData`.
+- App.tsx also maintains patient history, visit navigation, and last saved registration context.
+
+7.2 How patient data enters the system
+- From patient search or queue selection
+- From appointment-driven selection in UnifiedOperationsHub
+- From reception/doctor queue views converting queue payloads to PatientData
+- From backend patient fetch via `loadPatientByRegistration` in App.tsx
+
+7.3 How patient data is transformed
+- App.tsx contains mapping logic:
+  - mapDocToPatientData
+  - mapHistoryToPatientData
+- These adapt backend document shapes and legacy visit structures into the frontend PatientData format.
+- This is an important architectural sign: the frontend owns a significant amount of shape-normalization logic.
+
+7.4 How patient data moves through components
+- App.tsx holds activePatientData
+- App.tsx passes it to role portals or directly to PatientDashboard
+- PatientDashboard passes slices of data to individual cards
+- Cards call `updateActivePatientData(path, value)` or equivalent path-based mutations
+
+7.5 API call locations
+- API calls are distributed across feature views rather than centralized into one service layer.
+- Common pattern:
+  - component mounts
+  - component fetches data directly using `fetch(API_ENDPOINTS...)`
+- Examples:
+  - DashboardView fetches users, appointments, recent patients
+  - UnifiedOperationsHub fetches appointments and queues
+  - AppointmentBookingView fetches doctors, appointments, patients
+  - AppointmentQueueView fetches appointments
+  - DoctorQueueView fetches doctor queue and updates queue status
+  - ReceptionQueueView fetches reception queue and updates patient + queue state
+  - DocumentsView fetches patient info and patient documents
+  - MedicineManagementView fetches medicines and posts invoice parsing/upload requests
+
+7.6 Is data centralized?
+- Patient-centric chart state: yes, mostly centralized in App.tsx.
+- Module data for standalone views: no, each module manages its own local state and fetches independently.
+- Therefore the architecture is hybrid:
+  - centralized shell state for the active patient workflow
+  - decentralized module-local state for standalone screens
+
+7.7 Coupling implications
+- This architecture works well for encounter-driven EMR documentation.
+- It is less ideal for large ERP expansion because unrelated business modules each manage their own fetch and local state without a shared domain layer.
+
+============================================================
+BEST INTEGRATION POINT FOR PAYROLL MODULE
+============================================================
+
+8. Where Payroll Management should be added
+
+8.1 Recommended architectural location
+- Payroll Management should be added as a new standalone view module, not as a card inside PatientDashboard and not inside DoctorPortal or ReceptionistPortal.
+- The correct placement is alongside the existing finance/ERP-oriented views such as:
+  - BillingDashboardView
+  - PharmacyFinanceDashboardView
+  - VendorListView
+  - VendorLedgerView
+
+8.2 Why this is the correct fit
+- Payroll is operationally unrelated to active patient charting.
+- Existing architecture separates:
+  - patient workflow modules
+  - independent administrative/financial modules
+- Payroll belongs to the independent administrative/financial layer.
+
+8.3 Which file should contain the navigation link
+- Sidebar.tsx should contain the top-level navigation link.
+- That is where global feature entry points are defined.
+- A new button should be added there with role visibility rules, likely for admin and finance-capable staff.
+
+8.4 Which parent component should load the payroll module
+- App.tsx should load the Payroll module.
+- App.tsx already owns `currentView` and is the place where all top-level feature views are mounted.
+- The module should be added by:
+  - extending the currentView union with something like `payroll-management`
+  - adding a conditional render branch that returns `<PayrollManagementView />`
+
+8.5 How Payroll should follow existing patterns
+- It should follow the same pattern as DocumentsView, MedicineManagementView, VendorListView, and PharmacyFinanceDashboardView:
+  - be a standalone View component
+  - own its own local state
+  - fetch through API_ENDPOINTS
+  - not depend on activePatientData
+  - render as a self-contained screen in the App.tsx main content region
+
+8.6 Should Payroll be a new View component?
+- Yes.
+- It should be a new top-level View component, not a dashboard card and not a portal-only tab.
+- This is consistent with the existing module architecture for non-clinical domains.
+
+8.7 Payroll sub-capabilities under the current architecture
+- Employee management
+  should likely be its own subview or tab inside PayrollManagementView
+- Attendance
+  should be a section or child component inside the payroll module
+- Leave deductions
+  should be part of payroll calculation/business workflow, not a standalone global module initially
+- Payslip generation
+  should be a report/export workflow inside the payroll module
+
+Recommended integration conclusion
+- Global nav entry: Sidebar.tsx
+- Top-level render owner: App.tsx
+- Module type: standalone view component
+- Domain placement: finance / ERP layer
+
+============================================================
+RECOMMENDED FILE STRUCTURE FOR PAYROLL
+============================================================
+
+9. Suggested frontend structure
+
+Minimal integration structure
+- src/components/PayrollManagementView.tsx
+
+Recommended scalable structure
+- src/components/payroll/
+  - PayrollManagementView.tsx
+  - EmployeeManagementPanel.tsx
+  - AttendanceManagementPanel.tsx
+  - LeaveDeductionsPanel.tsx
+  - PayslipGenerationPanel.tsx
+  - PayrollSummaryCards.tsx
+  - payrollTypes.ts
+  - payrollUtils.ts
+
+9.1 Integration points in existing files
+
+Sidebar.tsx
+- Add a new navigation button for Payroll Management.
+- Choose visibility similar to finance/admin modules.
+
+App.tsx
+- Extend `currentView` union with `payroll-management`.
+- Import PayrollManagementView.
+- Add conditional branch:
+  `currentView === 'payroll-management' ? <PayrollManagementView /> : ...`
+
+src/config/api.ts
+- Add payroll endpoints when backend work begins.
+- Follow the existing API_ENDPOINTS pattern.
+
+9.2 Suggested behavior pattern for PayrollManagementView
+- Use local state for filters, selected employee, selected month, and pay-run state.
+- Fetch payroll data directly from API endpoints in useEffect, consistent with other standalone modules.
+- Use card/table/filter layout similar to:
+  - PharmacyFinanceDashboardView
+  - VendorListView
+  - MedicineManagementView
+
+9.3 Recommended UI architecture inside payroll module
+- Summary cards for total employees, attendance exceptions, pending payroll, processed payroll
+- Search and filter toolbar
+- Tabbed or segmented sections for:
+  - Employees
+  - Attendance
+  - Leave and deductions
+  - Payslips
+- Export/download actions for payslips and salary summaries
+
+9.4 Why this structure fits the codebase
+- It matches the current pattern for standalone business modules.
+- It avoids polluting patient-centric EMR state.
+- It keeps Payroll independent from DoctorPortal and ReceptionistPortal.
+- It uses the same app shell and navigation mechanics already established.
+
+============================================================
+FINAL ARCHITECTURAL ASSESSMENT
+============================================================
+
+The current frontend is a shell-driven, view-state-based hospital application with two clear architectural layers:
+- patient-centric clinical workflows centered around PatientDashboard
+- standalone operational and ERP-like views mounted directly by App.tsx
+
+The strongest reusable patterns are:
+- centralized shell state in App.tsx for active patient workflow
+- standalone feature views for independent modules
+- ExpandableCard + EditableText for chart/card interactions
+
+Under this architecture, Payroll Management should be implemented as a new standalone view loaded by App.tsx and linked from Sidebar.tsx. That approach is the cleanest match to the current codebase and avoids mixing ERP concerns into role portals or patient chart components.

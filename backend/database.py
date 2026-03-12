@@ -50,6 +50,15 @@ vendors_collection = db["vendors"]
 purchase_invoices_collection = db["purchase_invoices"]
 vendor_payments_collection = db["vendor_payments"]
 patient_documents_collection = db["patient_documents"]
+employees_collection = db["employees"]
+payroll_records_collection = db["payroll_records"]
+inventory_invoices_collection = db["inventory_invoices"]
+inventory_items_collection = db["inventory_items"]
+lens_serial_inventory_collection = db["lens_serial_inventory"]
+inventory_stock_collection = db["stock_collection"]
+lens_usage_collection = db["lens_usage"]
+inventory_usage_collection = db["inventory_usage"]
+inventory_stock_ledger_collection = db["inventory_stock_ledger"]
 
 
 def _create_index_safe(collection, keys, **kwargs):
@@ -92,6 +101,48 @@ def _ensure_billing_indexes():
     _create_index_safe(patient_documents_collection, [("fileId", 1)], unique=True)
     _create_index_safe(patient_documents_collection, [("category", 1)])
     _create_index_safe(patient_documents_collection, [("uploadedDate", -1)])
+
+    # payroll indexes
+    _create_index_safe(employees_collection, [("employeeId", 1)], unique=True)
+    _create_index_safe(employees_collection, [("createdAt", -1)])
+    _create_index_safe(payroll_records_collection, [("employeeId", 1), ("month", 1)], unique=True)
+    _create_index_safe(payroll_records_collection, [("month", 1)])
+    _create_index_safe(payroll_records_collection, [("createdAt", -1)])
+
+    # inventory indexes
+    _create_index_safe(inventory_invoices_collection, [("invoice_id", 1)], unique=True)
+    _create_index_safe(inventory_invoices_collection, [("vendor", 1)])
+    _create_index_safe(inventory_invoices_collection, [("invoice_number", 1)])
+    _create_index_safe(inventory_invoices_collection, [("invoice_date", -1)])
+    _create_index_safe(inventory_invoices_collection, [("created_at", -1)])
+
+    _create_index_safe(inventory_items_collection, [("invoice_id", 1)])
+    _create_index_safe(inventory_items_collection, [("description", 1)])
+    _create_index_safe(inventory_items_collection, [("is_serial_tracked", 1)])
+    _create_index_safe(inventory_items_collection, [("created_at", -1)])
+
+    _create_index_safe(lens_serial_inventory_collection, [("serial_number", 1)], unique=True)
+    _create_index_safe(lens_serial_inventory_collection, [("lens_model", 1)])
+    _create_index_safe(lens_serial_inventory_collection, [("status", 1)])
+    _create_index_safe(lens_serial_inventory_collection, [("invoice_id", 1)])
+
+    _create_index_safe(inventory_stock_collection, [("description", 1)], unique=True)
+    _create_index_safe(inventory_stock_collection, [("last_updated", -1)])
+    _create_index_safe(inventory_stock_collection, [("item_type", 1)])
+    _create_index_safe(inventory_stock_collection, [("minimum_stock_level", 1)])
+
+    _create_index_safe(lens_usage_collection, [("serial_number", 1)], unique=True)
+    _create_index_safe(lens_usage_collection, [("patient_id", 1)])
+    _create_index_safe(lens_usage_collection, [("surgery_date", -1)])
+
+    _create_index_safe(inventory_usage_collection, [("description", 1)])
+    _create_index_safe(inventory_usage_collection, [("department", 1)])
+    _create_index_safe(inventory_usage_collection, [("date", -1)])
+
+    _create_index_safe(inventory_stock_ledger_collection, [("description", 1)])
+    _create_index_safe(inventory_stock_ledger_collection, [("movement_type", 1)])
+    _create_index_safe(inventory_stock_ledger_collection, [("date", -1)])
+    _create_index_safe(inventory_stock_ledger_collection, [("reference_id", 1)])
 
 
 _ensure_billing_indexes()

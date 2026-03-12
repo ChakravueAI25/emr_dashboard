@@ -1,0 +1,523 @@
+SYSTEM ARCHITECTURE ANALYSIS
+EMR + ERP Hospital System
+Date: 2026-03-11
+
+Scope
+- Analysis only. No code changes were made.
+- Sources reviewed: src/App.tsx, src/components/Sidebar.tsx, src/components/UnifiedOperationsHub.tsx, selected major frontend views under src/components/, backend/main.py, backend/database.py, backend/models.py.
+
+============================================================
+1. FRONTEND MODULE MAP
+============================================================
+
+The frontend is a single React application that behaves like a role-aware hospital operating system. It combines EMR, queue management, appointments, billing, pharmacy, and vendor finance inside one shell.
+
+1.1 Application Shell
+- App.tsx is the central orchestrator.
+- It stores authentication state, current view, active patient context, visit navigation state, and top-level patient mapping logic.
+- The UI is not route-driven through a router library; instead it uses a currentView state machine and conditional rendering.
+- The same app shell serves multiple roles: receptionist, OPD, doctor, admin, patient.
+
+1.2 Major Frontend Modules
+
+Clinical / EMR Modules
+- DashboardView.tsx
+  Represents the general dashboard and overview widgets. It adapts to user role and pulls appointment and patient summary data.
+- ReceptionistPortal.tsx
+  Reception front-office workspace. Combines the Operations Hub, appointment booking, and patient chart entry for reception-stage documentation.
+- DoctorPortal.tsx
+  Doctor workspace. Uses the Operations Hub as the landing area and opens PatientDashboard for consultation and documentation.
+- PatientDashboard (from src/components/dashboard/PatientDashboard.tsx, referenced by portals)
+  Core patient chart workspace. Hosts multiple clinical cards such as presenting complaints, optometry, IOP, investigations, examination, medication, and surgical sections.
+- DocumentsView.tsx
+  Patient document vault. Supports upload, preview, download, deletion, category grouping, and ophthalmic investigation timeline.
+- SurgicalRecordView.tsx
+  Surgical documentation and surgery-related record management.
+- DischargeSummaryView.tsx
+  Discharge workflow and patient summary output.
+- TelemedicineView.tsx / VideoConsultationView.tsx
+  Remote consultation workflows.
+
+Operations Modules
+- UnifiedOperationsHub.tsx
+  Central operational dashboard for the day. Shows scheduled patients, OPD flow, consulting load, search, filtering, and patient selection/check-in behavior.
+- AppointmentBookingView.tsx
+  Appointment booking and patient search/selection. Supports selecting existing patients or capturing new-patient booking details.
+- AppointmentQueueView.tsx
+  Appointment lifecycle queue. Tracks booked, in-progress, and completed/discharged appointments.
+- ReceptionQueueView.tsx
+  Reception workflow queue.
+- OpdQueueView.tsx
+  OPD workflow queue.
+- DoctorQueueView.tsx
+  Doctor consultation queue. Pulls queued patients and opens current-visit data into the doctor chart.
+- PatientHistoryView.tsx
+  Historical patient lookup and visit review.
+
+Billing / Finance Modules
+- IndividualBillingView.tsx
+  Patient-specific billing workspace.
+- BillingDashboardView.tsx
+  Billing overview and aggregated financial workflow layer.
+- BillingAnalyticsView.tsx / AnalyticsView.tsx
+  Financial and operational analytics visualization.
+- PharmacyBillingView.tsx
+  Point-of-sale / prescription billing for pharmacy items.
+- PharmacyFinanceDashboardView.tsx
+  Vendor payable and purchase finance dashboard. This is the strongest existing ERP-style finance module.
+- VendorListView.tsx
+  Vendor master management.
+- VendorLedgerView.tsx
+  Vendor financial ledger, transaction timeline, exports, and payment entry.
+- VendorPaymentModal.tsx
+  Payment capture against outstanding vendor invoices.
+
+Inventory / Procurement Modules
+- MedicineManagementView.tsx
+  Pharmacy inventory master. Supports medicine CRUD, stock management, invoice parsing/import, and procurement-driven inventory updates.
+- InvoiceUploadView.tsx
+  Invoice ingestion workflow.
+- SummaryOfInvoiceView.tsx
+  GRN / invoice summary workspace.
+- SurgeryPackagesManager.tsx
+  Reusable surgery package templates and pricing structures.
+
+Administration / Platform Modules
+- AdminDashboardView.tsx
+  Administrative overview.
+- AdminDataManagementView.tsx
+  Data management and maintenance tools.
+- SettingsView.tsx / ProfileSettings.tsx / DoctorProfileView.tsx / ReceptionistProfileView.tsx
+  User configuration and profile settings.
+- UserLoginView.tsx / OrganizationLoginView.tsx / PaymentSetupView.tsx
+  Entry, organization access, and subscription/payment setup flows.
+- DataRepairView.tsx
+  Operational repair / maintenance tooling.
+
+1.3 Frontend Module Summary by Business Capability
+- Patient Management: PatientDashboard, PatientHistoryView, PatientsListView, ReceptionistPortal, DoctorPortal
+- Appointments: AppointmentBookingView, AppointmentQueueView, UnifiedOperationsHub
+- Queue Operations: ReceptionQueueView, OpdQueueView, DoctorQueueView
+- Investigations / Ophthalmology: OphthalmicInvestigationsCard, SystemicInvestigationsCard, SlitLampView, SpecialExaminationCard
+- Documents: DocumentsView, DocumentPreviewModal
+- Billing: IndividualBillingView, BillingDashboardView, BillingAnalyticsView
+- Pharmacy: PharmacyBillingView, MedicineManagementView
+- Procurement / Vendor Finance: PharmacyFinanceDashboardView, VendorListView, VendorLedgerView, VendorPaymentModal, InvoiceUploadView, SummaryOfInvoiceView
+- Surgery: SurgicalRecordView, SurgeryPackagesManager, surgery package flows
+- Admin / Platform: AdminDashboardView, AdminDataManagementView, Settings/Profile views, OrganizationLoginView
+
+============================================================
+2. NAVIGATION STRUCTURE
+============================================================
+
+2.1 Top-Level Navigation Pattern
+- Sidebar.tsx is the primary global navigation.
+- It exposes feature icons conditionally based on role.
+- Navigation is grouped implicitly by icon clusters rather than a formal nested menu.
+
+2.2 Logical Grouping from Sidebar + App Shell
+
+Clinical Modules
+- Dashboard
+- Documents
+- Telemedicine
+- Patient History
+- Doctor / OPD / Reception patient workflows
+
+Operational Modules
+- Appointments
+- Appointment Queue
+- Reception Queue
+- OPD Queue
+- Doctor Queue
+- Unified Operations Hub inside portals
+
+Financial / ERP Modules
+- Patient Billing
+- Billing Dashboard
+- Pharmacy Billing
+- Pharmacy Finance
+- Vendor Payables
+- Medicine Management
+- Invoice / GRN workflows
+
+Administrative / Platform Modules
+- Login / Profile
+- Settings
+- Admin Dashboard
+- Admin Data Management
+
+2.3 Portal-Based Secondary Navigation
+- ReceptionistPortal.tsx adds horizontal navigation inside the reception role for:
+  - Operations Hub
+  - Appointment booking
+- DoctorPortal.tsx adds a doctor-focused horizontal portal around:
+  - Operations Hub
+  - Patient chart/dashboard when a patient is selected
+- UnifiedOperationsHub.tsx acts as the role-aware day-operations control center rather than a general sidebar item.
+
+2.4 Architectural Interpretation
+- The app uses a layered navigation model:
+  - Layer 1: global sidebar for major system areas
+  - Layer 2: role-specific portals for focused workspaces
+  - Layer 3: patient chart/dashboard for encounter-level documentation
+
+This is appropriate for adding a Payroll module as a top-level ERP/finance section rather than embedding it inside the clinical portals.
+
+============================================================
+3. BACKEND SERVICE MAP
+============================================================
+
+The backend is a FastAPI monolith centered in backend/main.py, with MongoDB as the primary system of record.
+
+3.1 Core Backend Domains Identified in main.py
+
+Clinical / EMR Services
+- Patient creation and update
+- Patient retrieval and search
+- Patient visits and encounter history
+- Investigations update endpoints
+- Doctor documentation update endpoints
+- Patient document storage and file download/preview/delete
+- Slit lamp image upload and retrieval
+
+Operational Services
+- Appointment creation, listing, retrieval, update
+- Queue orchestration for reception, OPD, and doctor stages
+- Queue recall workflows back to reception or OPD
+- Operations-hub style appointment state transitions through queueStatus values
+
+Analytics Services
+- IOP trend
+- Visual acuity trend
+- Visit analytics
+- Procedure analytics
+- Billing analytics and dashboard statistics
+- Reading evaluation endpoint for rule-based severity assessment
+
+Financial / Billing Services
+- Patient billing summary
+- Insurance billing details and updates
+- Billing invoice creation and retrieval
+- Payments and claims tracking
+- Billing case/stage management
+- Surgery bill generation and management
+
+Pharmacy / ERP Services
+- Medicine CRUD and stock updates
+- Pharmacy billing
+- Stock reporting
+- GRN / purchase invoice ingestion
+- Vendor CRUD
+- Vendor ledger, outstanding invoices, overdue invoices
+- Vendor invoice payment recording
+- Surgery package template management
+
+Platform / Access Services
+- User creation and login
+- User listing and lookup
+- SaaS/organization routes are included via saas_endpoints router, indicating some multi-tenant or subscription-related platform behavior outside the main file.
+
+3.2 Architectural Style
+- Monolithic FastAPI application.
+- Shared MongoDB database.
+- Mostly synchronous PyMongo usage, with limited async Motor usage for some patient analytics/read paths.
+- File-backed document storage for uploaded patient documents.
+- Business domains coexist in one server process rather than separated microservices.
+
+3.3 Important Structural Observation
+- Core collections are centralized in backend/database.py.
+- Several workflow collections are created/accessed directly inside backend/main.py instead of being declared centrally.
+- Specifically observed dynamic collections:
+  - appointments
+  - reception_queue
+  - opd_queue
+  - doctor_queue
+
+This means the backend already behaves like a combined EMR + ERP monolith, but its persistence layer is only partially centralized.
+
+============================================================
+4. DATABASE COLLECTION MAP
+============================================================
+
+4.1 Collections Declared in backend/database.py
+
+patients
+- Master patient records.
+- Stores registrationId, demographics, contact data, history, documents references, and encounter arrays.
+
+patient_queue
+- General queue collection declared centrally, though active queue workflows in main.py primarily use dedicated queue collections.
+
+users
+- Application users and role-based access identities.
+
+pharmacy_medicines
+- Pharmacy item master and stock inventory.
+
+pharmacy_billing
+- Pharmacy sales / billing records for dispensed medicines.
+
+coupon_quotas
+- Coupon or quota tracking for SaaS/usage-limited functionality.
+
+billing_cases
+- Multi-stage billing cases, especially for procedures/surgery flows and insurance progression.
+
+surgery_packages
+- Reusable surgery package templates and billing structures.
+
+billing_invoices
+- Patient billing invoices and related billing events.
+
+initial_surgery_bills
+- Pre-surgery / initial bill documents.
+
+final_surgery_bills
+- Final surgery bill documents and settlement records.
+
+slit_lamp_images
+- Stored slit-lamp image metadata.
+
+doctor_feedback
+- Doctor feedback or AI summary feedback records.
+
+presets
+- Saved preset content, likely reusable templates/settings.
+
+vendors
+- Vendor master records.
+
+purchase_invoices
+- Procurement / GRN purchase invoices tied to vendors and stock intake.
+
+vendor_payments
+- Payment records against vendor invoices.
+
+patient_documents
+- Patient document metadata. Files are stored on disk, metadata in MongoDB.
+
+4.2 Collections Accessed Dynamically in backend/main.py
+
+appointments
+- Appointment booking and lifecycle records.
+- Created lazily if absent.
+
+reception_queue
+- Reception-stage operational queue.
+
+opd_queue
+- OPD-stage operational queue.
+
+doctor_queue
+- Doctor consultation-stage operational queue.
+
+4.3 Collection-Level Interpretation
+
+EMR Collections
+- patients
+- patient_documents
+- slit_lamp_images
+- doctor_feedback
+
+Operations Collections
+- appointments
+- reception_queue
+- opd_queue
+- doctor_queue
+- patient_queue (declared but appears secondary compared with stage-specific queues)
+
+Finance / ERP Collections
+- billing_invoices
+- billing_cases
+- initial_surgery_bills
+- final_surgery_bills
+- pharmacy_billing
+- pharmacy_medicines
+- vendors
+- purchase_invoices
+- vendor_payments
+- surgery_packages
+
+Platform / Support Collections
+- users
+- presets
+- coupon_quotas
+
+============================================================
+5. DOMAIN ARCHITECTURE
+============================================================
+
+5.1 CLINICAL SYSTEM (EMR)
+- Patient registration and demographic record
+- Presenting complaints and history
+- Optometry and IOP data
+- Ophthalmic investigations
+- Systemic investigations
+- Doctor examination and prescriptions
+- Slit-lamp image storage
+- Document vault for clinical reports and images
+- Surgical record and discharge summary workflows
+
+Primary frontend surfaces
+- PatientDashboard
+- ReceptionistPortal
+- DoctorPortal
+- DocumentsView
+- SurgicalRecordView
+- DischargeSummaryView
+
+Primary backend/data surfaces
+- patients
+- patient_documents
+- slit_lamp_images
+- patient visit / doctor / investigations endpoints
+
+5.2 OPERATIONS / HOSPITAL FLOW
+- Appointment booking
+- Appointment queue lifecycle
+- Reception workflow
+- OPD workflow
+- Doctor workflow
+- Recall loops back to reception or OPD
+- Unified day-operations dashboard
+
+Primary frontend surfaces
+- UnifiedOperationsHub
+- AppointmentBookingView
+- AppointmentQueueView
+- ReceptionQueueView
+- OpdQueueView
+- DoctorQueueView
+
+Primary backend/data surfaces
+- appointments
+- reception_queue
+- opd_queue
+- doctor_queue
+
+5.3 FINANCE / ERP-LIKE SYSTEM
+- Patient billing
+- Insurance handling and claims
+- Surgery billing
+- Pharmacy billing
+- Medicine master and stock updates
+- GRN / purchase invoice intake
+- Vendor master
+- Vendor ledger and payment workflows
+
+Primary frontend surfaces
+- IndividualBillingView
+- BillingDashboardView
+- PharmacyBillingView
+- MedicineManagementView
+- PharmacyFinanceDashboardView
+- VendorListView
+- VendorLedgerView
+
+Primary backend/data surfaces
+- billing_invoices
+- billing_cases
+- initial_surgery_bills
+- final_surgery_bills
+- pharmacy_billing
+- pharmacy_medicines
+- vendors
+- purchase_invoices
+- vendor_payments
+- surgery_packages
+
+5.4 PLATFORM / ADMIN
+- User management
+- Organization login / payment setup
+- Settings and profile configuration
+- Admin monitoring and data tools
+
+============================================================
+6. ARCHITECTURE GAPS / MISSING ERP MODULES
+============================================================
+
+The system already contains meaningful ERP-style capabilities in billing, pharmacy finance, procurement, and vendor payables. However, several classic ERP modules are still absent or only partially represented.
+
+Clearly Missing or Underdeveloped Modules
+- Payroll
+  No salary, pay run, deductions, attendance-linked pay, or payslip module exists.
+- HR / Staff Management
+  Users exist for authentication, but there is no staff master with departments, designations, joining dates, leave balances, or employment records.
+- Attendance / Timekeeping
+  No duty roster, shift attendance, biometric import, or timesheet module is present.
+- Accounting / General Ledger
+  There is finance functionality, but not a full accounting system with chart of accounts, journal entries, trial balance, P&L, or balance sheet.
+- Accounts Payable / Receivable Formalization
+  Vendor payables exist. Patient billing exists. But they are not yet unified into a broader accounting layer.
+- Central Procurement Workflow
+  GRN exists, but not a full procurement lifecycle with purchase orders, approvals, receiving variance, and stock valuation.
+- Asset Management
+  No fixed asset register or depreciation tracking.
+- Staff Scheduling / Department Management
+  No roster planning, department hierarchy, or workforce management.
+
+Partial Modules Already Present
+- Inventory management is partially present through pharmacy stock and GRN workflows.
+- Staff management is partially present through the users collection and role-based login.
+- Procurement is partially present through purchase_invoices and vendor_payments.
+
+============================================================
+7. RECOMMENDED PLACE FOR PAYROLL MODULE
+============================================================
+
+Recommended Placement
+- Payroll should live under the ERP / Finance side of the product, not inside the clinical workflow areas.
+
+Reasoning
+- Existing non-clinical financial modules already cluster around:
+  - Billing Dashboard
+  - Pharmacy Finance Dashboard
+  - Vendor Ledger
+  - Vendor List
+- These modules together represent the current ERP-oriented branch of the application.
+- Payroll belongs conceptually beside payables, procurement finance, and business operations rather than alongside patient charting or queue workflows.
+
+Best Fit in Current Navigation
+- Add Payroll as a sibling of:
+  - Billing Dashboard
+  - Pharmacy Finance
+  - Vendor Payables / Vendor Ledger
+
+Recommended Logical Grouping
+- Financial / ERP Modules
+  - Patient Billing
+  - Billing Dashboard
+  - Pharmacy Finance
+  - Vendor Ledger
+  - Vendor Master
+  - Payroll (new)
+
+Recommended Future ERP Cluster
+- Finance / ERP
+  - Billing
+  - Pharmacy Finance
+  - Vendor Payables
+  - Payroll
+  - Accounting (future)
+  - Procurement (future expansion of GRN/vendor workflows)
+  - HR / Staff Management (future)
+
+============================================================
+8. CONCLUSION
+============================================================
+
+Current System Shape
+- The product is already a hybrid EMR + hospital operations + partial ERP platform.
+- Clinical workflows are well represented through patient charting, investigations, documents, surgery, and telemedicine.
+- Operations workflows are built around appointment and staged queue management.
+- ERP-like capabilities already exist in billing, pharmacy, procurement intake, vendor management, and vendor payables.
+
+Architecture Recommendation for Payroll
+- Payroll should be introduced as a top-level financial/ERP module.
+- It should not be embedded inside Reception, OPD, Doctor, or Documents workflows.
+- The most consistent placement is alongside Pharmacy Finance and Vendor Ledger, as part of a broader Finance / ERP section.
+
+Suggested Next Architecture Step
+- If Payroll is added, the navigation should probably formalize a dedicated ERP grouping rather than continuing to expose finance modules only as separate sidebar icons.
+- This would make future additions such as Payroll, HR, Accounting, and Procurement easier to scale.

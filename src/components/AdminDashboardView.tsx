@@ -1,6 +1,6 @@
 ﻿import { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
-import { Building2, Users, IndianRupee, TrendingUp, RefreshCw, Database } from 'lucide-react';
+import { Building2, Users, IndianRupee, TrendingUp, RefreshCw, Database, Boxes } from 'lucide-react';
 import { API_ENDPOINTS } from '../config/api';
 
 interface Organization {
@@ -120,6 +120,13 @@ export function AdminDashboardView({ onNavigate }: { onNavigate?: NavigationCall
             <p className="text-[#8B8B8B]">Manage all organizations and subscriptions</p>
           </div>
           <div className="flex gap-3">
+            <button
+              onClick={() => onNavigate?.('inventory')}
+              className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white transition-colors hover:bg-blue-700"
+            >
+              <Boxes className="w-4 h-4" />
+              Inventory
+            </button>
             <button
               onClick={() => onNavigate?.('admin-data-management')}
               className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition-colors"

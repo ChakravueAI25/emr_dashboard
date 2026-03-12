@@ -432,10 +432,13 @@ export function BillingDashboardView({ onBillingClick }: BillingDashboardViewPro
     }
   };
 
+  const toSearchValue = (value: unknown): string => String(value ?? '').toLowerCase();
+
   const filteredRecords = records.filter(r => {
-    const matchesSearch =
-      r.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      r.registrationId.toLowerCase().includes(searchTerm.toLowerCase());
+    const query = toSearchValue(searchTerm);
+    const patientName = toSearchValue(r?.patientName);
+    const registrationId = toSearchValue(r?.registrationId);
+    const matchesSearch = patientName.includes(query) || registrationId.includes(query);
 
     const matchesType = typeFilter === 'All Types' || r.type === typeFilter;
     const matchesStatus = statusFilter === 'All Status' || r.status === statusFilter;

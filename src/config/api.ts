@@ -121,6 +121,16 @@ export const API_ENDPOINTS = {
     OVERDUE_INVOICES: `${API_BASE_URL}/vendors/overdue-invoices`,
   },
 
+  // Payroll endpoints
+  PAYROLL: {
+    EMPLOYEES: `${API_BASE_URL}/employees`,
+    EMPLOYEE: (employeeId: string) => `${API_BASE_URL}/employees/${encodeURIComponent(employeeId)}`,
+    LIST: (month: string) => `${API_BASE_URL}/payroll?month=${encodeURIComponent(month)}`,
+    RECORD: (employeeId: string, month: string) => `${API_BASE_URL}/payroll/${encodeURIComponent(employeeId)}/${encodeURIComponent(month)}`,
+    HISTORY: (employeeId: string) => `${API_BASE_URL}/payroll/history/${encodeURIComponent(employeeId)}`,
+    RUN: `${API_BASE_URL}/payroll/run`,
+  },
+
   // GRN / Purchase Invoice
   GRN: {
     CREATE: `${API_BASE_URL}/pharmacy/grn`,
@@ -139,6 +149,22 @@ export const API_ENDPOINTS = {
   INVENTORY: {
     EXPIRY_ALERTS: `${API_BASE_URL}/inventory/expiry-alerts`,
     DEAD_STOCK: `${API_BASE_URL}/inventory/dead-stock`,
+  },
+
+  INVENTORY_MANAGEMENT: {
+    ANALYTICS: `${API_BASE_URL}/inventory/analytics`,
+    INVOICES: `${API_BASE_URL}/inventory/invoices`,
+    STOCK: `${API_BASE_URL}/inventory/stock`,
+    STOCK_HISTORY: (description: string) => `${API_BASE_URL}/inventory/stock/${encodeURIComponent(description)}/history`,
+    LENS_SERIALS: `${API_BASE_URL}/inventory/lens-serials`,
+    LENS_USAGE: `${API_BASE_URL}/inventory/lens-usage`,
+    USAGE: `${API_BASE_URL}/inventory/usage`,
+    LEDGER: `${API_BASE_URL}/inventory/ledger`,
+    ADJUSTMENTS: `${API_BASE_URL}/inventory/adjustments`,
+    EXPIRY_REMOVAL: `${API_BASE_URL}/inventory/expiry-removal`,
+    REPORTS_USAGE: (period: 'daily' | 'monthly' | 'yearly') => `${API_BASE_URL}/inventory/reports/usage?period=${encodeURIComponent(period)}`,
+    REPORTS_PURCHASES: `${API_BASE_URL}/inventory/reports/purchases`,
+    REPORTS_LENS_USAGE: `${API_BASE_URL}/inventory/reports/lens-usage`,
   },
 
   // Surgery Packages endpoints

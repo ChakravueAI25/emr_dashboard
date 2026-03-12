@@ -201,7 +201,7 @@ from datetime import datetime
 # Allowed roles for the application. These map to the front-end roles.
 # Normalization in the API uppercases the incoming role string before validation,
 # so we list canonical UPPERCASE role names here.
-ALLOWED_ROLES = {"RECEPTIONIST", "OPD", "DOCTOR", "PATIENT"}
+ALLOWED_ROLES = {"ADMIN", "RECEPTIONIST", "OPD", "DOCTOR", "PATIENT"}
 
 class NewUser(BaseModel):
     username: str
@@ -222,6 +222,49 @@ class UserInDB(BaseModel):
         populate_by_name = True
         arbitrary_types_allowed = True
         json_encoders = {ObjectId: str}
+
+
+class PayrollEmployeeBase(BaseModel):
+    name: str
+    role: str
+    grossSalary: float
+    leaves: float = 0.0
+    advance: float = 0.0
+
+
+class PayrollEmployeeCreate(PayrollEmployeeBase):
+    pass
+
+
+class PayrollEmployeeUpdate(BaseModel):
+    name: Optional[str] = None
+    role: Optional[str] = None
+    grossSalary: Optional[float] = None
+    leaves: Optional[float] = None
+    advance: Optional[float] = None
+
+
+class PayrollRunRequest(BaseModel):
+    employeeId: str
+    month: Optional[str] = None
+
+
+class PayrollRecord(BaseModel):
+    employeeId: str
+    month: str
+    gross: float
+    basic: float
+    hra: float
+    pf: float
+    esi: float
+    pt: float
+    leaveDeduction: float
+    advance: float
+    netSalary: float
+    copf: float
+    coesi: float
+    ctc: float
+    createdAt: datetime = Field(default_factory=datetime.utcnow)
 
 
 # --- Pharmacy Models ---

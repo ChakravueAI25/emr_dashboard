@@ -9,7 +9,7 @@ import os
 import time
 import uuid
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import re
 from passlib.context import CryptContext
 from bson import ObjectId
@@ -47,7 +47,16 @@ from database import (
     presets_collection,
     vendors_collection,
     purchase_invoices_collection,
-    vendor_payments_collection
+    vendor_payments_collection,
+    employees_collection,
+    payroll_records_collection,
+    inventory_invoices_collection,
+    inventory_items_collection,
+    lens_serial_inventory_collection,
+    inventory_stock_collection,
+    lens_usage_collection,
+    inventory_usage_collection,
+    inventory_stock_ledger_collection,
 )
 from invoice_parser import parse_invoice
 from models import (
@@ -71,6 +80,9 @@ from models import (
     UpdateSurgeryPackage,
     PurchaseProduct,
     VendorPaymentRecord,
+    PayrollEmployeeCreate,
+    PayrollEmployeeUpdate,
+    PayrollRunRequest,
 )
 import database  # ensure database.py is loaded
 from database import patient_collection  # re-import for clarity
@@ -869,6 +881,427 @@ def sanitize(obj):
         return obj.isoformat()
     else:
         return obj
+
+
+def _round_currency(value: float) -> float:
+    return round(float(value or 0), 2)
+
+
+def _normalize_payroll_month(month: Optional[str]) -> str:
+    if month is None or not str(month).strip():
+        return datetime.utcnow().strftime("%Y-%m")
+
+    normalized = str(month).strip()
+    if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", normalized):
+        raise HTTPException(status_code=400, detail="month must be in YYYY-MM format")
+    return normalized
+
+
+def _is_current_payroll_month(month: str) -> bool:
+    return month == datetime.utcnow().strftime("%Y-%m")
+
+
+def _calculate_payroll_components(gross_salary: float, leaves: float, advance: float) -> dict:
+    gross = max(float(gross_salary or 0), 0.0)
+    leave_days = max(float(leaves or 0), 0.0)
+    advance_amount = max(float(advance or 0), 0.0)
+
+    basic = gross * 0.70
+    hra = gross * 0.30
+    pf = gross * 0.12
+    esi = gross * 0.0075
+
+    if gross > 20000:
+        pt = 200.0
+    elif gross > 15000:
+        pt = 150.0
+    else:
+        pt = 0.0
+
+    per_day = gross / 30 if gross else 0.0
+    leave_deduction = leave_days * per_day
+    net_salary = gross - pf - esi - pt - leave_deduction - advance_amount
+
+    copf = basic * 0.13
+    coesi = gross * 0.0325
+    ctc = gross + copf + coesi
+
+    return {
+        "basic": _round_currency(basic),
+        "hra": _round_currency(hra),
+        "pf": _round_currency(pf),
+        "esi": _round_currency(esi),
+        "pt": _round_currency(pt),
+        "leaveDeduction": _round_currency(leave_deduction),
+        "advance": _round_currency(advance_amount),
+        "netSalary": _round_currency(net_salary),
+        "copf": _round_currency(copf),
+        "coesi": _round_currency(coesi),
+        "ctc": _round_currency(ctc),
+    }
+
+
+def _generate_employee_id() -> str:
+    latest = employees_collection.find_one({}, sort=[("employeeId", -1)])
+    if not latest:
+        return "EMP001"
+
+    latest_id = str(latest.get("employeeId") or "EMP000")
+    match = re.search(r"(\d+)$", latest_id)
+    next_number = (int(match.group(1)) if match else 0) + 1
+    return f"EMP{next_number:03d}"
+
+
+def _build_payroll_record(employee: dict, month: Optional[str] = None) -> dict:
+    normalized_month = _normalize_payroll_month(month)
+    calculations = _calculate_payroll_components(
+        employee.get("grossSalary", 0),
+        employee.get("leaves", 0),
+        employee.get("advance", 0),
+    )
+
+    return {
+        "employeeId": employee.get("employeeId"),
+        "month": normalized_month,
+        "gross": _round_currency(employee.get("grossSalary", 0)),
+        **calculations,
+        "createdAt": datetime.utcnow(),
+    }
+
+
+def _upsert_payroll_record(employee: dict, month: Optional[str] = None) -> dict:
+    record = _build_payroll_record(employee, month)
+    month_key = record["month"]
+    created_at = record["createdAt"]
+
+    update_payload = {key: value for key, value in record.items() if key != "createdAt"}
+    payroll_records_collection.update_one(
+        {"employeeId": employee.get("employeeId"), "month": month_key},
+        {
+            "$set": update_payload,
+            "$setOnInsert": {"createdAt": created_at},
+        },
+        upsert=True,
+    )
+
+    saved_record = payroll_records_collection.find_one({"employeeId": employee.get("employeeId"), "month": month_key})
+    return saved_record or record
+
+
+def _generate_inventory_invoice_id() -> str:
+    return f"INV-{datetime.utcnow().strftime('%Y%m')}-{uuid.uuid4().hex[:6].upper()}"
+
+
+def _generate_inventory_reference(prefix: str) -> str:
+    return f"{prefix}-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:6].upper()}"
+
+
+def _normalize_inventory_user(user) -> str:
+    normalized = str(user or "").strip()
+    return normalized or "System"
+
+
+def _normalize_inventory_description(value, field_name: str = "description") -> str:
+    description = re.sub(r"\s+", " ", str(value or "").strip())
+    if not description:
+        raise HTTPException(status_code=400, detail=f"{field_name} is required")
+    return description
+
+
+def _parse_optional_inventory_datetime(value: Optional[str], field_name: str) -> Optional[datetime]:
+    if value is None or not str(value).strip():
+        return None
+    return _parse_inventory_datetime(value, field_name)
+
+
+def _normalize_inventory_item_type(value, is_serial_tracked: bool = False) -> str:
+    normalized = str(value or "").strip().upper().replace("-", "_").replace(" ", "_")
+    if is_serial_tracked:
+        normalized = "SERIAL_TRACKED"
+    if not normalized:
+        normalized = "CONSUMABLE"
+    if normalized not in {"SERIAL_TRACKED", "CONSUMABLE"}:
+        raise HTTPException(status_code=400, detail="item_type must be either SERIAL_TRACKED or CONSUMABLE")
+    return normalized
+
+
+def _create_inventory_ledger_entry(
+    description: str,
+    movement_type: str,
+    quantity: float,
+    previous_balance: float,
+    new_balance: float,
+    reference_id: Optional[str] = None,
+    date: Optional[datetime] = None,
+    user: Optional[str] = None,
+):
+    inventory_stock_ledger_collection.insert_one({
+        "description": description,
+        "movement_type": movement_type,
+        "quantity": round(float(quantity or 0), 2),
+        "previous_balance": round(float(previous_balance or 0), 2),
+        "new_balance": round(float(new_balance or 0), 2),
+        "reference_id": reference_id or "",
+        "date": date or datetime.utcnow(),
+        "user": _normalize_inventory_user(user),
+    })
+
+
+def _coerce_inventory_number(value, field_name: str, allow_zero: bool = True) -> float:
+    try:
+        number = float(value or 0)
+    except Exception:
+        raise HTTPException(status_code=400, detail=f"{field_name} must be a valid number")
+
+    if number < 0 or (not allow_zero and number == 0):
+        comparator = "greater than 0" if not allow_zero else "0 or greater"
+        raise HTTPException(status_code=400, detail=f"{field_name} must be {comparator}")
+    return number
+
+
+def _coerce_inventory_int(value, field_name: str) -> int:
+    try:
+        number = int(float(value or 0))
+    except Exception:
+        raise HTTPException(status_code=400, detail=f"{field_name} must be a valid integer")
+
+    if number < 0:
+        raise HTTPException(status_code=400, detail=f"{field_name} must be 0 or greater")
+    return number
+
+
+def _parse_inventory_datetime(value: Optional[str], field_name: str) -> datetime:
+    if value is None or not str(value).strip():
+        return datetime.utcnow()
+
+    normalized = str(value).strip().replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except Exception:
+        raise HTTPException(status_code=400, detail=f"{field_name} must be a valid ISO date")
+
+    if parsed.tzinfo is not None:
+        parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+    return parsed
+
+
+def _apply_inventory_stock_movement(
+    description: str,
+    movement_type: str,
+    quantity_delta: float,
+    unit: Optional[str] = None,
+    mrp: Optional[float] = None,
+    item_type: Optional[str] = None,
+    minimum_stock_level: Optional[float] = None,
+    reference_id: Optional[str] = None,
+    user: Optional[str] = None,
+    event_date: Optional[datetime] = None,
+):
+    normalized_description = _normalize_inventory_description(description)
+    normalized_movement = str(movement_type or "").strip().upper()
+    if normalized_movement not in {"PURCHASE", "USAGE", "SERIAL_USAGE", "ADJUSTMENT", "EXPIRY"}:
+        raise HTTPException(status_code=400, detail="Invalid inventory movement type")
+
+    existing = inventory_stock_collection.find_one({"description": normalized_description})
+    previous_balance = float((existing or {}).get("available_qty", 0) or 0)
+    next_balance = previous_balance + float(quantity_delta or 0)
+    if next_balance < 0:
+        raise HTTPException(status_code=400, detail=f"Insufficient stock for {normalized_description}")
+
+    now = event_date or datetime.utcnow()
+    resolved_item_type = _normalize_inventory_item_type(item_type or (existing or {}).get("item_type"), False)
+    resolved_minimum = float(
+        minimum_stock_level
+        if minimum_stock_level is not None
+        else (existing or {}).get("minimum_stock_level", 0) or 0
+    )
+
+    update_payload = {
+        "description": normalized_description,
+        "available_qty": round(next_balance, 2),
+        "unit": unit or (existing or {}).get("unit") or "pcs",
+        "mrp": float(mrp if mrp is not None else (existing or {}).get("mrp", 0) or 0),
+        "item_type": resolved_item_type,
+        "minimum_stock_level": round(resolved_minimum, 2),
+        "last_updated": now,
+    }
+
+    if existing:
+        inventory_stock_collection.update_one({"_id": existing["_id"]}, {"$set": update_payload})
+    else:
+        inventory_stock_collection.insert_one(update_payload)
+
+    _create_inventory_ledger_entry(
+        description=normalized_description,
+        movement_type=normalized_movement,
+        quantity=quantity_delta,
+        previous_balance=previous_balance,
+        new_balance=next_balance,
+        reference_id=reference_id,
+        date=now,
+        user=user,
+    )
+
+    return update_payload
+
+
+def _normalize_serial_numbers(value) -> list[str]:
+    if value is None:
+        return []
+
+    if isinstance(value, list):
+        raw_values = value
+    else:
+        raw_values = str(value).replace(",", "\n").splitlines()
+
+    normalized = []
+    for item in raw_values:
+        serial_number = str(item or "").strip()
+        if serial_number:
+            normalized.append(serial_number)
+    return normalized
+
+
+def _normalize_inventory_items(items: list[dict]) -> list[dict]:
+    if not isinstance(items, list) or not items:
+        raise HTTPException(status_code=400, detail="At least one inventory item is required")
+
+    normalized_items = []
+    serials_seen = set()
+
+    for index, raw_item in enumerate(items, start=1):
+        if not isinstance(raw_item, dict):
+            raise HTTPException(status_code=400, detail=f"Item {index} is invalid")
+
+        description = str(raw_item.get("description") or "").strip()
+        if not description:
+            raise HTTPException(status_code=400, detail=f"Item {index}: description is required")
+
+        qty = _coerce_inventory_int(raw_item.get("qty"), f"Item {index}: qty")
+        free_qty = _coerce_inventory_int(raw_item.get("free_qty", raw_item.get("freeQty")), f"Item {index}: free_qty")
+        total_units = qty + free_qty
+        unit = str(raw_item.get("unit") or "pcs").strip() or "pcs"
+        amount = _coerce_inventory_number(raw_item.get("amount"), f"Item {index}: amount")
+        gst = _coerce_inventory_number(raw_item.get("gst"), f"Item {index}: gst")
+        mrp = _coerce_inventory_number(raw_item.get("mrp"), f"Item {index}: mrp")
+        expiry_date = _parse_optional_inventory_datetime(raw_item.get("expiry_date", raw_item.get("expiryDate")), f"Item {index}: expiry_date")
+        minimum_stock_level = _coerce_inventory_number(
+            raw_item.get("minimum_stock_level", raw_item.get("minimumStockLevel")),
+            f"Item {index}: minimum_stock_level",
+        )
+
+        if gst not in {5.0, 18.0}:
+            raise HTTPException(status_code=400, detail=f"Item {index}: GST must be either 5 or 18")
+
+        is_serial_tracked = bool(raw_item.get("is_serial_tracked", raw_item.get("isSerialTracked")))
+        item_type = _normalize_inventory_item_type(raw_item.get("item_type", raw_item.get("itemType")), is_serial_tracked)
+        serial_numbers = _normalize_serial_numbers(raw_item.get("serial_numbers", raw_item.get("serialNumbers")))
+
+        if item_type == "SERIAL_TRACKED" and not is_serial_tracked:
+            is_serial_tracked = True
+        if item_type == "CONSUMABLE" and is_serial_tracked:
+            raise HTTPException(status_code=400, detail=f"Item {index}: consumables cannot be serial tracked")
+
+        if is_serial_tracked:
+            if total_units <= 0:
+                raise HTTPException(status_code=400, detail=f"Item {index}: serial tracked items must have quantity greater than 0")
+            if len(serial_numbers) != total_units:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Item {index}: expected {total_units} serial numbers, received {len(serial_numbers)}",
+                )
+            duplicate_in_item = len(serial_numbers) != len(set(serial_numbers))
+            if duplicate_in_item:
+                raise HTTPException(status_code=400, detail=f"Item {index}: serial numbers must be unique")
+
+            for serial_number in serial_numbers:
+                if serial_number in serials_seen:
+                    raise HTTPException(status_code=400, detail=f"Duplicate serial number in invoice: {serial_number}")
+                serials_seen.add(serial_number)
+
+        normalized_items.append({
+            "description": description,
+            "hsn": str(raw_item.get("hsn") or "").strip(),
+            "qty": qty,
+            "unit": unit,
+            "amount": amount,
+            "gst": gst,
+            "mrp": mrp,
+            "free_qty": free_qty,
+            "item_type": item_type,
+            "expiry_date": expiry_date,
+            "minimum_stock_level": minimum_stock_level,
+            "is_serial_tracked": is_serial_tracked,
+            "serial_numbers": serial_numbers,
+        })
+
+    if serials_seen:
+        existing_serials = list(lens_serial_inventory_collection.find({"serial_number": {"$in": list(serials_seen)}}))
+        if existing_serials:
+            duplicate_serials = ", ".join(sorted(serial.get("serial_number") for serial in existing_serials if serial.get("serial_number")))
+            raise HTTPException(status_code=409, detail=f"Serial numbers already exist: {duplicate_serials}")
+
+    return normalized_items
+
+
+def _build_low_stock_rows(limit: int = 10) -> list[dict]:
+    rows = list(
+        inventory_stock_collection.find({
+            "minimum_stock_level": {"$gt": 0},
+            "$expr": {"$lt": ["$available_qty", "$minimum_stock_level"]},
+        }).sort("available_qty", 1).limit(limit)
+    )
+    return [sanitize(row) for row in rows]
+
+
+def _build_expiring_soon_rows(limit: int = 10) -> list[dict]:
+    now = datetime.utcnow()
+    cutoff = now + timedelta(days=60)
+    item_rows = list(
+        inventory_items_collection.find({
+            "expiry_date": {"$ne": None, "$gte": now, "$lte": cutoff},
+        }).sort("expiry_date", 1)
+    )
+
+    grouped = {}
+    for row in item_rows:
+        description = row.get("description")
+        if not description or description in grouped:
+            continue
+        stock_row = inventory_stock_collection.find_one({"description": description})
+        if not stock_row or float(stock_row.get("available_qty", 0) or 0) <= 0:
+            continue
+        grouped[description] = {
+            "description": description,
+            "expiry_date": sanitize(row).get("expiry_date"),
+            "available_qty": stock_row.get("available_qty", 0),
+            "unit": stock_row.get("unit", "pcs"),
+        }
+
+    return list(grouped.values())[:limit]
+
+
+def _build_lens_serial_rows(status: Optional[str] = None) -> list[dict]:
+    query = {}
+    if status:
+        query["status"] = status.upper()
+
+    serial_rows = list(lens_serial_inventory_collection.find(query).sort("serial_number", 1))
+    serial_numbers = [row.get("serial_number") for row in serial_rows if row.get("serial_number")]
+    usage_rows = list(lens_usage_collection.find({"serial_number": {"$in": serial_numbers}})) if serial_numbers else []
+    usage_by_serial = {row.get("serial_number"): row for row in usage_rows}
+
+    response = []
+    for row in serial_rows:
+        usage = usage_by_serial.get(row.get("serial_number"))
+        response.append({
+            **sanitize(row),
+            "patient_name": usage.get("patient_name") if usage else "",
+            "surgery_date": sanitize(usage).get("surgery_date") if usage else "",
+            "doctor": usage.get("doctor") if usage else "",
+            "eye": usage.get("eye") if usage else "",
+        })
+    return response
 
 @app.get("/")
 def read_root():
@@ -5526,6 +5959,670 @@ async def get_vendors():
         return {"status": "success", "total": len(vendors), "vendors": [sanitize(v) for v in vendors]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/employees")
+async def get_employees():
+    try:
+        employees = list(employees_collection.find().sort("employeeId", 1))
+        return {"status": "success", "total": len(employees), "employees": [sanitize(employee) for employee in employees]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch employees: {str(e)}")
+
+
+@app.post("/employees")
+async def create_employee(payload: PayrollEmployeeCreate = Body(...)):
+    try:
+        name = (payload.name or "").strip()
+        role = (payload.role or "").strip()
+        if not name or not role:
+            raise HTTPException(status_code=400, detail="name and role are required")
+
+        employee = {
+            "employeeId": _generate_employee_id(),
+            "name": name,
+            "role": role,
+            "grossSalary": _round_currency(max(payload.grossSalary, 0)),
+            "leaves": max(float(payload.leaves or 0), 0.0),
+            "advance": _round_currency(max(payload.advance or 0, 0)),
+            "createdAt": datetime.utcnow(),
+        }
+
+        employees_collection.insert_one(employee)
+        payroll_record = _upsert_payroll_record(employee)
+        return {
+            "status": "success",
+            "employee": sanitize(employee),
+            "payroll": sanitize(payroll_record),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create employee: {str(e)}")
+
+
+@app.patch("/employees/{employee_id}")
+async def update_employee(employee_id: str, payload: PayrollEmployeeUpdate = Body(...)):
+    try:
+        existing = employees_collection.find_one({"employeeId": employee_id})
+        if not existing:
+            raise HTTPException(status_code=404, detail="Employee not found")
+
+        update_data = {}
+        if payload.name is not None:
+            name = payload.name.strip()
+            if not name:
+                raise HTTPException(status_code=400, detail="name cannot be empty")
+            update_data["name"] = name
+        if payload.role is not None:
+            role = payload.role.strip()
+            if not role:
+                raise HTTPException(status_code=400, detail="role cannot be empty")
+            update_data["role"] = role
+        if payload.grossSalary is not None:
+            update_data["grossSalary"] = _round_currency(max(payload.grossSalary, 0))
+        if payload.leaves is not None:
+            update_data["leaves"] = max(float(payload.leaves), 0.0)
+        if payload.advance is not None:
+            update_data["advance"] = _round_currency(max(payload.advance, 0))
+
+        if not update_data:
+            raise HTTPException(status_code=400, detail="No payroll fields provided")
+
+        update_data["updatedAt"] = datetime.utcnow()
+        employees_collection.update_one({"employeeId": employee_id}, {"$set": update_data})
+        updated_employee = employees_collection.find_one({"employeeId": employee_id})
+        payroll_record = _upsert_payroll_record(updated_employee)
+
+        return {
+            "status": "success",
+            "employee": sanitize(updated_employee),
+            "payroll": sanitize(payroll_record),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update employee: {str(e)}")
+
+
+@app.get("/payroll")
+async def list_payroll_records(month: str):
+    try:
+        normalized_month = _normalize_payroll_month(month)
+        records = list(payroll_records_collection.find({"month": normalized_month}).sort("employeeId", 1))
+        return {
+            "status": "success",
+            "month": normalized_month,
+            "total": len(records),
+            "records": [sanitize(record) for record in records],
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch payroll records: {str(e)}")
+
+
+@app.get("/payroll/history/{employee_id}")
+async def get_payroll_history(employee_id: str):
+    try:
+        records = list(
+            payroll_records_collection.find({"employeeId": employee_id}).sort("month", -1)
+        )
+        return {
+            "status": "success",
+            "employeeId": employee_id,
+            "total": len(records),
+            "records": [sanitize(record) for record in records],
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch payroll history: {str(e)}")
+
+
+@app.get("/payroll/{employee_id}/{month}")
+async def get_payroll_for_employee(employee_id: str, month: str):
+    try:
+        normalized_month = _normalize_payroll_month(month)
+        existing_record = payroll_records_collection.find_one({"employeeId": employee_id, "month": normalized_month})
+        if existing_record:
+            return {"status": "success", "persisted": True, "record": sanitize(existing_record)}
+
+        if not _is_current_payroll_month(normalized_month):
+            raise HTTPException(status_code=404, detail="Payroll record not found for this month")
+
+        employee = employees_collection.find_one({"employeeId": employee_id})
+        if not employee:
+            raise HTTPException(status_code=404, detail="Employee not found")
+
+        preview_record = _build_payroll_record(employee, normalized_month)
+        return {"status": "success", "persisted": False, "record": sanitize(preview_record)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch payroll record: {str(e)}")
+
+
+@app.post("/payroll/run")
+async def run_payroll(payload: PayrollRunRequest = Body(...)):
+    try:
+        employee = employees_collection.find_one({"employeeId": payload.employeeId})
+        if not employee:
+            raise HTTPException(status_code=404, detail="Employee not found")
+
+        record = _upsert_payroll_record(employee, payload.month)
+        return {"status": "success", "record": sanitize(record)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to run payroll: {str(e)}")
+
+
+@app.post("/inventory/invoices")
+async def create_inventory_invoice(payload: dict = Body(...)):
+    try:
+        vendor = str(payload.get("vendor") or "").strip()
+        invoice_number = str(payload.get("invoice_number") or payload.get("invoiceNumber") or "").strip()
+        created_by = _normalize_inventory_user(payload.get("user") or payload.get("created_by") or payload.get("createdBy"))
+        if not vendor or not invoice_number:
+            raise HTTPException(status_code=400, detail="vendor and invoice_number are required")
+
+        invoice_value = _coerce_inventory_number(payload.get("invoice_value", payload.get("invoiceValue")), "invoice_value", allow_zero=False)
+        invoice_date = _parse_inventory_datetime(payload.get("invoice_date", payload.get("invoiceDate")), "invoice_date")
+        normalized_items = _normalize_inventory_items(payload.get("items") or [])
+
+        duplicate_invoice = inventory_invoices_collection.find_one({
+            "vendor": {"$regex": f"^{re.escape(vendor)}$", "$options": "i"},
+            "invoice_number": invoice_number,
+        })
+        if duplicate_invoice:
+            raise HTTPException(status_code=409, detail="Inventory invoice already exists for this vendor and invoice number")
+
+        now = datetime.utcnow()
+        invoice_id = _generate_inventory_invoice_id()
+        invoice_document = {
+            "invoice_id": invoice_id,
+            "vendor": vendor,
+            "invoice_number": invoice_number,
+            "invoice_value": invoice_value,
+            "invoice_date": invoice_date,
+            "created_by": created_by,
+            "created_at": now,
+        }
+        inventory_invoices_collection.insert_one(invoice_document)
+
+        inventory_item_documents = []
+        serial_documents = []
+        for item in normalized_items:
+            inventory_item_documents.append({
+                "invoice_id": invoice_id,
+                "description": item["description"],
+                "hsn": item["hsn"],
+                "qty": item["qty"],
+                "unit": item["unit"],
+                "amount": item["amount"],
+                "gst": item["gst"],
+                "mrp": item["mrp"],
+                "free_qty": item["free_qty"],
+                "item_type": item["item_type"],
+                "expiry_date": item["expiry_date"],
+                "minimum_stock_level": item["minimum_stock_level"],
+                "is_serial_tracked": item["is_serial_tracked"],
+                "created_at": now,
+            })
+
+            total_units = item["qty"] + item["free_qty"]
+            _apply_inventory_stock_movement(
+                description=item["description"],
+                movement_type="PURCHASE",
+                quantity_delta=total_units,
+                unit=item["unit"],
+                mrp=item["mrp"],
+                item_type=item["item_type"],
+                minimum_stock_level=item["minimum_stock_level"],
+                reference_id=invoice_id,
+                user=created_by,
+                event_date=invoice_date,
+            )
+
+            if item["is_serial_tracked"]:
+                for serial_number in item["serial_numbers"]:
+                    serial_documents.append({
+                        "serial_number": serial_number,
+                        "lens_model": item["description"],
+                        "invoice_id": invoice_id,
+                        "expiry_date": item["expiry_date"],
+                        "status": "IN_STOCK",
+                        "created_at": now,
+                    })
+
+        if inventory_item_documents:
+            inventory_items_collection.insert_many(inventory_item_documents)
+        if serial_documents:
+            lens_serial_inventory_collection.insert_many(serial_documents)
+
+        return {
+            "status": "success",
+            "invoice": sanitize(invoice_document),
+            "itemsCreated": len(inventory_item_documents),
+            "serialsCreated": len(serial_documents),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create inventory invoice: {str(e)}")
+
+
+@app.get("/inventory/analytics")
+async def get_inventory_analytics():
+    try:
+        now = datetime.utcnow()
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        year_start = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+
+        def _sum_invoice_value(start_date: datetime) -> float:
+            pipeline = [
+                {"$match": {"invoice_date": {"$gte": start_date}}},
+                {"$group": {"_id": None, "total": {"$sum": "$invoice_value"}}},
+            ]
+            result = list(inventory_invoices_collection.aggregate(pipeline))
+            return float(result[0].get("total", 0)) if result else 0.0
+
+        value_pipeline = [
+            {"$group": {"_id": None, "total": {"$sum": {"$multiply": ["$available_qty", "$mrp"]}}}},
+        ]
+        value_result = list(inventory_stock_collection.aggregate(value_pipeline))
+        total_inventory_value = float(value_result[0].get("total", 0)) if value_result else 0.0
+        low_stock_rows = _build_low_stock_rows(limit=10)
+        expiring_rows = _build_expiring_soon_rows(limit=10)
+
+        payload = {
+            "totalInventoryValue": round(total_inventory_value, 2),
+            "totalPurchaseToday": round(_sum_invoice_value(today_start), 2),
+            "totalPurchaseThisMonth": round(_sum_invoice_value(month_start), 2),
+            "totalPurchaseThisYear": round(_sum_invoice_value(year_start), 2),
+            "totalInventoryItems": inventory_stock_collection.count_documents({}),
+            "lowStockItems": inventory_stock_collection.count_documents({
+                "minimum_stock_level": {"$gt": 0},
+                "$expr": {"$lt": ["$available_qty", "$minimum_stock_level"]},
+            }),
+            "expiringItems": len(_build_expiring_soon_rows(limit=1000)),
+            "lowStockList": low_stock_rows,
+            "expiringSoonItems": expiring_rows,
+        }
+        return {"status": "success", **payload}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch inventory analytics: {str(e)}")
+
+
+@app.get("/inventory/stock")
+async def get_inventory_stock():
+    try:
+        stock_rows = list(inventory_stock_collection.find().sort("description", 1))
+        return {
+            "status": "success",
+            "total": len(stock_rows),
+            "items": [sanitize(row) for row in stock_rows],
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch inventory stock: {str(e)}")
+
+
+@app.get("/inventory/stock/{description}/history")
+async def get_inventory_item_history(description: str):
+    try:
+        description_value = str(description or "").strip()
+        if not description_value:
+            raise HTTPException(status_code=400, detail="description is required")
+
+        item_rows = list(
+            inventory_items_collection.find({
+                "description": {"$regex": f"^{re.escape(description_value)}$", "$options": "i"}
+            }).sort("created_at", -1)
+        )
+
+        invoice_ids = [row.get("invoice_id") for row in item_rows if row.get("invoice_id")]
+        invoice_rows = list(inventory_invoices_collection.find({"invoice_id": {"$in": invoice_ids}})) if invoice_ids else []
+        invoice_map = {row.get("invoice_id"): row for row in invoice_rows}
+
+        purchase_history = []
+        for row in item_rows:
+            invoice = invoice_map.get(row.get("invoice_id"), {})
+            purchase_history.append({
+                **sanitize(row),
+                "vendor": invoice.get("vendor", ""),
+                "invoice_number": invoice.get("invoice_number", ""),
+                "invoice_date": sanitize(invoice).get("invoice_date") if invoice else "",
+                "invoice_value": invoice.get("invoice_value", 0),
+            })
+
+        usage_history = list(
+            lens_usage_collection.find({
+                "lens_model": {"$regex": f"^{re.escape(description_value)}$", "$options": "i"}
+            }).sort("surgery_date", -1)
+        )
+
+        consumable_usage_history = list(
+            inventory_usage_collection.find({
+                "description": {"$regex": f"^{re.escape(description_value)}$", "$options": "i"}
+            }).sort("date", -1)
+        )
+
+        ledger_history = list(
+            inventory_stock_ledger_collection.find({
+                "description": {"$regex": f"^{re.escape(description_value)}$", "$options": "i"}
+            }).sort("date", -1).limit(100)
+        )
+
+        return {
+            "status": "success",
+            "description": description_value,
+            "purchase_history": purchase_history,
+            "usage_history": [sanitize(row) for row in usage_history],
+            "consumable_usage_history": [sanitize(row) for row in consumable_usage_history],
+            "ledger_history": [sanitize(row) for row in ledger_history],
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch inventory history: {str(e)}")
+
+
+@app.get("/inventory/lens-serials")
+async def get_lens_serial_inventory(status: str | None = None):
+    try:
+        rows = _build_lens_serial_rows(status)
+        return {
+            "status": "success",
+            "total": len(rows),
+            "items": rows,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch lens serial inventory: {str(e)}")
+
+
+@app.post("/inventory/lens-usage")
+async def record_lens_usage(payload: dict = Body(...)):
+    try:
+        serial_number = str(payload.get("serial_number") or payload.get("serialNumber") or "").strip()
+        patient_id = str(payload.get("patient_id") or payload.get("patientId") or "").strip()
+        patient_name = str(payload.get("patient_name") or payload.get("patientName") or "").strip()
+        doctor = str(payload.get("doctor") or "").strip()
+        eye = str(payload.get("eye") or "").strip().upper()
+        user = _normalize_inventory_user(payload.get("user"))
+        surgery_date = _parse_inventory_datetime(payload.get("surgery_date", payload.get("surgeryDate")), "surgery_date")
+
+        if not serial_number or not patient_id or not patient_name or not doctor or not eye:
+            raise HTTPException(status_code=400, detail="serial_number, patient_id, patient_name, doctor, and eye are required")
+
+        serial_row = lens_serial_inventory_collection.find_one({"serial_number": serial_number})
+        if not serial_row:
+            raise HTTPException(status_code=404, detail="Serial number not found")
+
+        serial_status = str(serial_row.get("status") or "").upper()
+        if serial_status == "USED":
+            raise HTTPException(status_code=409, detail="This serial number has already been used")
+        if serial_status not in {"IN_STOCK", "RESERVED"}:
+            raise HTTPException(status_code=400, detail="This serial number is not available for usage")
+
+        existing_usage = lens_usage_collection.find_one({"serial_number": serial_number})
+        if existing_usage:
+            raise HTTPException(status_code=409, detail="Lens usage already recorded for this serial number")
+
+        usage_id = _generate_inventory_reference("LENS")
+        usage_document = {
+            "usage_id": usage_id,
+            "serial_number": serial_number,
+            "patient_id": patient_id,
+            "patient_name": patient_name,
+            "doctor": doctor,
+            "surgery_date": surgery_date,
+            "eye": eye,
+            "invoice_id": serial_row.get("invoice_id"),
+            "lens_model": serial_row.get("lens_model"),
+            "user": user,
+            "created_at": datetime.utcnow(),
+        }
+        lens_usage_collection.insert_one(usage_document)
+        lens_serial_inventory_collection.update_one(
+            {"_id": serial_row["_id"]},
+            {"$set": {"status": "USED", "updated_at": datetime.utcnow()}},
+        )
+        _apply_inventory_stock_movement(
+            description=serial_row.get("lens_model", ""),
+            movement_type="SERIAL_USAGE",
+            quantity_delta=-1,
+            item_type="SERIAL_TRACKED",
+            reference_id=usage_id,
+            user=user,
+            event_date=surgery_date,
+        )
+
+        return {"status": "success", "usage": sanitize(usage_document)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to record lens usage: {str(e)}")
+
+
+@app.post("/inventory/usage")
+async def record_inventory_usage(payload: dict = Body(...)):
+    try:
+        description = _normalize_inventory_description(payload.get("description"))
+        qty_used = _coerce_inventory_number(payload.get("qty_used", payload.get("qtyUsed", payload.get("quantityUsed"))), "qty_used", allow_zero=False)
+        department = str(payload.get("department") or "").strip().upper()
+        if department not in {"OT", "WARD", "OPD"}:
+            raise HTTPException(status_code=400, detail="department must be one of OT, Ward, or OPD")
+
+        usage_date = _parse_inventory_datetime(payload.get("date"), "date")
+        remarks = str(payload.get("remarks") or "").strip()
+        user = _normalize_inventory_user(payload.get("user"))
+
+        stock_row = inventory_stock_collection.find_one({"description": description})
+        if not stock_row:
+            raise HTTPException(status_code=404, detail="Inventory item not found in stock")
+        if str(stock_row.get("item_type") or "").upper() == "SERIAL_TRACKED":
+            raise HTTPException(status_code=400, detail="Serial tracked items must be consumed through lens serial usage")
+
+        usage_id = _generate_inventory_reference("USG")
+        usage_document = {
+            "usage_id": usage_id,
+            "description": description,
+            "qty_used": qty_used,
+            "department": department,
+            "date": usage_date,
+            "remarks": remarks,
+            "user": user,
+            "created_at": datetime.utcnow(),
+        }
+        inventory_usage_collection.insert_one(usage_document)
+        _apply_inventory_stock_movement(
+            description=description,
+            movement_type="USAGE",
+            quantity_delta=-qty_used,
+            unit=stock_row.get("unit"),
+            mrp=stock_row.get("mrp"),
+            item_type=stock_row.get("item_type"),
+            minimum_stock_level=stock_row.get("minimum_stock_level"),
+            reference_id=usage_id,
+            user=user,
+            event_date=usage_date,
+        )
+
+        return {"status": "success", "usage": sanitize(usage_document)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to record inventory usage: {str(e)}")
+
+
+@app.get("/inventory/ledger")
+async def get_inventory_stock_ledger(description: str | None = None, movement_type: str | None = None, limit: int = 200):
+    try:
+        query = {}
+        if description and description.strip():
+            query["description"] = {"$regex": f"^{re.escape(description.strip())}$", "$options": "i"}
+        if movement_type and movement_type.strip():
+            query["movement_type"] = movement_type.strip().upper()
+
+        rows = list(inventory_stock_ledger_collection.find(query).sort("date", -1).limit(max(1, min(limit, 1000))))
+        return {
+            "status": "success",
+            "total": len(rows),
+            "items": [sanitize(row) for row in rows],
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch inventory ledger: {str(e)}")
+
+
+@app.post("/inventory/adjustments")
+async def create_inventory_adjustment(payload: dict = Body(...)):
+    try:
+        description = _normalize_inventory_description(payload.get("description"))
+        quantity = float(payload.get("quantity", payload.get("quantity_delta", payload.get("quantityDelta", 0))) or 0)
+        if quantity == 0:
+            raise HTTPException(status_code=400, detail="quantity must not be 0")
+
+        user = _normalize_inventory_user(payload.get("user"))
+        remarks = str(payload.get("remarks") or payload.get("reason") or "").strip()
+        event_date = _parse_inventory_datetime(payload.get("date"), "date")
+        existing = inventory_stock_collection.find_one({"description": description}) or {}
+        reference_id = _generate_inventory_reference("ADJ")
+        _apply_inventory_stock_movement(
+            description=description,
+            movement_type="ADJUSTMENT",
+            quantity_delta=quantity,
+            unit=str(payload.get("unit") or existing.get("unit") or "pcs"),
+            mrp=float(payload.get("mrp") if payload.get("mrp") is not None else existing.get("mrp", 0) or 0),
+            item_type=payload.get("item_type") or existing.get("item_type") or "CONSUMABLE",
+            minimum_stock_level=float(payload.get("minimum_stock_level") if payload.get("minimum_stock_level") is not None else existing.get("minimum_stock_level", 0) or 0),
+            reference_id=reference_id,
+            user=user,
+            event_date=event_date,
+        )
+
+        return {
+            "status": "success",
+            "adjustment": {
+                "reference_id": reference_id,
+                "description": description,
+                "quantity": quantity,
+                "remarks": remarks,
+                "date": sanitize(event_date),
+                "user": user,
+            },
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create inventory adjustment: {str(e)}")
+
+
+@app.post("/inventory/expiry-removal")
+async def create_inventory_expiry_removal(payload: dict = Body(...)):
+    try:
+        description = _normalize_inventory_description(payload.get("description"))
+        quantity = _coerce_inventory_number(payload.get("quantity"), "quantity", allow_zero=False)
+        user = _normalize_inventory_user(payload.get("user"))
+        event_date = _parse_inventory_datetime(payload.get("date"), "date")
+        reference_id = _generate_inventory_reference("EXP")
+        stock_row = inventory_stock_collection.find_one({"description": description})
+        if not stock_row:
+            raise HTTPException(status_code=404, detail="Inventory item not found in stock")
+
+        _apply_inventory_stock_movement(
+            description=description,
+            movement_type="EXPIRY",
+            quantity_delta=-quantity,
+            unit=stock_row.get("unit"),
+            mrp=stock_row.get("mrp"),
+            item_type=stock_row.get("item_type"),
+            minimum_stock_level=stock_row.get("minimum_stock_level"),
+            reference_id=reference_id,
+            user=user,
+            event_date=event_date,
+        )
+
+        return {
+            "status": "success",
+            "expiryRemoval": {
+                "reference_id": reference_id,
+                "description": description,
+                "quantity": quantity,
+                "date": sanitize(event_date),
+                "user": user,
+            },
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to remove expired inventory: {str(e)}")
+
+
+@app.get("/inventory/reports/usage")
+async def get_inventory_usage_report(period: str = "daily"):
+    try:
+        normalized_period = str(period or "daily").strip().lower()
+        date_format = "%Y-%m-%d"
+        if normalized_period == "monthly":
+            date_format = "%Y-%m"
+        elif normalized_period == "yearly":
+            date_format = "%Y"
+        elif normalized_period != "daily":
+            raise HTTPException(status_code=400, detail="period must be daily, monthly, or yearly")
+
+        pipeline = [
+            {"$group": {
+                "_id": {"$dateToString": {"format": date_format, "date": "$date"}},
+                "totalQtyUsed": {"$sum": "$qty_used"},
+                "entries": {"$sum": 1},
+            }},
+            {"$sort": {"_id": -1}},
+        ]
+        rows = list(inventory_usage_collection.aggregate(pipeline))
+        return {
+            "status": "success",
+            "period": normalized_period,
+            "rows": [
+                {
+                    "label": row.get("_id"),
+                    "totalQtyUsed": round(float(row.get("totalQtyUsed", 0) or 0), 2),
+                    "entries": row.get("entries", 0),
+                }
+                for row in rows
+            ],
+            "records": [sanitize(row) for row in inventory_usage_collection.find().sort("date", -1).limit(200)],
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch inventory usage report: {str(e)}")
+
+
+@app.get("/inventory/reports/purchases")
+async def get_inventory_purchase_report():
+    try:
+        invoices = list(inventory_invoices_collection.find().sort("invoice_date", -1).limit(300))
+        return {
+            "status": "success",
+            "totalInvoices": len(invoices),
+            "totalPurchaseValue": round(sum(float(row.get("invoice_value", 0) or 0) for row in invoices), 2),
+            "records": [sanitize(row) for row in invoices],
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch purchase report: {str(e)}")
+
+
+@app.get("/inventory/reports/lens-usage")
+async def get_inventory_lens_usage_report():
+    try:
+        rows = list(lens_usage_collection.find().sort("surgery_date", -1).limit(300))
+        return {
+            "status": "success",
+            "totalUsed": len(rows),
+            "records": [sanitize(row) for row in rows],
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch lens usage report: {str(e)}")
 
 
 @app.get("/vendors/ledger")

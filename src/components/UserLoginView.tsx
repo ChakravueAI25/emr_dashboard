@@ -15,7 +15,7 @@ export function UserLoginView({ onAuthSuccess, onNavigate }: { onAuthSuccess?: A
     password: '',
     confirmPassword: '',
     fullName: '',
-    role: 'receptionist'
+    role: 'admin'
   });
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
@@ -286,10 +286,10 @@ export function UserLoginView({ onAuthSuccess, onNavigate }: { onAuthSuccess?: A
                       e.currentTarget.style.boxShadow = 'none';
                     }}
                   >
+                    <option value="admin" style={{ backgroundColor: 'var(--theme-bg-input)' }}>Admin</option>
                     <option value="receptionist" style={{ backgroundColor: 'var(--theme-bg-input)' }}>Receptionist</option>
                     <option value="opd" style={{ backgroundColor: 'var(--theme-bg-input)' }}>OPD</option>
                     <option value="doctor" style={{ backgroundColor: 'var(--theme-bg-input)' }}>Doctor</option>
-                    <option value="patient" style={{ backgroundColor: 'var(--theme-bg-input)' }}>Patient</option>
                   </select>
                 </div>
               )}
@@ -405,10 +405,10 @@ export function UserLoginView({ onAuthSuccess, onNavigate }: { onAuthSuccess?: A
                   <div style={{ color: 'var(--theme-text-muted)', fontSize: '0.875rem', fontWeight: 500 }}>Sign in as</div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem' }}>
                     {[
+                      { role: 'admin', label: 'Admin' },
                       { role: 'receptionist', label: 'Receptionist' },
                       { role: 'opd', label: 'OPD' },
-                      { role: 'doctor', label: 'Doctor' },
-                      { role: 'patient', label: 'Admin' }
+                      { role: 'doctor', label: 'Doctor' }
                     ].map(({ role, label }) => (
                       <button
                         key={role}
