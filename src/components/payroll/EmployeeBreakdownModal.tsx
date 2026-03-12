@@ -227,25 +227,25 @@ export function EmployeeBreakdownModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div
-        className="relative w-full max-w-2xl rounded-2xl border border-[var(--theme-accent)]/20 bg-[var(--theme-bg-secondary)] shadow-2xl"
+        className="relative w-full max-w-4xl rounded-2xl border border-[var(--theme-accent)]/20 bg-[var(--theme-bg-secondary)] shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex items-start justify-between px-6 py-5 border-b border-[var(--theme-accent)]/10">
+        <div className="flex items-start justify-between border-b border-[var(--theme-accent)]/10 px-7 py-6">
           <div>
-            <h2 className="text-xl font-semibold text-[var(--theme-text)]">Salary Breakdown</h2>
-            <p className="text-sm text-[var(--theme-text-muted)] mt-1">{employee.name} · {employee.employeeId} · {formatPayrollMonth(month)}</p>
+            <h2 className="text-2xl font-semibold text-[var(--theme-text)]">Salary Breakdown</h2>
+            <p className="mt-1 text-base text-[var(--theme-text-muted)]">{employee.name} · {employee.employeeId} · {formatPayrollMonth(month)}</p>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={handleDownloadPayslip}
               disabled={downloadingPayslip}
-              className="px-3 py-2 rounded-lg border border-[var(--theme-accent)]/20 text-sm text-[var(--theme-text)] hover:bg-[var(--theme-bg-tertiary)] transition-colors flex items-center gap-2"
+              className="flex items-center gap-2 rounded-lg border border-[var(--theme-accent)]/20 px-4 py-2.5 text-base text-[var(--theme-text)] transition-colors hover:bg-[var(--theme-bg-tertiary)]"
             >
               <Download className="w-4 h-4" />{downloadingPayslip ? 'Generating...' : 'Download Payslip'}
             </button>
             <button
               onClick={() => setShowHistory((current) => !current)}
-              className="px-3 py-2 rounded-lg border border-[var(--theme-accent)]/20 text-sm text-[var(--theme-text)] hover:bg-[var(--theme-bg-tertiary)] transition-colors flex items-center gap-2"
+              className="flex items-center gap-2 rounded-lg border border-[var(--theme-accent)]/20 px-4 py-2.5 text-base text-[var(--theme-text)] transition-colors hover:bg-[var(--theme-bg-tertiary)]"
             >
               <History className="w-4 h-4" />View History
             </button>
@@ -255,27 +255,27 @@ export function EmployeeBreakdownModal({
           </div>
         </div>
 
-        <div className="p-6 space-y-6">
+        <div className="space-y-7 p-7">
           {downloadError ? (
-            <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+            <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-5 py-4 text-base text-red-400">
               {downloadError}
             </div>
           ) : null}
           {showHistory ? (
-            <div className="rounded-xl border border-[var(--theme-accent)]/10 bg-[var(--theme-bg)] p-4">
-              <h3 className="text-sm font-semibold text-[var(--theme-text)] mb-3">Payroll History</h3>
+            <div className="rounded-xl border border-[var(--theme-accent)]/10 bg-[var(--theme-bg)] p-5">
+              <h3 className="mb-4 text-base font-semibold text-[var(--theme-text)]">Payroll History</h3>
               {historyLoading ? (
-                <div className="text-sm text-[var(--theme-text-muted)]">Loading payroll history...</div>
+                <div className="text-base text-[var(--theme-text-muted)]">Loading payroll history...</div>
               ) : payrollHistory.length === 0 ? (
-                <div className="text-sm text-[var(--theme-text-muted)]">No previous payroll records found.</div>
+                <div className="text-base text-[var(--theme-text-muted)]">No previous payroll records found.</div>
               ) : (
-                <div className="space-y-2">
-                  <div className="grid grid-cols-[1fr_auto] gap-4 text-xs uppercase tracking-wider text-[var(--theme-text-muted)] border-b border-[var(--theme-accent)]/10 pb-2">
+                <div className="space-y-3">
+                  <div className="grid grid-cols-[1fr_auto] gap-4 border-b border-[var(--theme-accent)]/10 pb-2 text-sm uppercase tracking-wider text-[var(--theme-text-muted)]">
                     <span>Month</span>
                     <span>Net Salary</span>
                   </div>
                   {payrollHistory.map((record) => (
-                    <div key={`${record.employeeId}-${record.month}`} className="grid grid-cols-[1fr_auto] gap-4 text-sm">
+                    <div key={`${record.employeeId}-${record.month}`} className="grid grid-cols-[1fr_auto] gap-4 text-base">
                       <span className="text-[var(--theme-text)]">{formatPayrollMonth(record.month)}</span>
                       <span className="font-medium text-[var(--theme-text)]">{formatCurrency(record.netSalary)}</span>
                     </div>
@@ -285,12 +285,12 @@ export function EmployeeBreakdownModal({
             </div>
           ) : null}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="rounded-xl border border-[var(--theme-accent)]/10 bg-[var(--theme-bg)] p-4">
-              <h3 className="text-sm font-semibold text-[var(--theme-text)] mb-3">Earnings</h3>
-              <div className="space-y-2">
+          <div className="grid grid-cols-1 gap-7 md:grid-cols-2">
+            <div className="rounded-xl border border-[var(--theme-accent)]/10 bg-[var(--theme-bg)] p-5">
+              <h3 className="mb-4 text-base font-semibold text-[var(--theme-text)]">Earnings</h3>
+              <div className="space-y-3">
                 {earningsRows.map(([label, value]) => (
-                  <div key={label} className="flex items-center justify-between text-sm">
+                  <div key={label} className="flex items-center justify-between text-base">
                     <span className="text-[var(--theme-text-muted)]">{label}</span>
                     <span className="font-medium text-[var(--theme-text)]">{value}</span>
                   </div>
@@ -298,17 +298,17 @@ export function EmployeeBreakdownModal({
               </div>
             </div>
 
-            <div className="rounded-xl border border-[var(--theme-accent)]/10 bg-[var(--theme-bg)] p-4">
-              <h3 className="text-sm font-semibold text-[var(--theme-text)] mb-3">Employee Deductions</h3>
-              <div className="space-y-2">
+            <div className="rounded-xl border border-[var(--theme-accent)]/10 bg-[var(--theme-bg)] p-5">
+              <h3 className="mb-4 text-base font-semibold text-[var(--theme-text)]">Employee Deductions</h3>
+              <div className="space-y-3">
                 {deductionRows.map(([label, value]) => (
-                  <div key={label} className="flex items-center justify-between text-sm">
+                  <div key={label} className="flex items-center justify-between text-base">
                     <span className="text-[var(--theme-text-muted)]">{label}</span>
                     <span className="font-medium text-[var(--theme-text)]">{value}</span>
                   </div>
                 ))}
                 <div className="flex items-center justify-between gap-4 pt-2 border-t border-[var(--theme-accent)]/10">
-                  <span className="text-sm text-[var(--theme-text-muted)]">Advance</span>
+                  <span className="text-base text-[var(--theme-text-muted)]">Advance</span>
                   {isReadOnly ? (
                     <span className="font-medium text-[var(--theme-text)]">{formatCurrency(effectiveRecord.advance)}</span>
                   ) : (
@@ -319,12 +319,12 @@ export function EmployeeBreakdownModal({
                         step="0.01"
                         value={advanceInput}
                         onChange={(event) => setAdvanceInput(event.target.value)}
-                        className="w-32 rounded-lg bg-[var(--theme-bg-secondary)] border border-[var(--theme-accent)]/20 px-3 py-2 text-sm text-[var(--theme-text)] outline-none focus:border-[var(--theme-accent)] transition-colors"
+                        className="h-11 w-36 rounded-lg border border-[var(--theme-accent)]/20 bg-[var(--theme-bg-secondary)] px-3 py-2 text-base text-[var(--theme-text)] outline-none transition-colors focus:border-[var(--theme-accent)]"
                       />
                       <button
                         onClick={handleSaveAdvance}
                         disabled={savingAdvance}
-                        className="px-3 py-2 rounded-lg bg-[var(--theme-accent)] text-[var(--theme-bg)] text-sm font-medium disabled:opacity-60"
+                        className="rounded-lg bg-[var(--theme-accent)] px-4 py-2.5 text-base font-medium text-[var(--theme-bg)] disabled:opacity-60"
                       >
                         {savingAdvance ? 'Saving...' : 'Save'}
                       </button>
@@ -338,9 +338,9 @@ export function EmployeeBreakdownModal({
               </div>
             </div>
 
-            <div className="rounded-xl border border-[var(--theme-accent)]/10 bg-[var(--theme-bg)] p-4 md:col-span-2">
-              <h3 className="text-sm font-semibold text-[var(--theme-text)] mb-3">Employer Contributions</h3>
-              <div className="space-y-3 text-sm">
+            <div className="rounded-xl border border-[var(--theme-accent)]/10 bg-[var(--theme-bg)] p-5 md:col-span-2">
+              <h3 className="mb-4 text-base font-semibold text-[var(--theme-text)]">Employer Contributions</h3>
+              <div className="space-y-3 text-base">
                 <div className="flex items-center justify-between">
                   <span className="text-[var(--theme-text-muted)]">COPF</span>
                   <span className="font-medium text-[var(--theme-text)]">{formatCurrency(effectiveRecord.copf)}</span>
@@ -357,16 +357,16 @@ export function EmployeeBreakdownModal({
             </div>
           </div>
 
-          <div className="rounded-xl border border-[var(--theme-accent)]/10 bg-[var(--theme-bg)] p-4">
-            <div className="flex items-center justify-between text-sm">
+          <div className="rounded-xl border border-[var(--theme-accent)]/10 bg-[var(--theme-bg)] p-5">
+            <div className="flex items-center justify-between text-base">
               <span className="text-[var(--theme-text-muted)]">Month</span>
               <span className="font-medium text-[var(--theme-text)]">{formatPayrollMonth(month)}</span>
             </div>
-            <div className="flex items-center justify-between text-sm mt-2">
+            <div className="mt-2 flex items-center justify-between text-base">
               <span className="text-[var(--theme-text-muted)]">Leaves Entered</span>
               <span className="font-medium text-[var(--theme-text)]">{employee.leaves}</span>
             </div>
-            <div className="flex items-center justify-between text-sm mt-2">
+            <div className="mt-2 flex items-center justify-between text-base">
               <span className="text-[var(--theme-text-muted)]">Record Status</span>
               <span className="font-medium text-[var(--theme-text)]">{loading ? 'Refreshing...' : payrollRecord ? 'Persisted' : 'Preview'}</span>
             </div>

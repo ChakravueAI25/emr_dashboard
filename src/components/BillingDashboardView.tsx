@@ -338,6 +338,7 @@ import {
   Eye,
   Edit,
   Trash2,
+  CreditCard,
   IndianRupee,
   Clock,
   User,
@@ -348,12 +349,14 @@ import {
   ChevronRight,
   ArrowRight,
   TrendingUp,
+  Wallet,
 } from 'lucide-react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import API_ENDPOINTS from '../config/api';
 import { BillingAnalyticsView } from './BillingAnalyticsView';
+import { AdvanceManagementView } from './billing/AdvanceManagementView';
 
 interface BillingRecord {
   id: string;
@@ -395,14 +398,29 @@ export function BillingDashboardView({ onBillingClick }: BillingDashboardViewPro
     settledRevenue: 0,
     unsettledRevenue: 0,
     pendingBills: 0,
+    advanceCollectedToday: 0,
+    activeAdvancesTotal: 0,
+    patientsWithActiveAdvance: 0,
     pendingBillsList: [] as any[],
     completedToday: 0,
     totalRecords: 0
   });
-  const [viewMode, setViewMode] = useState<'transactions' | 'analytics'>('transactions');
+  const [viewMode, setViewMode] = useState<'transactions' | 'analytics' | 'advances'>('transactions');
 
   useEffect(() => {
     fetchBillingRecords();
+  }, []);
+
+  useEffect(() => {
+    const refresh = () => {
+      void fetchBillingRecords();
+    };
+    window.addEventListener('billingUpdated', refresh);
+    window.addEventListener('advanceUpdated', refresh);
+    return () => {
+      window.removeEventListener('billingUpdated', refresh);
+      window.removeEventListener('advanceUpdated', refresh);
+    };
   }, []);
 
   const fetchBillingRecords = async () => {
@@ -419,6 +437,9 @@ export function BillingDashboardView({ onBillingClick }: BillingDashboardViewPro
           settledRevenue: data.settledRevenue || 0,
           unsettledRevenue: data.unsettledRevenue || 0,
           pendingBills: data.pendingBills || 0,
+          advanceCollectedToday: data.advanceCollectedToday || 0,
+          activeAdvancesTotal: data.activeAdvancesTotal || 0,
+          patientsWithActiveAdvance: data.patientsWithActiveAdvance || 0,
           pendingBillsList: data.pendingBillsList || [],
           completedToday: data.completedToday || 0,
           totalRecords: data.totalRecords || 0
@@ -490,6 +511,10 @@ export function BillingDashboardView({ onBillingClick }: BillingDashboardViewPro
     return <BillingAnalyticsView onBack={() => setViewMode('transactions')} />;
   }
 
+  if (viewMode === 'advances') {
+    return <AdvanceManagementView onBack={() => setViewMode('transactions')} />;
+  }
+
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white p-6 ml-16">
       {/* Header */}
@@ -499,6 +524,13 @@ export function BillingDashboardView({ onBillingClick }: BillingDashboardViewPro
           <p className="text-[#8B8B8B] text-sm mt-1">Manage all patient billing and transactions</p>
         </div>
         <div className="flex items-center gap-3">
+          <Button 
+            onClick={() => setViewMode('advances')}
+            className="bg-[#1a1a1a] border border-[#D4A574] text-[#D4A574] hover:bg-[#2a2a2a]"
+          >
+            <Wallet className="w-4 h-4 mr-2" />
+            Manage Advances
+          </Button>
           <Button 
             onClick={() => setViewMode('analytics')}
             className="bg-[#1a1a1a] border border-[#D4A574] text-[#D4A574] hover:bg-[#2a2a2a]"
@@ -539,6 +571,24 @@ export function BillingDashboardView({ onBillingClick }: BillingDashboardViewPro
             color: 'text-yellow-500',
             type: 'list',
             list: dashboardStats.pendingBillsList // Access directly from state
+          },
+          {
+            label: 'Advance Collected Today',
+            value: `₹${dashboardStats.advanceCollectedToday.toLocaleString()}`,
+            icon: Wallet,
+            color: 'text-emerald-400',
+          },
+          {
+            label: 'Active Advances Total',
+            value: `₹${dashboardStats.activeAdvancesTotal.toLocaleString()}`,
+            icon: CreditCard,
+            color: 'text-blue-400',
+          },
+          {
+            label: 'Patients With Active Advance',
+            value: dashboardStats.patientsWithActiveAdvance,
+            icon: User,
+            color: 'text-[#D4A574]',
           },
           { label: 'Completed Today', value: dashboardStats.completedToday, icon: CheckCircle2, color: 'text-blue-500' },
         ].map((stat, i) => (

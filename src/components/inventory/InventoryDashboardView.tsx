@@ -19,21 +19,21 @@ export function InventoryDashboardView({ analytics, onRefresh, loading }: Invent
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+    <div className="space-y-8">
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
         {cards.map(({ label, value, icon: Icon }) => (
-          <div key={label} className="rounded-2xl border border-[var(--theme-accent)]/15 bg-[var(--theme-bg-secondary)] p-4">
-            <div className="mb-2 flex items-center gap-2 text-xs uppercase tracking-wider text-[var(--theme-text-muted)]">
-              <Icon className="h-4 w-4 text-[var(--theme-accent)]" />
+          <div key={label} className="rounded-2xl border border-[var(--theme-accent)]/15 bg-[var(--theme-bg-secondary)] p-6">
+            <div className="mb-3 flex items-center gap-2 text-sm uppercase tracking-wider text-[var(--theme-text-muted)]">
+              <Icon className="h-5 w-5 text-[var(--theme-accent)]" />
               {label}
             </div>
-            <div className="text-2xl font-semibold text-[var(--theme-text)]">{loading ? 'Loading...' : value}</div>
+            <div className="text-3xl font-semibold text-[var(--theme-text)]">{loading ? 'Loading...' : value}</div>
           </div>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <SectionCard title="Low Stock Alerts" action={<button onClick={onRefresh} className="text-xs text-[var(--theme-text-muted)]">Refresh</button>}>
+      <div className="grid grid-cols-1 gap-7 xl:grid-cols-2">
+        <SectionCard title="Low Stock Alerts" action={<button onClick={onRefresh} className="text-sm font-medium text-[var(--theme-text-muted)]">Refresh</button>}>
           <div className="space-y-3">
             {analytics.lowStockList.length === 0 ? (
               <div className="rounded-xl border border-dashed border-[var(--theme-accent)]/20 px-4 py-5 text-sm text-[var(--theme-text-muted)]">No low stock items right now.</div>

@@ -1,0 +1,1018 @@
+INDIVIDUAL BILLING ARCHITECTURE ANALYSIS
+Generated: 2026-03-12
+Scope: Current implementation centered on src/components/IndividualBillingView.tsx, with related backend routes in backend/main.py, API definitions in src/config/api.ts, and collection wiring in backend/database.py.
+
+============================================================
+1. EXECUTIVE SUMMARY
+============================================================
+
+The current patient billing implementation is not a single unified billing module. It is a mixed architecture with:
+
+1. A rich frontend billing screen in IndividualBillingView.tsx.
+2. Multiple backend billing APIs in backend/main.py.
+3. A split persistence model where some billing data is stored in standalone MongoDB collections and mirrored into the patient document, while other billing data lives only inside the patient document.
+4. A second, older or overlapping billing UI in BillingView.tsx and duplicate backend route definitions later in backend/main.py.
+
+Practically, IndividualBillingView.tsx acts as the main patient billing workflow for:
+
+- patient search and selection
+- service selection
+- surgery package billing
+- insurance-assisted surgery billing
+- coupon application
+- invoice printing
+- saving invoices
+
+The most important architectural characteristic is that the screen supports two different billing patterns:
+
+1. Standard invoice flow
+   Regular services and non-surgery items are aggregated into a single invoice and saved through POST /api/billing/patient/{reg_id}/invoices.
+
+2. Surgery insurance two-bill flow
+   Surgery cases can create:
+   - an initial bill with security deposit
+   - a final settlement bill after insurance approval
+
+This is functionally useful, but the implementation is inconsistent across UI, backend, and persistence. Several values collected in the UI are not actually persisted by the main backend handlers.
+
+============================================================
+2. UI STRUCTURE
+============================================================
+
+Frontend entry point:
+- src/components/IndividualBillingView.tsx
+
+Routing entry:
+- src/App.tsx renders IndividualBillingView for the 'individual-billing' route.
+
+The page is laid out as a 3-column responsive grid:
+
+1. Left/main content area (lg:col-span-2)
+2. Right sticky summary panel
+3. Modal overlays for surgery selection, reusable package save, and insurance company/contact entry
+
+Main UI sections
+
+2.1 Header area
+
+The top section contains:
+
+- patient billing title
+- current selected patient summary
+- patient search box with async dropdown
+- Add Company/TPA button
+- Print Invoice button
+- Save and Finalize button
+
+This means patient selection is built directly into the billing screen rather than being a separate billing launch context only.
+
+2.2 Patient selection flow
+
+The component supports patient selection in three ways:
+
+1. initial registrationId from App.tsx
+2. initial patientData passed from appointment booking
+3. direct patient search using /patients/search
+
+After selection, it fetches full patient details using /patients/{registrationId}.
+
+2.3 Service list section
+
+The service selection card contains:
+
+- search bar for filtering services
+- hard-coded COMMON_SERVICES list
+- saved surgery packages loaded from backend
+- a dedicated Surgeries button that opens SurgerySelectionModal
+
+The service catalog is not fetched dynamically from backend master data. It is mostly hard-coded in the component.
+
+Current common service entries include:
+
+- Consultation Fee
+- Follow-up Visit
+- OCT Scan - Bilateral
+- Visual Field Test
+- Fundus Photography
+- IOP Measurement
+- Refraction
+- Cataract Surgery (Phaco)
+- LASIK Surgery
+- Advance Fee
+
+2.4 Surgery breakdown section
+
+When any surgery item is added, a dedicated surgery breakdown editor appears for each surgery line item.
+
+This section allows:
+
+- loading package pricing presets (35000, 40000, 50000, 60000, 75000)
+- editing particular name
+- editing cost
+- editing quantity
+- adding new particulars
+- deleting particulars
+- recalculating net and gross amount per row
+
+This surgery editor is the most detailed billing UI in the module and behaves like a mini line-item cost-sheet builder.
+
+2.5 Surgery insurance billing section
+
+If at least one surgery item exists, another card appears for surgery insurance flow.
+
+This area contains:
+
+- govt insurance toggle
+- insurance type selector: CGHS, SGHS, PRIVATE
+- insurance company selector
+- TPA selector
+- claim number input
+- contact person display block
+- date of surgery input
+- date of discharge input
+- stage toggle: Initial Bill vs Final Settlement
+- security deposit input for initial stage
+- insurance approved amount input for final stage
+- cost summary block
+- action button to create initial or final surgery bill
+
+This is effectively a separate billing sub-workflow embedded into the main invoice screen.
+
+2.6 Right-side bill summary panel
+
+The sticky summary panel contains:
+
+- patient identity block
+- compact selected item list
+- inline price editing per item
+- subtotal and discount display
+- insurance covered and patient payable display for surgery insurance cases
+- grand total display
+- payment method buttons
+- action buttons: collect amount, save draft
+- coupon application section
+- invoice email footer display
+- admin coupon refresh action
+
+2.7 Invoice generation area
+
+There is no dedicated visible invoice preview pane. Invoice generation is implemented as print-only HTML templates created in JavaScript and sent to a hidden iframe.
+
+Print templates include:
+
+- general invoice print template
+- initial surgery bill print template
+- final surgery bill print template
+
+Therefore, invoice generation is client-side HTML generation, not backend PDF generation.
+
+============================================================
+3. BILLING DATA MODEL IN THE FRONTEND
+============================================================
+
+The primary frontend billing object is not a single bill object. It is spread across multiple useState variables.
+
+3.1 Core line-item model
+
+Billing items are stored in:
+- const [items, setItems] = useState<BillingItem[]>([])
+
+BillingItem fields:
+
+- id: string
+- name: string
+- category: string
+- price: number
+- quantity: number
+- discount: number
+- tax: number
+- total: number
+- surgeryBreakdown?: SurgeryParticular[]
+- totalGrossAmt?: number
+- mouDiscount?: number
+- receivedAmt?: number
+- isExpanded?: boolean
+- selectedPackage?: number
+
+SurgeryParticular fields:
+
+- sNo
+- particular
+- cost
+- qty
+- netAmt
+- grossAmt
+
+3.2 Additional bill-level state
+
+The overall bill is represented by separate state variables rather than a cohesive bill domain model.
+
+Main bill-level state includes:
+
+- patient
+- currentRegId
+- paymentMethod
+- selectedDoctor
+- govtInsuranceEnabled
+- insuranceCategory
+- insuranceCompany
+- insuranceTPA
+- claimNumber
+- insuranceCovered
+- patientPayable
+- couponCode
+- workerQuota
+- discountAmount
+- couponDiscountInput
+- couponAppliedAmount
+- isCouponApplied
+
+Surgery-specific billing state includes:
+
+- isSurgeryBillingMode
+- surgeryBillStage
+- securityDeposit
+- insuranceApprovedAmount
+- existingInitialBill
+- existingSurgeryBills
+- dateOfSurgery
+- dateOfDischarge
+
+3.3 Fields mapped to backend invoice creation
+
+When handleSaveBill runs, the payload sent to POST /api/billing/patient/{reg_id}/invoices contains:
+
+- service
+- serviceItems
+- amount
+- status
+- insuranceCovered
+- insuranceStatus
+- patientResponsibility
+- patientPaidAmount
+- couponCode
+- appliedBy
+- discountAmount
+- paymentMethod
+- notes
+- isSurgeryCase
+- expectedFromInsurance
+- upfrontPaid
+
+3.4 Requested data points from the task
+
+Status of requested billing fields in the actual frontend design:
+
+- services: yes, stored as items and serialized into serviceItems
+- service_price: yes, stored as item.price
+- discount: partially; item.discount exists but there is no real UI for per-item discount editing in this screen
+- tax: field exists per item but actual tax calculation is disabled
+- total_amount: yes, derived as subtotal/grandTotal and sent as amount
+- payment_mode: yes, stored in paymentMethod
+- paid_amount: not a true user-entered field in the standard flow; patientPaidAmount is auto-derived and sent equal to patientResponsibility/grandTotal
+- balance_amount: only present in surgery final settlement flow as calculated balancePayable/refundAmount, not as a standard invoice field
+
+Conclusion:
+The frontend does not maintain a normalized billing domain object. It is a collection of local states with derived totals and ad hoc payload assembly.
+
+============================================================
+4. BILLING CALCULATION LOGIC
+============================================================
+
+4.1 Standard invoice calculations
+
+The component calculates:
+
+- subtotal = sum(items.total)
+- totalDiscount = sum(items.discount)
+- totalTax = 0
+- grandTotal = subtotal - totalDiscount - discountAmount - couponAppliedAmount
+
+Important details:
+
+1. Tax is intentionally disabled.
+   totalTax is hard-coded to 0.
+
+2. item.discount exists in the model, but there is no active UI that edits item.discount in IndividualBillingView.
+   In practice, totalDiscount is usually 0 unless items are injected with discount values externally.
+
+3. Free Camp payment method sets discountAmount to subtotal.
+   That forces the payable amount effectively to zero.
+
+4. Coupon discount is applied separately as couponAppliedAmount.
+
+4.2 Surgery item calculations
+
+For surgery items, totals are recalculated from the breakdown table.
+
+Per surgery item:
+
+- netAmt = cost * qty
+- grossAmt = cost * qty
+- totalGrossAmt = sum(grossAmt of breakdown rows)
+- total = totalGrossAmt - mouDiscount
+- receivedAmt = totalGrossAmt - mouDiscount
+
+This means surgery totals do not depend on the original COMMON_SERVICES price after a breakdown/package is applied.
+
+4.3 Insurance estimate calculations in the UI
+
+When insurance is enabled:
+
+- the component looks up a percentage from MOCK_INSURANCE_PLANS
+- insuranceCovered = round(grandTotal * coveragePercent / 100)
+- patientPayable = grandTotal - insuranceCovered
+
+This is purely frontend estimation logic using hard-coded mock plans.
+There is no backend validation of these plan percentages in the standard save flow.
+
+4.4 Surgery final settlement calculations
+
+For final surgery billing:
+
+- totalSurgeryCost = sum(total of items where category === 'Surgery')
+- patientTotalShare = totalSurgeryCost - insuranceApprovedAmount
+- balancePayable = max(0, patientTotalShare - securityDeposit)
+- refundAmount = abs(min(0, patientTotalShare - securityDeposit))
+
+These same formulas are also recomputed in the backend final surgery bill endpoint.
+
+4.5 What is and is not calculated
+
+Calculated today:
+
+- subtotal
+- discount total
+- surgery gross totals
+- insurance estimate in UI
+- surgery patient share
+- surgery balance/refund
+
+Not properly calculated today:
+
+- tax/GST
+- partial payment remaining balance for normal invoices
+- installment schedules
+- bank-transfer-specific reconciliation
+- true insurance claim receivable for regular invoices
+
+============================================================
+5. PAYMENT FLOW
+============================================================
+
+5.1 Supported payment methods in IndividualBillingView
+
+UI-supported payment buttons are:
+
+- Cash
+- Card
+- UPI
+- Insurance
+- Free Camp
+
+5.2 Requested payment method analysis
+
+From the task list:
+
+- cash: supported
+- UPI: supported
+- card: supported
+- bank transfer: not offered in this screen as a selectable patient payment method
+- insurance: supported as a method/state, and separately as a surgery billing workflow
+
+Bank transfer appears elsewhere in backend insurance-received handling, but not in the patient-facing payment mode selector of this component.
+
+5.3 Standard payment flow
+
+For standard invoices, clicking COLLECT amount or Save & Finalize does not call the dedicated payments endpoint.
+Instead, it directly creates an invoice record via POST /api/billing/patient/{reg_id}/invoices.
+
+In that payload:
+
+- paymentMethod is stored
+- patientPaidAmount is auto-set equal to the payable amount
+- status is sent as paid or draft depending on action
+
+This means the standard flow treats invoice creation and payment capture as the same operation.
+
+5.4 Surgery payment flow
+
+For surgery insurance cases, payment is split into two distinct flows:
+
+Initial bill:
+- collects security deposit
+- stores securityDepositPaymentMethod
+- stores estimated insurance coverage and estimated patient share
+
+Final bill:
+- stores insurance approved amount
+- stores finalPaymentMethod
+- computes balancePayable or refundAmount
+
+5.5 Dedicated payment endpoint exists but is not used here
+
+Backend has:
+- GET /api/billing/patient/{reg_id}/payments
+- POST /api/billing/patient/{reg_id}/payments
+
+But IndividualBillingView.tsx does not call them.
+
+Architectural result:
+- regular invoice payment capture is embedded in invoice creation
+- payment history is not being generated by this screen for standard invoices
+- partial payments cannot be properly represented through the current UI flow
+
+============================================================
+6. API INTERACTIONS USED BY INDIVIDUALBILLINGVIEW.TSX
+============================================================
+
+6.1 APIs actually called by this screen
+
+Patient and setup APIs:
+
+- GET /patients/search
+- GET /patients/{registrationId}
+- GET /api/surgery-packages
+- POST /api/surgery-packages
+- GET /api/coupons/quota/{workerId}
+- POST /api/coupons/refresh
+
+Billing APIs actually used:
+
+- GET /api/billing/patient/{registrationId}/surgery-bills
+- POST /api/billing/patient/{registrationId}/surgery-bills/initial
+- POST /api/billing/patient/{registrationId}/surgery-bills/final
+- POST /api/billing/patient/{registrationId}/invoices
+
+6.2 Backend APIs present but not used by this screen
+
+The backend also exposes:
+
+- GET /api/billing/patient/{reg_id}/summary
+- GET/PUT /api/billing/patient/{reg_id}/insurance
+- GET /api/billing/patient/{reg_id}/invoices
+- GET/POST /api/billing/patient/{reg_id}/payments
+- GET/POST /api/billing/patient/{reg_id}/claims
+- POST /api/billing/cases
+- GET /api/billing/cases/patient/{reg_id}
+- PUT /api/billing/cases/{case_id}/stage
+
+Those are primarily consumed by the older BillingView.tsx or other billing dashboards, not by IndividualBillingView.tsx.
+
+6.3 Frontend to backend communication pattern
+
+The communication model is plain fetch with JSON payloads.
+There is no dedicated API service layer or React Query layer in this component.
+
+Characteristics:
+
+- direct fetch calls inside component
+- local loading state only
+- optimistic UI is minimal
+- window event dispatch used to notify dashboard refresh after billing update
+
+Custom browser event used:
+- billingUpdated
+
+============================================================
+7. DATABASE STRUCTURE AND PERSISTENCE MODEL
+============================================================
+
+MongoDB collections wired in backend/database.py:
+
+- patients
+- billing_cases
+- surgery_packages
+- billing_invoices
+- initial_surgery_bills
+- final_surgery_bills
+- coupon_quotas
+- pharmacy_billing
+
+7.1 Standalone collections used for billing source-of-truth storage
+
+The backend explicitly comments that these are source-of-truth collections:
+
+- billing_invoices
+- initial_surgery_bills
+- final_surgery_bills
+
+Each record is then mirrored into patients.billing as a cache or denormalized copy.
+
+7.2 Patient document embedded billing structure
+
+The helper _safe_billing initializes the patient document billing block as:
+
+- invoices: []
+- surgeryBills: []
+- payments: []
+- claims: []
+- insurance: {}
+
+So the patient document is also a billing container, but not the sole system of record.
+
+7.3 Invoice fields stored in billing_invoices
+
+Main fields written by create_invoice:
+
+- id
+- date
+- service
+- serviceItems
+- amount
+- status
+- insuranceCovered
+- insuranceStatus
+- patientResponsibility
+- patientPaidAmount
+- couponCode
+- appliedBy
+- discountAmount
+- paymentMethod
+- notes
+- createdAt
+- appointmentId
+- doctorName
+- isSurgeryCase
+- expectedFromInsurance
+- upfrontPaid
+- registrationId
+- linkedCaseId (conditionally)
+
+7.4 Initial surgery bill fields stored
+
+Main fields written by create_initial_surgery_bill:
+
+- billId
+- billType = initial
+- status = pending_approval
+- createdAt
+- updatedAt
+- registrationId
+- patientName
+- surgeryName
+- surgeryBreakdown
+- totalSurgeryCost
+- hasInsurance
+- insuranceType
+- insuranceCompany
+- insuranceTPA
+- estimatedInsuranceCoverage
+- securityDeposit
+- securityDepositPaid
+- securityDepositPaymentMethod
+- securityDepositDate
+- estimatedPatientShare
+- notes
+- createdBy
+
+Notably missing from the primary persistence path despite being collected in UI:
+
+- claimNumber
+- insurance contact person object
+- dateOfSurgery
+- dateOfDischarge
+- items
+
+7.5 Final surgery bill fields stored
+
+Main fields written by create_final_surgery_bill:
+
+- billId
+- billType = final
+- linkedInitialBillId
+- status = balance_due | refund_due | settled
+- createdAt
+- updatedAt
+- registrationId
+- patientName
+- surgeryName
+- surgeryBreakdown
+- totalSurgeryCost
+- hasInsurance
+- insuranceType
+- insuranceCompany
+- insuranceTPA
+- insuranceApprovedAmount
+- insuranceClaimReference
+- insuranceApprovalDate
+- securityDepositPaid
+- patientTotalShare
+- balancePayable
+- refundAmount
+- patientPaymentReceived
+- insurancePaymentStatus
+- insurancePaymentReceivedDate
+- insurancePaymentAmount
+- insurancePaymentMethod
+- finalPaymentAmount
+- finalPaymentMethod
+- finalPaymentDate
+- notes
+- createdBy
+
+Also notably missing from the primary persistence path:
+
+- dateOfSurgery
+- dateOfDischarge
+- claimNumber from the UI payload
+- detailed patient contact information
+
+7.6 Payment storage model
+
+Payments are not stored in a dedicated payments collection.
+POST /api/billing/patient/{reg_id}/payments pushes payments only into patients.billing.payments.
+
+Stored payment fields:
+
+- id
+- date
+- amount
+- method
+- invoiceId
+- caseId
+- stageName
+- notes
+- createdAt
+
+7.7 Claims storage model
+
+Claims are also not stored in a dedicated collection.
+They are pushed into patients.billing.claims.
+
+Stored claim fields:
+
+- id
+- dateFiled
+- service
+- billed
+- approved
+- status
+- invoiceId
+- notes
+- createdAt
+
+7.8 Billing case collection
+
+billing_cases acts as a workflow tracker for multi-stage insurance/surgery flows.
+
+Stored case information includes:
+
+- caseId
+- registrationId
+- procedureName
+- totalEstimatedAmount
+- insuranceApprovedAmount
+- preSurgeryPaidAmount
+- status
+- createdAt
+- updatedAt
+- stages[]
+
+Stages typically include:
+
+- insurance_approval
+- pre_surgery
+- final_settlement
+
+============================================================
+8. BILLING STATE MANAGEMENT
+============================================================
+
+8.1 State mechanism
+
+Billing state in IndividualBillingView.tsx is managed entirely with local React useState and useEffect.
+
+There is no:
+
+- context provider for billing
+- reducer for billing domain operations
+- shared billing store
+- server-state cache library
+
+8.2 How state changes when services are added
+
+When a service is added:
+
+- addItem checks if the item already exists
+- for existing items, quantity is incremented and total is recalculated
+- for new items, a BillingItem is appended
+- if the item is a surgery, breakdown and surgery mode are enabled
+
+8.3 How state changes when prices or breakdown rows change
+
+The following handlers update pricing state:
+
+- updatePrice
+- updateSurgeryParticular
+- applySurgeryPackage
+- addSurgeryParticular
+- removeSurgeryParticular
+- updateMouDiscount
+
+These mutate items and derived totals are recalculated from current item state.
+
+8.4 How state changes when discounts or coupons change
+
+- discountAmount is manipulated mainly by Free Camp selection
+- couponDiscountInput captures requested coupon discount
+- handleApplyWorkerCoupon validates quota, then sets couponAppliedAmount and isCouponApplied
+
+8.5 How state changes when payment method changes
+
+- paymentMethod is a single state variable
+- selecting Free Camp also mutates discountAmount to subtotal
+- other methods only set paymentMethod
+
+8.6 How state changes when insurance is entered
+
+- enabling insurance toggles govtInsuranceEnabled
+- insuranceCategory, insuranceCompany, insuranceTPA drive the insurance estimate effect
+- useEffect recalculates insuranceCovered and patientPayable when those dependencies change
+
+8.7 How state changes in surgery billing stages
+
+- surgeryBillStage switches between initial and final
+- existingInitialBill can preload final settlement data
+- securityDeposit and insuranceApprovedAmount feed settlement totals
+
+Conclusion:
+The component uses broad local state and manual recalculation. This makes it easy to build features quickly but hard to reason about safely as the domain grows.
+
+============================================================
+9. INVOICE STRUCTURE
+============================================================
+
+There are three invoice/bill outputs in this implementation.
+
+9.1 Standard invoice print structure
+
+Generated client-side in handlePrint.
+
+Contains:
+
+- hospital header and branding
+- patient details
+- invoice number
+- payment mode
+- insurance summary if enabled
+- line items table
+- totals block
+- amount in words
+- signatures
+
+9.2 Initial surgery bill print structure
+
+Generated client-side in handlePrintInitialBill.
+
+Contains:
+
+- bill ID
+- patient name and registration ID
+- admission/discharge dates
+- insurance information
+- surgery breakdown table
+- total surgery cost
+- provisional notice
+
+9.3 Final surgery bill print structure
+
+Generated client-side in handlePrintFinalBill.
+
+Contains:
+
+- final bill ID
+- linked initial bill reference
+- insurance approval details
+- surgery breakdown
+- settlement calculation table
+- balance payable or settled message
+
+Key architectural point:
+invoice formatting is owned by the frontend component, not the backend. That means invoice design, calculation presentation, and printed output can diverge from persisted backend data if the UI and API evolve separately.
+
+============================================================
+10. END-TO-END DATA FLOW: UI TO BACKEND TO DATABASE
+============================================================
+
+10.1 Standard invoice flow
+
+UI:
+- user selects patient
+- user adds services/items
+- user chooses payment method
+- user optionally applies coupon
+- user clicks Save & Finalize or Collect
+
+Frontend processing:
+- totals are computed locally
+- payload is assembled in handleSaveBill
+
+Backend:
+- POST /api/billing/patient/{reg_id}/invoices
+- coupon quota may be decremented
+- invoice record is created
+- if surgery/insurance flags are present, billing case may also be created
+
+Persistence:
+- inserted into billing_invoices collection
+- mirrored into patients.billing.invoices
+
+UI follow-up:
+- alert shown
+- optional save-as-package popup for surgery items
+- billingUpdated browser event dispatched for dashboard refresh
+
+10.2 Initial surgery insurance bill flow
+
+UI:
+- surgery item added
+- insurance enabled
+- company/TPA selected
+- security deposit entered
+- user clicks Create Initial Bill
+
+Frontend processing:
+- billData object built with surgery breakdown and insurance estimates
+
+Backend:
+- POST /api/billing/patient/{reg_id}/surgery-bills/initial
+
+Persistence:
+- inserted into initial_surgery_bills
+- mirrored into patients.billing.surgeryBills
+
+Output:
+- success alert
+- print template opened
+
+10.3 Final surgery settlement flow
+
+UI:
+- existing initial bill optionally loaded
+- insurance approved amount entered
+- user clicks Create Final Settlement Bill
+
+Frontend processing:
+- patientTotalShare, balancePayable, refundAmount are calculated locally
+
+Backend:
+- POST /api/billing/patient/{reg_id}/surgery-bills/final
+- server recalculates settlement values
+- linked initial bill is marked settled
+
+Persistence:
+- inserted into final_surgery_bills
+- mirrored into patients.billing.surgeryBills
+- initial bill updated in both collection and patient mirror
+
+============================================================
+11. CURRENT LIMITATIONS AND RISKS
+============================================================
+
+11.1 No normalized billing domain model in frontend
+
+The screen is built from many independent state variables rather than a single bill object or reducer-driven state model.
+This increases the risk of hidden coupling and missed updates when new financial features are added.
+
+11.2 Tax is disabled
+
+totalTax is hard-coded to 0.
+There is no real GST/tax support even though item.tax exists in the model.
+
+11.3 Standard payment tracking is weak
+
+The screen saves invoices directly as paid or draft and sets patientPaidAmount automatically.
+It does not use the dedicated payments API.
+
+Effects:
+
+- no proper partial payment capture from this UI
+- no staged patient collections for standard invoices
+- no accurate paid vs outstanding timeline for non-surgery bills from this screen alone
+
+11.4 Bank transfer is not supported in the payment selector
+
+The requested payment mode list is broader than the current UI supports.
+Bank transfer exists only as an insurance reconciliation concept elsewhere, not as a normal billing payment option here.
+
+11.5 UI collects fields that the main backend handlers do not persist
+
+Examples collected in UI but missing from main surgery bill persistence:
+
+- dateOfSurgery
+- dateOfDischarge
+- claimNumber on the initial flow
+- insurance contact person details
+- item list on the surgery bill records
+
+This is a major architecture gap because the interface suggests data capture that the source-of-truth records do not fully retain.
+
+11.6 Mixed persistence strategy
+
+Invoices and surgery bills are dual-written to standalone collections plus patient mirrors.
+Payments and claims are stored only in patient documents.
+
+This causes:
+
+- inconsistent query strategy
+- inconsistent source-of-truth ownership
+- harder reporting and reconciliation
+
+11.7 Duplicate or overlapping backend routes exist
+
+Later in backend/main.py there is another set of billing-related routes with overlapping paths, including:
+
+- POST /api/billing/patient/{registration_id}/surgery-bills/initial
+- POST /api/billing/patient/{registration_id}/surgery-bills/final
+
+and another billing invoice route:
+
+- POST /api/billing/invoices/{registration_id}
+
+These later handlers have different persistence behavior. This creates architecture ambiguity and makes future billing changes risky.
+
+11.8 Index mismatch in billing_invoices collection
+
+backend/database.py creates a unique index on invoiceId for billing_invoices.
+But create_invoice stores the invoice identifier under id, not invoiceId.
+
+Effect:
+- the intended uniqueness guarantee is not aligned with the actual stored field
+
+11.9 Dashboard data expectations do not fully match stored invoice payload
+
+The dashboard aggregation and unified records expect fields such as patientName in invoice documents, but create_invoice does not explicitly store patientName.
+That can lead to incomplete dashboard display data or fallback labels.
+
+11.10 update_surgery_bill updates only patient mirror
+
+PUT /api/billing/patient/{reg_id}/surgery-bills/{bill_id} updates billing.surgeryBills inside the patient document, but does not update the standalone initial_surgery_bills or final_surgery_bills collections.
+
+This breaks the stated source-of-truth pattern.
+
+11.11 Insurance logic is partly mock-based
+
+Insurance coverage estimates in the UI are derived from MOCK_INSURANCE_PLANS stored inside the frontend component.
+That is not a durable or auditable financial rule engine.
+
+11.12 Service catalog is mostly hard-coded
+
+COMMON_SERVICES is embedded in the component.
+That limits maintainability for pricing updates, package control, and role-based billing configuration.
+
+11.13 Invoice generation is frontend-only
+
+Printed invoice content is generated entirely in the browser.
+There is no server-side invoice rendering, no PDF storage, and no immutable invoice snapshot persisted at creation time.
+
+11.14 No real expense or cash-flow integration from this screen
+
+Although the repo has finance endpoints, this component does not create explicit cash ledger records, payment journal entries, or reconciliation entries beyond invoice persistence.
+
+11.15 No true invoice history view inside this component
+
+The screen can fetch surgery bill history, but it does not show a full standard invoice history or payment ledger within the same UI.
+
+============================================================
+12. DESIGN IMPLICATIONS FOR NEW FINANCIAL FEATURES
+============================================================
+
+Before adding new features such as partial payments, multi-mode settlement, bank transfer capture, cash-flow integration, expense linkage, or improved receivable tracking, the current architecture should be treated as having three different billing layers:
+
+1. UI interaction layer in IndividualBillingView.tsx
+2. Billing API layer in backend/main.py
+3. Mixed persistence layer across standalone collections and patient-embedded mirrors
+
+The safest future design work should assume:
+
+- invoice creation and payment capture need to be separated for standard billing
+- standalone collections should become the consistent source of truth for all billing entities
+- patient document billing blocks should be treated as mirrors or summaries only
+- surgery billing needs a formal schema, because the UI currently captures more than the persisted records keep
+- duplicate routes in backend/main.py must be resolved before major billing expansion
+
+============================================================
+13. FINAL ASSESSMENT
+============================================================
+
+Current architecture strengths:
+
+- rich surgery billing UI
+- flexible line-item editing for surgery breakdowns
+- support for insurance-assisted surgery workflow
+- reusable surgery packages
+- billing dashboard already aggregates billing collections
+
+Current architecture weaknesses:
+
+- inconsistent domain model
+- mixed persistence strategy
+- duplicate backend route definitions
+- incomplete field persistence for surgery details
+- standard payments not modeled cleanly
+- disabled tax support
+- no immutable server-side invoice document generation
+
+Bottom line:
+The current billing module is feature-rich at the UI level but structurally inconsistent at the domain and persistence levels. New financial features can be added safely only after treating billing as a formal domain model rather than a set of loosely connected UI states and partially overlapping backend handlers.

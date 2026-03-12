@@ -73,6 +73,18 @@ export const API_ENDPOINTS = {
   BILLING_INVOICES: (registrationId: string) => `${API_BASE_URL}/api/billing/patient/${encodeURIComponent(registrationId)}/invoices`,
   BILLING_PAYMENTS: (registrationId: string) => `${API_BASE_URL}/api/billing/patient/${encodeURIComponent(registrationId)}/payments`,
   BILLING_CLAIMS: (registrationId: string) => `${API_BASE_URL}/api/billing/patient/${encodeURIComponent(registrationId)}/claims`,
+  BILLING_ADVANCES: {
+    LIST_ALL: `${API_BASE_URL}/api/billing/advances`,
+    ANALYTICS: `${API_BASE_URL}/api/billing/advances/analytics`,
+    PATIENT: (registrationId: string) => `${API_BASE_URL}/api/billing/patient/${encodeURIComponent(registrationId)}/advances`,
+    USE: (advanceId: string) => `${API_BASE_URL}/api/billing/advances/${encodeURIComponent(advanceId)}/use`,
+    REFUND: (advanceId: string) => `${API_BASE_URL}/api/billing/advances/${encodeURIComponent(advanceId)}/refund`,
+  },
+
+  INSURANCE: {
+    COMPANIES: `${API_BASE_URL}/api/insurance/companies`,
+    TPAS: `${API_BASE_URL}/api/insurance/tpas`,
+  },
 
   // Pharmacy endpoints
   PHARMACY: {
@@ -165,6 +177,17 @@ export const API_ENDPOINTS = {
     REPORTS_USAGE: (period: 'daily' | 'monthly' | 'yearly') => `${API_BASE_URL}/inventory/reports/usage?period=${encodeURIComponent(period)}`,
     REPORTS_PURCHASES: `${API_BASE_URL}/inventory/reports/purchases`,
     REPORTS_LENS_USAGE: `${API_BASE_URL}/inventory/reports/lens-usage`,
+  },
+
+  EXPENSES: {
+    CREATE: `${API_BASE_URL}/api/expenses`,
+    LIST: `${API_BASE_URL}/api/expenses`,
+    SUMMARY: `${API_BASE_URL}/api/expenses/summary`,
+  },
+
+  FINANCE: {
+    SUMMARY: `${API_BASE_URL}/api/finance/summary`,
+    CASH_FLOW: `${API_BASE_URL}/api/finance/cash-flow`,
   },
 
   // Surgery Packages endpoints

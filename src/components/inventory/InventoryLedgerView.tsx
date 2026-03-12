@@ -9,7 +9,7 @@ export function InventoryLedgerView({ rows }: InventoryLedgerViewProps) {
   return (
     <SectionCard title="Stock Movement Ledger">
       <div className="overflow-x-auto rounded-xl border border-[var(--theme-accent)]/10">
-        <table className="w-full min-w-[1080px] border-collapse text-sm">
+        <table className="w-full min-w-[1080px] border-collapse text-base">
           <thead>
             <tr className="bg-[var(--theme-bg)]">
               {['Date', 'Description', 'Movement', 'Quantity', 'Previous', 'New', 'Reference', 'User'].map((header) => (

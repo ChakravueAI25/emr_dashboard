@@ -37,6 +37,8 @@ from database import (
     pharmacy_collection, 
     pharmacy_billing_collection, 
     coupon_quota_collection,
+    insurance_companies_collection,
+    billing_advances_collection,
     billing_cases_collection,
     surgery_packages_collection,
     billing_invoices_collection,
@@ -57,6 +59,7 @@ from database import (
     lens_usage_collection,
     inventory_usage_collection,
     inventory_stock_ledger_collection,
+    expenses_collection,
 )
 from invoice_parser import parse_invoice
 from models import (
@@ -885,6 +888,87 @@ def sanitize(obj):
 
 def _round_currency(value: float) -> float:
     return round(float(value or 0), 2)
+
+
+def _format_date_only(value) -> str:
+    dt = _to_datetime(value)
+    return dt.strftime("%Y-%m-%d") if dt else ""
+
+
+def _get_next_advance_id() -> str:
+    latest = billing_advances_collection.find_one(
+        {"advance_id": {"$regex": r"^ADV-\d{5}$"}},
+        sort=[("created_at", -1)],
+        projection={"advance_id": 1},
+    )
+    next_number = 1
+    if latest and latest.get("advance_id"):
+        match = re.search(r"(\d+)$", str(latest["advance_id"]))
+        if match:
+            next_number = int(match.group(1)) + 1
+    return f"ADV-{next_number:05d}"
+
+
+def _serialize_advance_doc(doc: dict) -> dict:
+    created_at = _to_datetime(doc.get("created_at"))
+    refunded_at = _to_datetime(doc.get("refunded_at"))
+    used_at = _to_datetime(doc.get("used_at"))
+    return {
+        "advance_id": doc.get("advance_id", ""),
+        "registration_id": doc.get("registration_id", ""),
+        "patient_name": doc.get("patient_name", ""),
+        "amount": _round_currency(doc.get("amount", 0)),
+        "payment_method": doc.get("payment_method", ""),
+        "date": _format_date_only(doc.get("date") or doc.get("created_at")),
+        "status": doc.get("status", "ACTIVE"),
+        "linked_invoice_id": doc.get("linked_invoice_id"),
+        "created_by": doc.get("created_by", ""),
+        "remarks": doc.get("remarks", ""),
+        "created_at": created_at.isoformat() if created_at else "",
+        "used_at": used_at.isoformat() if used_at else "",
+        "refunded_at": refunded_at.isoformat() if refunded_at else "",
+    }
+
+
+def _get_active_advances_for_patient(reg_id: str) -> list[dict]:
+    docs = list(
+        billing_advances_collection.find(
+            {"registration_id": reg_id, "status": "ACTIVE"},
+            {"_id": 0},
+        ).sort("created_at", 1)
+    )
+    return [_serialize_advance_doc(doc) for doc in docs]
+
+
+def _serialize_insurance_company_doc(doc: dict) -> dict:
+    return {
+        "name": str(doc.get("name") or "").strip(),
+        "tpas": [str(item).strip() for item in (doc.get("tpas") or []) if str(item).strip()],
+        "coveragePercent": _round_currency(doc.get("coverage_percent", 0)),
+        "contactName": str(doc.get("contact_name") or "").strip(),
+        "contactEmail": str(doc.get("contact_email") or "").strip(),
+        "contactPhone": str(doc.get("contact_phone") or "").strip(),
+        "contactAddress": str(doc.get("contact_address") or "").strip(),
+    }
+
+
+def _normalize_tpa_list(value) -> list[str]:
+    if isinstance(value, list):
+        source = value
+    else:
+        source = str(value or "").split(",")
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for item in source:
+        token = str(item or "").strip()
+        if not token:
+            continue
+        key = token.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        normalized.append(token)
+    return normalized
 
 
 def _normalize_payroll_month(month: Optional[str]) -> str:
@@ -3195,10 +3279,21 @@ def create_invoice(reg_id: str, invoice_data: dict = Body(...)):
 
         # Get service items with surgery breakdown if provided
         service_items = invoice_data.get("serviceItems", [])
+        advance_ids = [
+            str(advance_id).strip()
+            for advance_id in (invoice_data.get("advanceIds") or [])
+            if str(advance_id).strip()
+        ]
+        advance_applied_amount = _round_currency(invoice_data.get("advanceAppliedAmount", 0))
+        invoice_id = f"INV-{datetime.now().strftime('%Y-%m')}-{str(uuid.uuid4())[:8].upper()}"
+        patient = patient_collection.find_one({"registrationId": reg_id}, {"name": 1, "patientDetails.name": 1}) or {}
+        patient_name = invoice_data.get("patientName") or patient.get("name") or patient.get("patientDetails", {}).get("name") or "Unknown"
 
         invoice = {
-            "id": f"INV-{datetime.now().strftime('%Y-%m')}-{str(uuid.uuid4())[:8].upper()}",
+            "id": invoice_id,
+            "invoiceId": invoice_id,
             "date": invoice_data.get("date", datetime.now().strftime("%Y-%m-%d")),
+            "patientName": patient_name,
             "service": invoice_data.get("service", ""),
             "serviceItems": service_items,  # Store full items including surgery breakdown
             "amount": float(invoice_data.get("amount", 0)),
@@ -3219,7 +3314,9 @@ def create_invoice(reg_id: str, invoice_data: dict = Body(...)):
             # New fields for Multi-stage tracking directly from the UI
             "isSurgeryCase": invoice_data.get("isSurgeryCase", False),
             "expectedFromInsurance": float(invoice_data.get("expectedFromInsurance", 0)),
-            "upfrontPaid": float(invoice_data.get("upfrontPaid", 0))
+            "upfrontPaid": float(invoice_data.get("upfrontPaid", 0)),
+            "advanceAppliedAmount": advance_applied_amount,
+            "advanceIds": advance_ids,
         }
 
         # Auto-create a Billing Case if this is a surgery/insurance package
@@ -3695,6 +3792,245 @@ def refresh_worker_quota(data: dict = Body(...)):
         upsert=True
     )
     return {"status": "success", "message": f"Quota refreshed for {worker_id}"}
+
+
+@app.post("/api/billing/patient/{reg_id}/advances")
+def create_patient_advance(reg_id: str, advance_data: dict = Body(...)):
+    """Create a new surgery booking advance receipt for standard billing only."""
+    patient = patient_collection.find_one({"registrationId": reg_id})
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    amount = _round_currency(advance_data.get("amount", 0))
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="amount must be greater than 0")
+
+    payment_method = str(advance_data.get("payment_method") or "").strip()
+    if not payment_method:
+        raise HTTPException(status_code=400, detail="payment_method is required")
+
+    advance_date = _parse_date_only(
+        str(advance_data.get("date") or datetime.utcnow().strftime("%Y-%m-%d")),
+        "date",
+    )
+
+    patient_name = (
+        advance_data.get("patient_name")
+        or patient.get("name")
+        or patient.get("patientDetails", {}).get("name")
+        or "Unknown"
+    )
+
+    doc = {
+        "advance_id": _get_next_advance_id(),
+        "registration_id": reg_id,
+        "patient_name": patient_name,
+        "amount": amount,
+        "payment_method": payment_method,
+        "date": advance_date,
+        "status": "ACTIVE",
+        "linked_invoice_id": None,
+        "created_by": str(advance_data.get("created_by") or "System").strip() or "System",
+        "remarks": str(advance_data.get("remarks") or "").strip(),
+        "created_at": datetime.utcnow(),
+        "updated_at": datetime.utcnow(),
+    }
+
+    try:
+        billing_advances_collection.insert_one(doc)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to create advance: {exc}")
+
+    return {
+        "status": "success",
+        "message": "Advance collected successfully",
+        "advance": _serialize_advance_doc(doc),
+    }
+
+
+@app.get("/api/insurance/companies")
+def list_insurance_companies():
+    docs = list(insurance_companies_collection.find({}, {"_id": 0}).sort("name", 1))
+    return {
+        "status": "success",
+        "records": [_serialize_insurance_company_doc(doc) for doc in docs],
+    }
+
+
+@app.post("/api/insurance/companies")
+def create_insurance_company(payload: dict = Body(...)):
+    name = str(payload.get("name") or payload.get("company_name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="name is required")
+
+    normalized_tpas = _normalize_tpa_list(payload.get("tpas") or payload.get("tpa_names") or [])
+    now = datetime.utcnow()
+    update_doc = {
+        "$set": {
+            "name": name,
+            "name_lower": name.lower(),
+            "coverage_percent": _round_currency(payload.get("coveragePercent", payload.get("coverage_percent", 0))),
+            "contact_name": str(payload.get("contactName") or payload.get("contact_name") or "").strip(),
+            "contact_email": str(payload.get("contactEmail") or payload.get("contact_email") or "").strip(),
+            "contact_phone": str(payload.get("contactPhone") or payload.get("contact_phone") or "").strip(),
+            "contact_address": str(payload.get("contactAddress") or payload.get("contact_address") or "").strip(),
+            "updated_at": now,
+        },
+        "$setOnInsert": {
+            "created_at": now,
+        },
+    }
+    if normalized_tpas:
+        update_doc["$addToSet"] = {"tpas": {"$each": normalized_tpas}}
+
+    insurance_companies_collection.update_one({"name_lower": name.lower()}, update_doc, upsert=True)
+    doc = insurance_companies_collection.find_one({"name_lower": name.lower()}, {"_id": 0}) or {}
+    return {
+        "status": "success",
+        "company": _serialize_insurance_company_doc(doc),
+    }
+
+
+@app.post("/api/insurance/tpas")
+def add_insurance_tpas(payload: dict = Body(...)):
+    name = str(payload.get("company_name") or payload.get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="company_name is required")
+
+    normalized_tpas = _normalize_tpa_list(payload.get("tpas") or payload.get("tpa_names") or [])
+    if not normalized_tpas:
+        raise HTTPException(status_code=400, detail="At least one TPA is required")
+
+    insurance_companies_collection.update_one(
+        {"name_lower": name.lower()},
+        {
+            "$set": {
+                "name": name,
+                "name_lower": name.lower(),
+                "updated_at": datetime.utcnow(),
+            },
+            "$setOnInsert": {
+                "created_at": datetime.utcnow(),
+                "coverage_percent": 0,
+            },
+            "$addToSet": {
+                "tpas": {"$each": normalized_tpas},
+            },
+        },
+        upsert=True,
+    )
+
+    doc = insurance_companies_collection.find_one({"name_lower": name.lower()}, {"_id": 0}) or {}
+    return {
+        "status": "success",
+        "company": _serialize_insurance_company_doc(doc),
+    }
+
+
+@app.get("/api/billing/patient/{reg_id}/advances")
+def get_patient_advances(reg_id: str):
+    docs = list(
+        billing_advances_collection.find(
+            {"registration_id": reg_id},
+            {"_id": 0},
+        ).sort("created_at", -1)
+    )
+    return {
+        "status": "success",
+        "records": [_serialize_advance_doc(doc) for doc in docs],
+        "active_total": _round_currency(
+            sum(float(doc.get("amount", 0) or 0) for doc in docs if doc.get("status") == "ACTIVE")
+        ),
+    }
+
+
+@app.get("/api/billing/advances")
+def list_billing_advances(
+    status: Optional[str] = None,
+    registration_id: Optional[str] = None,
+    limit: int = 500,
+):
+    query: dict = {}
+    if status:
+        query["status"] = str(status).strip().upper()
+    if registration_id:
+        query["registration_id"] = registration_id
+
+    safe_limit = max(1, min(limit, 2000))
+    docs = list(
+        billing_advances_collection.find(query, {"_id": 0})
+        .sort("created_at", -1)
+        .limit(safe_limit)
+    )
+    return {
+        "status": "success",
+        "records": [_serialize_advance_doc(doc) for doc in docs],
+        "total": billing_advances_collection.count_documents(query),
+    }
+
+
+@app.put("/api/billing/advances/{advance_id}/use")
+def use_billing_advance(advance_id: str, payload: dict = Body(...)):
+    linked_invoice_id = str(payload.get("linked_invoice_id") or payload.get("linkedInvoiceId") or "").strip()
+    if not linked_invoice_id:
+        raise HTTPException(status_code=400, detail="linked_invoice_id is required")
+
+    advance = billing_advances_collection.find_one({"advance_id": advance_id})
+    if not advance:
+        raise HTTPException(status_code=404, detail="Advance not found")
+    if str(advance.get("status") or "").upper() != "ACTIVE":
+        raise HTTPException(status_code=400, detail="Only ACTIVE advances can be used")
+
+    used_at = datetime.utcnow()
+    billing_advances_collection.update_one(
+        {"advance_id": advance_id},
+        {
+            "$set": {
+                "status": "USED",
+                "linked_invoice_id": linked_invoice_id,
+                "used_at": used_at,
+                "used_by": str(payload.get("used_by") or payload.get("usedBy") or "System").strip() or "System",
+                "updated_at": used_at,
+            }
+        },
+    )
+
+    updated = billing_advances_collection.find_one({"advance_id": advance_id}, {"_id": 0})
+    return {
+        "status": "success",
+        "message": f"Advance {advance_id} marked as used",
+        "advance": _serialize_advance_doc(updated or advance),
+    }
+
+
+@app.put("/api/billing/advances/{advance_id}/refund")
+def refund_billing_advance(advance_id: str, payload: dict = Body(...)):
+    advance = billing_advances_collection.find_one({"advance_id": advance_id})
+    if not advance:
+        raise HTTPException(status_code=404, detail="Advance not found")
+    if str(advance.get("status") or "").upper() != "ACTIVE":
+        raise HTTPException(status_code=400, detail="Only ACTIVE advances can be refunded")
+
+    refunded_at = datetime.utcnow()
+    billing_advances_collection.update_one(
+        {"advance_id": advance_id},
+        {
+            "$set": {
+                "status": "REFUNDED",
+                "refund_reason": str(payload.get("reason") or "").strip(),
+                "refunded_by": str(payload.get("refunded_by") or payload.get("refundedBy") or "System").strip() or "System",
+                "refunded_at": refunded_at,
+                "updated_at": refunded_at,
+            }
+        },
+    )
+
+    updated = billing_advances_collection.find_one({"advance_id": advance_id}, {"_id": 0})
+    return {
+        "status": "success",
+        "message": f"Advance {advance_id} marked as refunded",
+        "advance": _serialize_advance_doc(updated or advance),
+    }
 
 
 @app.get("/api/billing/patient/{reg_id}/payments")
@@ -4683,6 +5019,23 @@ async def get_billing_dashboard_stats(page: int = 1, limit: int = 50):
                               (final_surg_stats[0]["pendingBills"] if final_surg_stats else 0) + \
                               (pharm_stats[0]["pendingBills"] if pharm_stats else 0)
 
+        today_key = datetime.utcnow().strftime("%Y-%m-%d")
+        active_advance_docs = list(
+            billing_advances_collection.find(
+                {"status": "ACTIVE"},
+                {"amount": 1, "registration_id": 1, "_id": 0},
+            )
+        )
+        advance_today_docs = list(
+            billing_advances_collection.find(
+                {"date": _parse_date_only(today_key, "date")},
+                {"amount": 1, "_id": 0},
+            )
+        )
+        active_advances_total = _round_currency(sum(float(doc.get("amount", 0) or 0) for doc in active_advance_docs))
+        advance_collected_today = _round_currency(sum(float(doc.get("amount", 0) or 0) for doc in advance_today_docs))
+        patients_with_active_advance = len({str(doc.get("registration_id") or "").strip() for doc in active_advance_docs if str(doc.get("registration_id") or "").strip()})
+
         # Total Refunds
         refunds_total = (inv_stats[0]["refundAmount"] if inv_stats else 0) + \
                         (final_surg_stats[0]["refunds"] if final_surg_stats else 0)
@@ -4817,9 +5170,6 @@ async def get_billing_dashboard_stats(page: int = 1, limit: int = 50):
         # Sort pending list by date desc — no cap so sum(amounts) == unsettledRevenue
         pending_list.sort(key=lambda x: str(x.get("date", "")), reverse=True)
 
-        # Completed Today (approximate for MVP: just use date match)
-        today_str = datetime.utcnow().strftime("%Y-%m-%d")
-        
         # --- 3. Pagination for Billing Records Table ---
         recent_invoices = invoice_views.get("recent", [])
         recent_surgery = surgery_views.get("recent", [])
@@ -4882,6 +5232,9 @@ async def get_billing_dashboard_stats(page: int = 1, limit: int = 50):
             "pendingBills": pending_bills_count,
             "completedToday": 0, # Placeholder or separate query if needed
             "refunds": round(refunds_total, 2),
+            "advanceCollectedToday": advance_collected_today,
+            "activeAdvancesTotal": active_advances_total,
+            "patientsWithActiveAdvance": patients_with_active_advance,
             "pendingBillsList": pending_list,
             "records": paginated_records,
             "totalRecords": len(all_records), # This is approximate total of top slices
@@ -4891,6 +5244,41 @@ async def get_billing_dashboard_stats(page: int = 1, limit: int = 50):
         return preview_payload("/api/billing/dashboard/stats", payload, route_started_perf, len(paginated_records))
     except Exception as e:
         print(f"Error fetching billing dashboard stats: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/billing/advances/analytics")
+async def get_billing_advance_analytics():
+    try:
+        today_key = datetime.utcnow().strftime("%Y-%m-%d")
+        active_advance_docs = list(
+            billing_advances_collection.find(
+                {"status": "ACTIVE"},
+                {"amount": 1, "registration_id": 1, "_id": 0},
+            )
+        )
+        advance_today_docs = list(
+            billing_advances_collection.find(
+                {"date": _parse_date_only(today_key, "date")},
+                {"amount": 1, "_id": 0},
+            )
+        )
+
+        active_advance_total = _round_currency(sum(float(doc.get("amount", 0) or 0) for doc in active_advance_docs))
+        advance_collected_today = _round_currency(sum(float(doc.get("amount", 0) or 0) for doc in advance_today_docs))
+        patients_with_active_advance = len({
+            str(doc.get("registration_id") or "").strip()
+            for doc in active_advance_docs
+            if str(doc.get("registration_id") or "").strip()
+        })
+
+        return {
+            "status": "success",
+            "advanceCollectedToday": advance_collected_today,
+            "activeAdvanceTotal": active_advance_total,
+            "patientsWithActiveAdvance": patients_with_active_advance,
+        }
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 # ============ ANALYTICS ENDPOINT ============
@@ -5206,6 +5594,475 @@ async def get_billing_analytics():
         print(f"Error in analytics: {str(e)}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Analytics error: {str(e)}")
+
+
+# ==================== EXPENSES & FINANCE ENDPOINTS ====================
+
+def _parse_date_only(value: str, field_name: str) -> datetime:
+    try:
+        return datetime.strptime(str(value).strip(), "%Y-%m-%d")
+    except Exception:
+        raise HTTPException(status_code=400, detail=f"{field_name} must be in YYYY-MM-DD format")
+
+
+def _resolve_period_bounds(
+    period: str = "month",
+    day: Optional[str] = None,
+    month: Optional[str] = None,
+    year: Optional[int] = None,
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
+):
+    now = datetime.utcnow()
+    period_key = (period or "month").strip().lower()
+
+    if period_key == "day":
+        target = _parse_date_only(day, "day") if day else now.replace(hour=0, minute=0, second=0, microsecond=0)
+        start = target.replace(hour=0, minute=0, second=0, microsecond=0)
+        end = start + timedelta(days=1)
+        return start, end
+
+    if period_key == "month":
+        month_token = (month or now.strftime("%Y-%m")).strip()
+        if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", month_token):
+            raise HTTPException(status_code=400, detail="month must be in YYYY-MM format")
+        start = datetime.strptime(month_token + "-01", "%Y-%m-%d")
+        if start.month == 12:
+            end = start.replace(year=start.year + 1, month=1)
+        else:
+            end = start.replace(month=start.month + 1)
+        return start, end
+
+    if period_key == "year":
+        selected_year = int(year or now.year)
+        if selected_year < 2000 or selected_year > 2100:
+            raise HTTPException(status_code=400, detail="year must be between 2000 and 2100")
+        start = datetime(selected_year, 1, 1)
+        end = datetime(selected_year + 1, 1, 1)
+        return start, end
+
+    if period_key == "custom":
+        if not from_date or not to_date:
+            raise HTTPException(status_code=400, detail="from_date and to_date are required for custom period")
+        start = _parse_date_only(from_date, "from_date").replace(hour=0, minute=0, second=0, microsecond=0)
+        end_date = _parse_date_only(to_date, "to_date").replace(hour=0, minute=0, second=0, microsecond=0)
+        if end_date < start:
+            raise HTTPException(status_code=400, detail="to_date must be greater than or equal to from_date")
+        end = end_date + timedelta(days=1)
+        return start, end
+
+    raise HTTPException(status_code=400, detail="period must be one of: day, month, year, custom")
+
+
+def _to_datetime(value) -> Optional[datetime]:
+    if isinstance(value, datetime):
+        dt = value
+    elif isinstance(value, str):
+        normalized = value.strip().replace("Z", "+00:00")
+        dt = None
+        try:
+            dt = datetime.fromisoformat(normalized)
+        except Exception:
+            try:
+                dt = datetime.strptime(normalized[:10], "%Y-%m-%d")
+            except Exception:
+                return None
+    else:
+        return None
+
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+
+def _serialize_expense_doc(doc: dict) -> dict:
+    expense_date = _to_datetime(doc.get("date"))
+    created_at = _to_datetime(doc.get("created_at"))
+    return {
+        "expense_id": doc.get("expense_id", ""),
+        "date": expense_date.strftime("%Y-%m-%d") if expense_date else "",
+        "amount": round(float(doc.get("amount", 0) or 0), 2),
+        "paid_by": doc.get("paid_by", ""),
+        "paid_to": doc.get("paid_to", ""),
+        "category": doc.get("category", ""),
+        "payment_mode": doc.get("payment_mode", ""),
+        "remarks": doc.get("remarks", ""),
+        "created_by": doc.get("created_by", ""),
+        "created_at": created_at.isoformat() if created_at else "",
+    }
+
+
+def _build_expense_summary_from_docs(expense_docs: list[dict]) -> dict:
+    now = datetime.utcnow()
+    today = now.date()
+    current_month = (now.year, now.month)
+    current_year = now.year
+
+    summary = {
+        "todayExpenses": 0.0,
+        "thisMonthExpenses": 0.0,
+        "thisYearExpenses": 0.0,
+        "totalExpenses": 0.0,
+        "cashExpenses": 0.0,
+        "upiExpenses": 0.0,
+        "cardExpenses": 0.0,
+        "bankTransferExpenses": 0.0,
+    }
+
+    for doc in expense_docs:
+        amount = float(doc.get("amount", 0) or 0)
+        mode = str(doc.get("payment_mode") or "").strip().lower()
+        dt = _to_datetime(doc.get("date"))
+
+        summary["totalExpenses"] += amount
+        if mode == "cash":
+            summary["cashExpenses"] += amount
+        elif mode == "upi":
+            summary["upiExpenses"] += amount
+        elif mode == "card":
+            summary["cardExpenses"] += amount
+        elif mode in {"bank transfer", "bank_transfer", "bank-transfer"}:
+            summary["bankTransferExpenses"] += amount
+
+        if dt is None:
+            continue
+        if dt.date() == today:
+            summary["todayExpenses"] += amount
+        if (dt.year, dt.month) == current_month:
+            summary["thisMonthExpenses"] += amount
+        if dt.year == current_year:
+            summary["thisYearExpenses"] += amount
+
+    for key in summary:
+        summary[key] = round(summary[key], 2)
+
+    return summary
+
+
+def _aggregate_income_by_day(start: datetime, end: datetime) -> dict[str, float]:
+    daily_income: dict[str, float] = {}
+
+    def add_income(date_value, amount_value):
+        amount = float(amount_value or 0)
+        if amount == 0:
+            return
+        dt = _to_datetime(date_value)
+        if not dt:
+            return
+        if dt < start or dt >= end:
+            return
+        key = dt.strftime("%Y-%m-%d")
+        daily_income[key] = round(daily_income.get(key, 0.0) + amount, 2)
+
+    invoice_rows = list(
+        billing_invoices_collection.find(
+            {},
+            {"date": 1, "createdAt": 1, "status": 1, "patientResponsibility": 1, "patientPaidAmount": 1, "_id": 0},
+        )
+    )
+    for row in invoice_rows:
+        paid_amount = float(row.get("patientPaidAmount", 0) or 0)
+        if paid_amount <= 0 and row.get("status") == "paid":
+            paid_amount = float(row.get("patientResponsibility", 0) or 0)
+        add_income(row.get("date") or row.get("createdAt"), paid_amount)
+
+    surgery_rows = list(
+        final_surgery_bills_collection.find(
+            {},
+            {
+                "createdAt": 1,
+                "status": 1,
+                "patientTotalShare": 1,
+                "balancePayable": 1,
+                "patientPaymentReceived": 1,
+                "_id": 0,
+            },
+        )
+    )
+    for row in surgery_rows:
+        status = str(row.get("status") or "").strip().lower()
+        received = float(row.get("patientPaymentReceived", 0) or 0)
+        total_share = float(row.get("patientTotalShare", 0) or 0)
+        balance_payable = float(row.get("balancePayable", 0) or 0)
+        if received > 0:
+            amount = received
+        elif status == "settled":
+            amount = total_share
+        elif status in {"balance_due", "partially_paid"}:
+            amount = max(total_share - balance_payable, 0)
+        else:
+            amount = 0
+        add_income(row.get("createdAt"), amount)
+
+    pharmacy_rows = list(
+        pharmacy_billing_collection.find(
+            {},
+            {"billDate": 1, "status": 1, "totalAmount": 1, "paidAmount": 1, "_id": 0},
+        )
+    )
+    for row in pharmacy_rows:
+        paid_amount = float(row.get("paidAmount", 0) or 0)
+        if paid_amount <= 0 and str(row.get("status") or "").strip().lower() == "completed":
+            paid_amount = float(row.get("totalAmount", 0) or 0)
+        add_income(row.get("billDate"), paid_amount)
+
+    advance_rows = list(
+        billing_advances_collection.find(
+            {},
+            {
+                "date": 1,
+                "created_at": 1,
+                "status": 1,
+                "amount": 1,
+                "refunded_at": 1,
+                "_id": 0,
+            },
+        )
+    )
+    for row in advance_rows:
+        amount = float(row.get("amount", 0) or 0)
+        add_income(row.get("date") or row.get("created_at"), amount)
+        if str(row.get("status") or "").strip().upper() == "REFUNDED":
+            add_income(row.get("refunded_at"), -amount)
+
+    return daily_income
+
+
+def _aggregate_expenses_by_day(start: datetime, end: datetime) -> dict[str, float]:
+    rows = list(
+        expenses_collection.find(
+            {"date": {"$gte": start, "$lt": end}},
+            {"date": 1, "amount": 1, "_id": 0},
+        )
+    )
+
+    daily_expense: dict[str, float] = {}
+    for row in rows:
+        dt = _to_datetime(row.get("date"))
+        if not dt:
+            continue
+        key = dt.strftime("%Y-%m-%d")
+        daily_expense[key] = round(daily_expense.get(key, 0.0) + float(row.get("amount", 0) or 0), 2)
+    return daily_expense
+
+
+@app.post("/api/expenses")
+def create_expense(payload: dict = Body(...)):
+    try:
+        date_raw = payload.get("date")
+        amount = float(payload.get("amount", 0) or 0)
+        paid_to = str(payload.get("paid_to") or "").strip()
+        category = str(payload.get("category") or "").strip()
+        payment_mode = str(payload.get("payment_mode") or "").strip()
+        remarks = str(payload.get("remarks") or "").strip()
+        created_by = str(payload.get("created_by") or "").strip() or "System"
+        paid_by = str(payload.get("paid_by") or "").strip() or created_by
+
+        if not date_raw:
+            raise HTTPException(status_code=400, detail="date is required")
+        if amount <= 0:
+            raise HTTPException(status_code=400, detail="amount must be greater than 0")
+        if not paid_to:
+            raise HTTPException(status_code=400, detail="paid_to is required")
+        if not category:
+            raise HTTPException(status_code=400, detail="category is required")
+        if not payment_mode:
+            raise HTTPException(status_code=400, detail="payment_mode is required")
+
+        expense_date = _parse_date_only(str(date_raw), "date")
+        expense_id = f"EXP-{datetime.utcnow().strftime('%Y%m%d')}-{uuid.uuid4().hex[:8].upper()}"
+
+        doc = {
+            "expense_id": expense_id,
+            "date": expense_date,
+            "amount": round(amount, 2),
+            "paid_by": paid_by,
+            "paid_to": paid_to,
+            "category": category,
+            "payment_mode": payment_mode,
+            "remarks": remarks,
+            "created_by": created_by,
+            "created_at": datetime.utcnow(),
+        }
+        expenses_collection.insert_one(doc)
+
+        return {
+            "status": "success",
+            "message": "Expense saved successfully",
+            "expense": _serialize_expense_doc(doc),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/expenses")
+def list_expenses(
+    period: str = "month",
+    day: Optional[str] = None,
+    month: Optional[str] = None,
+    year: Optional[int] = None,
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
+    category: Optional[str] = None,
+    payment_mode: Optional[str] = None,
+    sort_by: str = "date",
+    sort_dir: str = "desc",
+    limit: int = 500,
+):
+    try:
+        start, end = _resolve_period_bounds(period, day, month, year, from_date, to_date)
+        query = {"date": {"$gte": start, "$lt": end}}
+
+        if category:
+            query["category"] = category
+        if payment_mode:
+            query["payment_mode"] = payment_mode
+
+        allowed_sort = {
+            "date": "date",
+            "amount": "amount",
+            "paid_by": "paid_by",
+            "paid_to": "paid_to",
+            "category": "category",
+            "payment_mode": "payment_mode",
+            "created_at": "created_at",
+        }
+        sort_field = allowed_sort.get(sort_by, "date")
+        direction = -1 if str(sort_dir).lower() == "desc" else 1
+
+        safe_limit = max(1, min(limit, 2000))
+        docs = list(expenses_collection.find(query).sort(sort_field, direction).limit(safe_limit))
+        total_count = expenses_collection.count_documents(query)
+
+        return {
+            "status": "success",
+            "records": [_serialize_expense_doc(doc) for doc in docs],
+            "total": total_count,
+            "filters": {
+                "period": period,
+                "day": day,
+                "month": month,
+                "year": year,
+                "from_date": from_date,
+                "to_date": to_date,
+                "category": category,
+                "payment_mode": payment_mode,
+            },
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/expenses/summary")
+def get_expense_summary(
+    period: str = "month",
+    day: Optional[str] = None,
+    month: Optional[str] = None,
+    year: Optional[int] = None,
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
+    category: Optional[str] = None,
+    payment_mode: Optional[str] = None,
+):
+    try:
+        start, end = _resolve_period_bounds(period, day, month, year, from_date, to_date)
+        query = {"date": {"$gte": start, "$lt": end}}
+        if category:
+            query["category"] = category
+        if payment_mode:
+            query["payment_mode"] = payment_mode
+
+        docs = list(expenses_collection.find(query, {"_id": 0}))
+        summary = _build_expense_summary_from_docs(docs)
+        summary["recordCount"] = len(docs)
+
+        return {
+            "status": "success",
+            **summary,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/finance/summary")
+def get_finance_summary(
+    period: str = "month",
+    day: Optional[str] = None,
+    month: Optional[str] = None,
+    year: Optional[int] = None,
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
+):
+    try:
+        start, end = _resolve_period_bounds(period, day, month, year, from_date, to_date)
+        income_by_day = _aggregate_income_by_day(start, end)
+        expense_by_day = _aggregate_expenses_by_day(start, end)
+
+        today_key = datetime.utcnow().strftime("%Y-%m-%d")
+        income_today = round(float(income_by_day.get(today_key, 0) or 0), 2)
+        expenses_today = round(float(expense_by_day.get(today_key, 0) or 0), 2)
+
+        total_income = round(sum(income_by_day.values()), 2)
+        total_expenses = round(sum(expense_by_day.values()), 2)
+        monthly_net_balance = round(total_income - total_expenses, 2)
+
+        return {
+            "status": "success",
+            "incomeToday": income_today,
+            "expensesToday": expenses_today,
+            "netBalanceToday": round(income_today - expenses_today, 2),
+            "monthlyNetBalance": monthly_net_balance,
+            "totalIncome": total_income,
+            "totalExpenses": total_expenses,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/finance/cash-flow")
+def get_finance_cash_flow(
+    period: str = "month",
+    day: Optional[str] = None,
+    month: Optional[str] = None,
+    year: Optional[int] = None,
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
+):
+    try:
+        start, end = _resolve_period_bounds(period, day, month, year, from_date, to_date)
+        income_by_day = _aggregate_income_by_day(start, end)
+        expense_by_day = _aggregate_expenses_by_day(start, end)
+
+        all_dates = sorted(set(income_by_day.keys()) | set(expense_by_day.keys()))
+        rows = []
+        for date_key in all_dates:
+            income = round(float(income_by_day.get(date_key, 0) or 0), 2)
+            expense = round(float(expense_by_day.get(date_key, 0) or 0), 2)
+            rows.append({
+                "date": date_key,
+                "income": income,
+                "expenses": expense,
+                "balance": round(income - expense, 2),
+            })
+
+        rows.sort(key=lambda row: row["date"], reverse=True)
+        return {
+            "status": "success",
+            "rows": rows,
+            "count": len(rows),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/pharmacy/stock-report")
 async def get_stock_report():

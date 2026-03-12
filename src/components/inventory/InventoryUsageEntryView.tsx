@@ -35,7 +35,7 @@ export function InventoryUsageEntryView({ stockRows, submitting, onSubmit }: Inv
 
   return (
     <SectionCard title="Usage Entry">
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-5">
         <div>
           <label className={labelClass}>Date</label>
           <input className={inputClass} type="date" value={date} onChange={(event) => setDate(event.target.value)} />
@@ -67,8 +67,8 @@ export function InventoryUsageEntryView({ stockRows, submitting, onSubmit }: Inv
         </div>
       </div>
 
-      <div className="mt-5 flex justify-end">
-        <button onClick={() => void submit()} disabled={submitting} className="rounded-xl bg-[var(--theme-accent)] px-5 py-2.5 text-sm font-semibold text-[var(--theme-bg)] disabled:opacity-60">
+      <div className="mt-6 flex justify-end">
+        <button onClick={() => void submit()} disabled={submitting} className="rounded-xl bg-[var(--theme-accent)] px-6 py-3 text-base font-semibold text-[var(--theme-bg)] disabled:opacity-60">
           {submitting ? 'Recording Usage...' : 'Record Consumable Usage'}
         </button>
       </div>

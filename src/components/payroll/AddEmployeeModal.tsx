@@ -56,44 +56,44 @@ export function AddEmployeeModal({ isOpen, onClose, onAddEmployee }: AddEmployee
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div
-        className="relative w-full max-w-lg rounded-2xl border border-[var(--theme-accent)]/20 bg-[var(--theme-bg-secondary)] shadow-2xl"
+        className="relative w-full max-w-2xl rounded-2xl border border-[var(--theme-accent)]/20 bg-[var(--theme-bg-secondary)] shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--theme-accent)]/10">
+        <div className="flex items-center justify-between border-b border-[var(--theme-accent)]/10 px-7 py-5">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-gradient-to-br from-[var(--theme-accent)]/20 to-[var(--theme-accent)]/5">
-              <UserPlus className="w-5 h-5 text-[var(--theme-accent)]" />
+            <div className="rounded-xl bg-gradient-to-br from-[var(--theme-accent)]/20 to-[var(--theme-accent)]/5 p-2.5">
+              <UserPlus className="h-6 w-6 text-[var(--theme-accent)]" />
             </div>
-            <h2 className="text-lg font-semibold text-[var(--theme-text)]">Add Employee</h2>
+            <h2 className="text-2xl font-semibold text-[var(--theme-text)]">Add Employee</h2>
           </div>
           <button onClick={onClose} className="p-2 rounded-xl hover:bg-[var(--theme-bg-tertiary)] transition-colors">
             <X className="w-5 h-5 text-[var(--theme-text-muted)]" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+        <form onSubmit={handleSubmit} className="space-y-6 p-7">
           <div>
-            <label className="block text-xs uppercase tracking-wider text-[var(--theme-text-muted)] mb-2">Employee Name</label>
+            <label className="mb-2 block text-sm font-semibold uppercase tracking-wider text-[var(--theme-text-muted)]">Employee Name</label>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Enter employee name"
-              className="w-full rounded-xl bg-[var(--theme-bg)] border border-[var(--theme-accent)]/20 px-4 py-3 text-sm text-[var(--theme-text)] outline-none focus:border-[var(--theme-accent)] transition-colors"
+              className="w-full rounded-xl border border-[var(--theme-accent)]/20 bg-[var(--theme-bg)] px-4 py-3.5 text-base text-[var(--theme-text)] outline-none transition-colors focus:border-[var(--theme-accent)]"
             />
           </div>
 
           <div>
-            <label className="block text-xs uppercase tracking-wider text-[var(--theme-text-muted)] mb-2">Role</label>
+            <label className="mb-2 block text-sm font-semibold uppercase tracking-wider text-[var(--theme-text-muted)]">Role</label>
             <input
               value={role}
               onChange={(e) => setRole(e.target.value)}
               placeholder="Enter role"
-              className="w-full rounded-xl bg-[var(--theme-bg)] border border-[var(--theme-accent)]/20 px-4 py-3 text-sm text-[var(--theme-text)] outline-none focus:border-[var(--theme-accent)] transition-colors"
+              className="w-full rounded-xl border border-[var(--theme-accent)]/20 bg-[var(--theme-bg)] px-4 py-3.5 text-base text-[var(--theme-text)] outline-none transition-colors focus:border-[var(--theme-accent)]"
             />
           </div>
 
           <div>
-            <label className="block text-xs uppercase tracking-wider text-[var(--theme-text-muted)] mb-2">Gross Salary</label>
+            <label className="mb-2 block text-sm font-semibold uppercase tracking-wider text-[var(--theme-text-muted)]">Gross Salary</label>
             <input
               type="number"
               min="0"
@@ -101,13 +101,13 @@ export function AddEmployeeModal({ isOpen, onClose, onAddEmployee }: AddEmployee
               value={grossSalary}
               onChange={(e) => setGrossSalary(e.target.value)}
               placeholder="Enter gross salary"
-              className="w-full rounded-xl bg-[var(--theme-bg)] border border-[var(--theme-accent)]/20 px-4 py-3 text-sm text-[var(--theme-text)] outline-none focus:border-[var(--theme-accent)] transition-colors"
+              className="w-full rounded-xl border border-[var(--theme-accent)]/20 bg-[var(--theme-bg)] px-4 py-3.5 text-base text-[var(--theme-text)] outline-none transition-colors focus:border-[var(--theme-accent)]"
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
             <div>
-              <label className="block text-xs uppercase tracking-wider text-[var(--theme-text-muted)] mb-2">Leaves</label>
+              <label className="mb-2 block text-sm font-semibold uppercase tracking-wider text-[var(--theme-text-muted)]">Leaves</label>
               <input
                 type="number"
                 min="0"
@@ -115,11 +115,11 @@ export function AddEmployeeModal({ isOpen, onClose, onAddEmployee }: AddEmployee
                 value={leaves}
                 onChange={(e) => setLeaves(e.target.value)}
                 placeholder="Enter leave days"
-                className="w-full rounded-xl bg-[var(--theme-bg)] border border-[var(--theme-accent)]/20 px-4 py-3 text-sm text-[var(--theme-text)] outline-none focus:border-[var(--theme-accent)] transition-colors"
+                className="w-full rounded-xl border border-[var(--theme-accent)]/20 bg-[var(--theme-bg)] px-4 py-3.5 text-base text-[var(--theme-text)] outline-none transition-colors focus:border-[var(--theme-accent)]"
               />
             </div>
             <div>
-              <label className="block text-xs uppercase tracking-wider text-[var(--theme-text-muted)] mb-2">Advance</label>
+              <label className="mb-2 block text-sm font-semibold uppercase tracking-wider text-[var(--theme-text-muted)]">Advance</label>
               <input
                 type="number"
                 min="0"
@@ -127,24 +127,24 @@ export function AddEmployeeModal({ isOpen, onClose, onAddEmployee }: AddEmployee
                 value={advance}
                 onChange={(e) => setAdvance(e.target.value)}
                 placeholder="Enter advance amount"
-                className="w-full rounded-xl bg-[var(--theme-bg)] border border-[var(--theme-accent)]/20 px-4 py-3 text-sm text-[var(--theme-text)] outline-none focus:border-[var(--theme-accent)] transition-colors"
+                className="w-full rounded-xl border border-[var(--theme-accent)]/20 bg-[var(--theme-bg)] px-4 py-3.5 text-base text-[var(--theme-text)] outline-none transition-colors focus:border-[var(--theme-accent)]"
               />
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-2">
+          <div className="flex justify-end gap-3 pt-3">
             <button
               type="button"
               onClick={onClose}
               disabled={saving}
-              className="px-4 py-2.5 rounded-xl border border-[var(--theme-accent)]/20 text-sm text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg-tertiary)] transition-colors"
+              className="rounded-xl border border-[var(--theme-accent)]/20 px-5 py-3 text-base text-[var(--theme-text-muted)] transition-colors hover:bg-[var(--theme-bg-tertiary)]"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-[var(--theme-accent)] to-[var(--theme-accent-hover)] text-[var(--theme-bg)] text-sm font-semibold hover:shadow-lg transition-all"
+              className="rounded-xl bg-gradient-to-r from-[var(--theme-accent)] to-[var(--theme-accent-hover)] px-6 py-3 text-base font-semibold text-[var(--theme-bg)] transition-all hover:shadow-lg"
             >
               {saving ? 'Saving...' : 'Add Employee'}
             </button>

@@ -34,6 +34,16 @@ interface InsurancePlan {
   coveragePercent: number;
 }
 
+interface InsuranceCompanyRecord {
+  name: string;
+  tpas: string[];
+  coveragePercent: number;
+  contactName?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  contactAddress?: string;
+}
+
 const MOCK_INSURANCE_PLANS: Record<
   Exclude<InsuranceCategory, null>,
   InsurancePlan[]
@@ -251,6 +261,29 @@ interface PatientSearchResult {
   email?: string;
 }
 
+interface AdvanceRecord {
+  advance_id: string;
+  registration_id: string;
+  patient_name: string;
+  amount: number;
+  payment_method: string;
+  date: string;
+  status: 'ACTIVE' | 'USED' | 'REFUNDED';
+  linked_invoice_id: string | null;
+  created_by: string;
+  remarks?: string;
+  created_at: string;
+}
+
+interface FinalSettlementSummary {
+  totalSurgeryCost: number;
+  insuranceApprovedAmount: number;
+  patientShare: number;
+  securityDeposit: number;
+  balancePayable: number;
+  refundAmount: number;
+}
+
 const COMMON_SERVICES = [
   { id: 'S1', name: 'Consultation Fee', category: 'Service', price: 500 },
   { id: 'S2', name: 'Follow-up Visit', category: 'Service', price: 300 },
@@ -269,6 +302,8 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
   const [items, setItems] = useState<BillingItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'Card' | 'UPI' | 'Insurance' | 'Free Camp'>('Cash');
+  const [advancePaymentMethod, setAdvancePaymentMethod] = useState<'Cash' | 'Card' | 'UPI' | 'Bank Transfer'>('Cash');
+  const [insuranceCompanies, setInsuranceCompanies] = useState<InsuranceCompanyRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDoctor, setSelectedDoctor] = useState<string>('');
   const [showCompanyTpaModal, setShowCompanyTpaModal] = useState(false);
@@ -279,6 +314,7 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
   const [newContactEmail, setNewContactEmail] = useState('');
   const [newContactPhone, setNewContactPhone] = useState('');
   const [newContactAddress, setNewContactAddress] = useState('');
+  const [isSavingInsuranceCompany, setIsSavingInsuranceCompany] = useState(false);
 
   const [currentRegId, setCurrentRegId] = useState<string | undefined>(initialRegistrationId);
   const [patientSearchQuery, setPatientSearchQuery] = useState('');
@@ -313,6 +349,12 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
   const [couponDiscountInput, setCouponDiscountInput] = useState('');
   const [couponAppliedAmount, setCouponAppliedAmount] = useState(0);
   const [isCouponApplied, setIsCouponApplied] = useState(false);
+  const [advances, setAdvances] = useState<AdvanceRecord[]>([]);
+  const [appliedAdvanceIds, setAppliedAdvanceIds] = useState<string[]>([]);
+  const [showCollectAdvanceModal, setShowCollectAdvanceModal] = useState(false);
+  const [collectAdvanceAmount, setCollectAdvanceAmount] = useState('');
+  const [collectAdvanceRemarks, setCollectAdvanceRemarks] = useState('');
+  const [isSavingAdvance, setIsSavingAdvance] = useState(false);
 
   // ============ SAVE AS PACKAGE STATE ============
   const [showSaveAsPackagePopup, setShowSaveAsPackagePopup] = useState(false);
@@ -329,6 +371,7 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
   const [existingInitialBill, setExistingInitialBill] = useState<any>(null);
   const [existingSurgeryBills, setExistingSurgeryBills] = useState<any[]>([]);
   const [showBillHistory, setShowBillHistory] = useState(false);
+  const [finalSettlementData, setFinalSettlementData] = useState<FinalSettlementSummary | null>(null);
 
   // Calculated amounts for final bill
   const totalSurgeryCost = items.filter(i => i.category === 'Surgery').reduce((sum, i) => sum + i.total, 0);
@@ -359,6 +402,41 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
     };
     fetchSavedPackages();
   }, []);
+
+  const fetchInsuranceCompanies = async () => {
+    try {
+      const response = await fetch(API_ENDPOINTS.INSURANCE.COMPANIES);
+      if (!response.ok) throw new Error('Failed to fetch insurance companies');
+      const data = await response.json();
+      const records = Array.isArray(data.records) ? data.records : Array.isArray(data) ? data : [];
+      setInsuranceCompanies(
+        records
+          .map((record: any) => ({
+            name: String(record.name || record.company || '').trim(),
+            tpas: Array.isArray(record.tpas) ? record.tpas.map((item: any) => String(item).trim()).filter(Boolean) : [],
+            coveragePercent: Number(record.coveragePercent) || 0,
+            contactName: String(record.contactName || '').trim(),
+            contactEmail: String(record.contactEmail || '').trim(),
+            contactPhone: String(record.contactPhone || '').trim(),
+            contactAddress: String(record.contactAddress || '').trim(),
+          }))
+          .filter((record: InsuranceCompanyRecord) => record.name)
+      );
+    } catch (err) {
+      console.error('Error fetching insurance companies:', err);
+      setInsuranceCompanies([]);
+    }
+  };
+
+  useEffect(() => {
+    void fetchInsuranceCompanies();
+  }, []);
+
+  useEffect(() => {
+    if (surgeryBillStage !== 'final') {
+      setFinalSettlementData(null);
+    }
+  }, [surgeryBillStage]);
 
   // Patient search with debounce
   useEffect(() => {
@@ -431,8 +509,8 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
         name: initialPatientData.name || '',
         registrationId: initialPatientData.registrationId || '',
         demographics: {
-          age: initialPatientData.demographics?.age || '',
-          sex: initialPatientData.demographics?.sex || '',
+          age: (initialPatientData as any).demographics?.age || initialPatientData.age || '',
+          sex: (initialPatientData as any).demographics?.sex || initialPatientData.sex || '',
         },
         contactInfo: {
           phone: initialPatientData.contactInfo?.phone || '',
@@ -463,8 +541,10 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
       console.log('🔄 Fetching patient details for registration:', currentRegId);
       fetchPatientDetails();
       fetchSurgeryBills();
+      fetchPatientAdvances(currentRegId);
     } else {
       setLoading(false);
+      setAdvances([]);
     }
   }, [currentRegId]);
 
@@ -488,6 +568,18 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
       setWorkerQuota(null);
     }
     return null;
+  };
+
+  const fetchPatientAdvances = async (regId: string) => {
+    try {
+      const response = await fetch(API_ENDPOINTS.BILLING_ADVANCES.PATIENT(regId));
+      if (!response.ok) throw new Error('Failed to fetch patient advances');
+      const data = await response.json();
+      setAdvances(Array.isArray(data.records) ? data.records : []);
+    } catch (err) {
+      console.error('Error fetching patient advances:', err);
+      setAdvances([]);
+    }
   };
 
   // Fetch existing surgery bills for the patient
@@ -548,6 +640,68 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
     } finally {
       setLoading(false);
     }
+  };
+
+  const availableInsuranceCompanies = React.useMemo(() => {
+    const seedCompanies = insuranceCategory
+      ? MOCK_INSURANCE_PLANS[insuranceCategory].map((plan) => ({
+          name: plan.company,
+          tpas: plan.tpas,
+          coveragePercent: plan.coveragePercent,
+          contactName: '',
+          contactEmail: '',
+          contactPhone: '',
+          contactAddress: '',
+        }))
+      : [];
+
+    const merged = new Map<string, InsuranceCompanyRecord>();
+    [...seedCompanies, ...insuranceCompanies].forEach((company) => {
+      const key = company.name.trim().toLowerCase();
+      if (!key) return;
+      const existing = merged.get(key);
+      if (!existing) {
+        merged.set(key, {
+          ...company,
+          tpas: [...new Set(company.tpas || [])],
+        });
+        return;
+      }
+
+      merged.set(key, {
+        ...existing,
+        ...company,
+        coveragePercent: Number(company.coveragePercent || existing.coveragePercent || 0),
+        tpas: [...new Set([...(existing.tpas || []), ...(company.tpas || [])])],
+        contactName: company.contactName || existing.contactName,
+        contactEmail: company.contactEmail || existing.contactEmail,
+        contactPhone: company.contactPhone || existing.contactPhone,
+        contactAddress: company.contactAddress || existing.contactAddress,
+      });
+    });
+
+    return Array.from(merged.values()).sort((left, right) => left.name.localeCompare(right.name));
+  }, [insuranceCompanies, insuranceCategory]);
+
+  const selectedInsuranceCompanyRecord = availableInsuranceCompanies.find((company) => company.name === insuranceCompany) || null;
+
+  const applyInsuranceCompanySelection = (companyName: string) => {
+    setInsuranceCompany(companyName);
+    setInsuranceTPA('');
+
+    const selectedCompany = availableInsuranceCompanies.find((company) => company.name === companyName);
+    if (!selectedCompany) {
+      setContactName('');
+      setContactPhone('');
+      setContactEmail('');
+      setContactAddress('');
+      return;
+    }
+
+    setContactName(selectedCompany.contactName || '');
+    setContactPhone(selectedCompany.contactPhone || '');
+    setContactEmail(selectedCompany.contactEmail || '');
+    setContactAddress(selectedCompany.contactAddress || '');
   };
 
   const addItem = (service: typeof COMMON_SERVICES[0]) => {
@@ -734,6 +888,56 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
   const totalDiscount = items.reduce((sum, i) => sum + i.discount, 0);
   const totalTax = 0; // FIXED: Removed GST calculation
   const grandTotal = subtotal - totalDiscount - discountAmount - couponAppliedAmount;
+  const activeAdvances = advances.filter((advance) => advance.status === 'ACTIVE');
+  const availableAdvanceTotal = activeAdvances.reduce((sum, advance) => sum + Number(advance.amount || 0), 0);
+  const advanceAppliedAmount = activeAdvances
+    .filter((advance) => appliedAdvanceIds.includes(advance.advance_id))
+    .reduce((sum, advance) => sum + Number(advance.amount || 0), 0);
+  const isAdvanceSystemEnabled = !govtInsuranceEnabled;
+  const standardBalanceAfterAdvance = Math.max(0, grandTotal - advanceAppliedAmount);
+  const isFinalSettlementSummaryVisible = surgeryBillStage === 'final' && finalSettlementData !== null;
+  const finalSettlementPatientShare = finalSettlementData?.patientShare ?? 0;
+  const finalSettlementSecurityDeposit = finalSettlementData?.securityDeposit ?? 0;
+  const finalSettlementBalancePayable = Math.max(0, finalSettlementData?.balancePayable ?? 0);
+  const summaryCollectAmount = isFinalSettlementSummaryVisible
+    ? finalSettlementBalancePayable
+    : govtInsuranceEnabled
+      ? patientPayable
+      : standardBalanceAfterAdvance;
+
+  const findApplicableAdvanceIds = (billAmount: number) => {
+    if (billAmount <= 0) return [] as string[];
+
+    let runningTotal = 0;
+    const selectedIds: string[] = [];
+    const sortedAdvances = [...activeAdvances].sort((left, right) => left.date.localeCompare(right.date));
+
+    for (const advance of sortedAdvances) {
+      const amount = Number(advance.amount || 0);
+      if (amount <= 0) continue;
+      if (runningTotal + amount > billAmount) continue;
+      selectedIds.push(advance.advance_id);
+      runningTotal += amount;
+    }
+
+    return selectedIds;
+  };
+
+  useEffect(() => {
+    if (!isAdvanceSystemEnabled && appliedAdvanceIds.length > 0) {
+      setAppliedAdvanceIds([]);
+      return;
+    }
+
+    if (appliedAdvanceIds.length === 0) return;
+
+    const refreshedIds = findApplicableAdvanceIds(grandTotal);
+    const currentSorted = [...appliedAdvanceIds].sort().join('|');
+    const refreshedSorted = [...refreshedIds].sort().join('|');
+    if (currentSorted !== refreshedSorted) {
+      setAppliedAdvanceIds(refreshedIds);
+    }
+  }, [activeAdvances, grandTotal, govtInsuranceEnabled]);
 
   const handleApplyWorkerCoupon = async () => {
     const normalizedWorkerId = couponCode.trim().toUpperCase();
@@ -765,6 +969,81 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
     setCouponAppliedAmount(requestedDiscount);
     setIsCouponApplied(true);
     showAlert(`Coupon applied for ${normalizedWorkerId}.`);
+  };
+
+  const handleCollectAdvance = async () => {
+    if (!currentRegId || !patient) {
+      showAlert('Please select a patient first.');
+      return;
+    }
+
+    if (!isAdvanceSystemEnabled) {
+      showAlert('Advance payments are disabled while insurance billing is active.');
+      return;
+    }
+
+    const amount = Number(collectAdvanceAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      showAlert('Enter a valid advance amount.');
+      return;
+    }
+
+    try {
+      setIsSavingAdvance(true);
+      const response = await fetch(API_ENDPOINTS.BILLING_ADVANCES.PATIENT(currentRegId), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount,
+          payment_method: advancePaymentMethod,
+          remarks: collectAdvanceRemarks,
+          created_by: currentUser || 'BillingStaff',
+          patient_name: patient?.name || patient?.patientDetails?.name || '',
+          date: new Date().toISOString().slice(0, 10),
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || 'Failed to collect advance');
+
+      const createdAdvance = data.advance as AdvanceRecord;
+      setShowCollectAdvanceModal(false);
+      setCollectAdvanceAmount('');
+      setCollectAdvanceRemarks('');
+      setAdvancePaymentMethod('Cash');
+      await fetchPatientAdvances(currentRegId);
+      window.dispatchEvent(new CustomEvent('advanceUpdated'));
+      handlePrintAdvanceReceipt(createdAdvance);
+      showAlert(`Advance collected successfully: ${createdAdvance.advance_id}`);
+    } catch (err) {
+      console.error('Error collecting advance:', err);
+      showAlert(err instanceof Error ? err.message : 'Failed to collect advance');
+    } finally {
+      setIsSavingAdvance(false);
+    }
+  };
+
+  const handleApplyAdvance = () => {
+    if (!isAdvanceSystemEnabled) {
+      showAlert('Advance payments are disabled while insurance billing is active.');
+      return;
+    }
+
+    if (activeAdvances.length === 0) {
+      showAlert('No active advances available for this patient.');
+      return;
+    }
+
+    const selectedIds = findApplicableAdvanceIds(grandTotal);
+    if (selectedIds.length === 0) {
+      showAlert('No active advance can be applied to the current bill amount.');
+      return;
+    }
+
+    setAppliedAdvanceIds(selectedIds);
+  };
+
+  const clearAppliedAdvance = () => {
+    setAppliedAdvanceIds([]);
   };
 
   // ============ SURGERY BILL FUNCTIONS ============
@@ -904,6 +1183,15 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
         const result = await response.json();
         const calc = result.calculation;
 
+        setFinalSettlementData({
+          totalSurgeryCost: Number(calc.totalSurgeryCost) || 0,
+          insuranceApprovedAmount: Number(calc.insuranceApprovedAmount) || 0,
+          patientShare: Number(calc.patientTotalShare) || 0,
+          securityDeposit: Number(calc.securityDepositPaid) || 0,
+          balancePayable: Number(calc.balancePayable) || 0,
+          refundAmount: Number(calc.refundAmount) || 0,
+        });
+
         let message = `âœ… Final Settlement Bill Created!\n\nBill ID: ${result.billId}\n\n`;
         message += `ðŸ“Š Calculation Summary:\n`;
         message += `• Total Surgery Cost: ₹${calc.totalSurgeryCost.toLocaleString('en-IN')}\n`;
@@ -938,6 +1226,7 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
     setExistingInitialBill(initialBill);
     setSurgeryBillStage('final');
     setIsSurgeryBillingMode(true); // Enable surgery billing mode
+    setFinalSettlementData(null);
     setSecurityDeposit(initialBill.securityDeposit || 0);
     setInsuranceCategory(initialBill.insuranceType);
     setInsuranceCompany(initialBill.insuranceCompany);
@@ -958,6 +1247,7 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
     setGovtInsuranceEnabled(enabled);
 
     if (!enabled) {
+      setFinalSettlementData(null);
       setInsuranceCategory(null);
       setInsuranceCompany('');
       setInsuranceTPA('');
@@ -974,19 +1264,75 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
       return;
     }
 
-    const plan = MOCK_INSURANCE_PLANS[insuranceCategory]
-      .find(p => p.company === insuranceCompany);
+    const plan = availableInsuranceCompanies.find(p => p.name === insuranceCompany)
+      || MOCK_INSURANCE_PLANS[insuranceCategory].find(p => p.company === insuranceCompany);
 
     if (!plan) return;
 
     const covered = Math.round(
-      (amount * plan.coveragePercent) / 100
+      (amount * Number((plan as any).coveragePercent || 0)) / 100
     );
 
     setInsuranceCovered(covered);
     setPatientPayable(amount - covered);
 
-  }, [govtInsuranceEnabled, insuranceCategory, insuranceCompany, grandTotal]);
+  }, [govtInsuranceEnabled, insuranceCategory, insuranceCompany, grandTotal, availableInsuranceCompanies]);
+
+  const resetInsuranceCompanyModal = () => {
+    setShowCompanyTpaModal(false);
+    setNewCompanyName('');
+    setNewTpaNames('');
+    setNewContactName('');
+    setNewContactEmail('');
+    setNewContactPhone('');
+    setNewContactAddress('');
+  };
+
+  const handleSaveInsuranceCompany = async () => {
+    const companyName = newCompanyName.trim();
+    const tpaNames = newTpaNames
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    if (!companyName) {
+      showAlert('Please enter a company name');
+      return;
+    }
+
+    try {
+      setIsSavingInsuranceCompany(true);
+      const response = await fetch(API_ENDPOINTS.INSURANCE.COMPANIES, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: companyName,
+          tpas: tpaNames,
+          contactName: newContactName,
+          contactEmail: newContactEmail,
+          contactPhone: newContactPhone,
+          contactAddress: newContactAddress,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.detail || 'Failed to save insurance company');
+      }
+
+      await fetchInsuranceCompanies();
+      applyInsuranceCompanySelection(companyName);
+      if (tpaNames.length > 0) {
+        setInsuranceTPA(tpaNames[0]);
+      }
+      resetInsuranceCompanyModal();
+      showAlert('Company and Contact Details added successfully!');
+    } catch (err) {
+      console.error('Error saving insurance company:', err);
+      showAlert(err instanceof Error ? err.message : 'Failed to save insurance company');
+    } finally {
+      setIsSavingInsuranceCompany(false);
+    }
+  };
 
   // Convert number to words (Indian format)
   const numberToWords = (num: number): string => {
@@ -1045,6 +1391,53 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
       // Remove after a delay to let the browser send the print job
       setTimeout(() => iframe.remove(), 1000);
     };
+  };
+
+  const handlePrintAdvanceReceipt = (advance: AdvanceRecord) => {
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Advance Receipt - ${advance.advance_id}</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 24px; color: #111827; }
+          .shell { max-width: 760px; margin: 0 auto; border: 2px solid #D4A574; border-radius: 12px; overflow: hidden; }
+          .header { padding: 20px 24px; background: #111827; color: #F9FAFB; }
+          .header h1 { margin: 0; font-size: 24px; }
+          .header p { margin: 6px 0 0; color: #D1D5DB; }
+          .content { padding: 24px; }
+          .receipt-id { font-size: 24px; font-weight: 800; color: #B45309; margin-bottom: 12px; }
+          .amount { font-size: 30px; font-weight: 800; color: #065F46; margin-bottom: 24px; }
+          .row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #E5E7EB; gap: 16px; }
+          .label { font-weight: 700; color: #6B7280; }
+          .value { text-align: right; }
+          .footer { padding: 16px 24px; background: #F9FAFB; color: #6B7280; font-size: 12px; }
+          @media print { body { padding: 0; } .shell { border: none; } }
+        </style>
+      </head>
+      <body>
+        <div class="shell">
+          <div class="header">
+            <h1>SPARK Eye Care Hospital</h1>
+            <p>Advance Payment Receipt</p>
+          </div>
+          <div class="content">
+            <div class="receipt-id">${advance.advance_id}</div>
+            <div class="amount">₹${Number(advance.amount || 0).toLocaleString('en-IN')}</div>
+            <div class="row"><div class="label">Patient Name</div><div class="value">${advance.patient_name}</div></div>
+            <div class="row"><div class="label">Registration ID</div><div class="value">${advance.registration_id}</div></div>
+            <div class="row"><div class="label">Date</div><div class="value">${advance.date}</div></div>
+            <div class="row"><div class="label">Payment Method</div><div class="value">${advance.payment_method}</div></div>
+            <div class="row"><div class="label">Collected By</div><div class="value">${advance.created_by || currentUser || 'BillingStaff'}</div></div>
+            ${advance.remarks ? `<div class="row"><div class="label">Remarks</div><div class="value">${advance.remarks}</div></div>` : ''}
+          </div>
+          <div class="footer">Computer generated advance receipt.</div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    printViaIframe(printContent);
   };
 
   // ============ PRINT INITIAL SURGERY BILL ============
@@ -1224,10 +1617,6 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
       `;
     });
 
-    const hasBalance = calculation.balancePayable > 0;
-    const hasRefund = calculation.refundAmount > 0;
-    const isSettled = !hasBalance && !hasRefund;
-
     const printContent = `
       <!DOCTYPE html>
       <html>
@@ -1251,7 +1640,7 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
           .total-row { display: flex; justify-content: flex-end; margin-bottom: 6px; }
           .total-label { font-weight: bold; min-width: 200px; text-align: right; padding-right: 15px; }
           .total-value { min-width: 100px; text-align: right; font-weight: bold; }
-          .final-amount { font-size: 15px; border: 2px solid ${hasBalance ? '#e74c3c' : '#27ae60'}; padding: 10px; margin: 8px; border-radius: 6px; background: ${hasBalance ? '#fdf2f2' : '#e8f8f0'}; text-align: center; }
+          .final-amount { font-size: 15px; border: 2px solid #27ae60; padding: 10px; margin: 8px; border-radius: 6px; background: #e8f8f0; text-align: center; }
           .insurance-info { background-color: #f7f7f7; padding: 8px; margin: 8px; border-radius: 6px; border: 1px solid #27ae60; }
           .calculation-table { width: 100%; border-collapse: collapse; margin: 10px 0; }
           .calculation-table td { padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px; }
@@ -1361,23 +1750,12 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
                 <td><strong>Patient's Total Share</strong></td>
                 <td style="text-align: right; font-weight: bold;">₹${calculation.patientTotalShare?.toLocaleString('en-IN')}</td>
               </tr>
-              <tr style="border-top: 2px solid #333;">
-                <td><strong>${hasBalance ? 'Balance Payable by Patient' : 'Final Balance'}</strong></td>
-                <td style="text-align: right; font-size: 12px; font-weight: bold; color: ${hasBalance ? '#e74c3c' : '#27ae60'};">
-                  ${hasBalance ? '₹' + calculation.balancePayable?.toLocaleString('en-IN') : '₹0 (Settled)'}
-                </td>
-              </tr>
             </table>
           </div>
           
           <div class="final-amount">
-            ${hasBalance ? `
-              <div style="font-size: 11px; color: #e74c3c;">Balance Payable by Patient</div>
-              <div style="font-size: 18px; font-weight: bold; color: #e74c3c;">₹${calculation.balancePayable?.toLocaleString('en-IN')}</div>
-            ` : `
-              <div style="font-size: 11px; color: #27ae60;">âœ“ Bill Fully Settled</div>
-              <div style="font-size: 16px; font-weight: bold; color: #27ae60;">No Balance Due</div>
-            `}
+            <div style="font-size: 11px; color: #27ae60;">Invoice Total</div>
+            <div style="font-size: 18px; font-weight: bold; color: #27ae60;">₹${calculation.patientTotalShare?.toLocaleString('en-IN')}</div>
           </div>
           
           <div class="footer">
@@ -1786,6 +2164,18 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
 
     try {
       const isSurgery = items.some(item => item.category === 'Surgery');
+      const effectiveAdvanceIds = isAdvanceSystemEnabled ? appliedAdvanceIds : [];
+      const effectiveAdvanceAmount = isAdvanceSystemEnabled ? advanceAppliedAmount : 0;
+      const currentPatientResponsibility = isFinalSettlementSummaryVisible
+        ? finalSettlementPatientShare
+        : govtInsuranceEnabled
+          ? patientPayable
+          : grandTotal;
+      const currentCollectedAmount = isFinalSettlementSummaryVisible
+        ? finalSettlementBalancePayable
+        : govtInsuranceEnabled
+          ? patientPayable
+          : Math.max(0, grandTotal - effectiveAdvanceAmount);
 
       // Prepare items with surgery breakdown for surgery items
       const itemsWithBreakdown = items.map(item => {
@@ -1816,19 +2206,22 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          patientName: patient?.name || patient?.patientDetails?.name || '',
           service: items.map(i => i.name).join(', '),
           serviceItems: itemsWithBreakdown, // Include full items with breakdown
           amount: subtotal + totalTax, // Total bill amount including tax
           status: status,
           insuranceCovered: govtInsuranceEnabled ? insuranceCovered : 0,
           insuranceStatus: govtInsuranceEnabled ? 'claimed' : 'none',
-          patientResponsibility: govtInsuranceEnabled ? patientPayable : grandTotal,
-          patientPaidAmount: govtInsuranceEnabled ? patientPayable : grandTotal,
+          patientResponsibility: currentPatientResponsibility,
+          patientPaidAmount: currentCollectedAmount,
           couponCode: isCouponApplied ? couponCode.trim().toUpperCase() : '',
           appliedBy: isCouponApplied ? couponCode.trim().toUpperCase() : '',
           discountAmount: discountAmount + couponAppliedAmount + totalDiscount,
           paymentMethod: paymentMethod, // Explicitly pass payment method
           notes: `Payment via ${paymentMethod}. ${govtInsuranceEnabled ? `Insurance Claim: ${insuranceCompany} - ${insuranceTPA}` : ''}`,
+          advanceAppliedAmount: effectiveAdvanceAmount,
+          advanceIds: effectiveAdvanceIds,
           // New Multi-stage tracking fields
           isSurgeryCase: isSurgery,
           expectedFromInsurance: govtInsuranceEnabled ? insuranceCovered : 0,
@@ -1837,6 +2230,31 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
       });
 
       if (response.ok) {
+        const result = await response.json();
+
+        if (effectiveAdvanceIds.length > 0 && result.invoiceId) {
+          await Promise.all(
+            effectiveAdvanceIds.map((advanceId) =>
+              fetch(API_ENDPOINTS.BILLING_ADVANCES.USE(advanceId), {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  linked_invoice_id: result.invoiceId,
+                  used_by: currentUser || 'BillingStaff',
+                }),
+              }).then(async (advanceResponse) => {
+                if (!advanceResponse.ok) {
+                  const advanceError = await advanceResponse.json().catch(() => ({}));
+                  throw new Error(advanceError.detail || `Failed to apply advance ${advanceId}`);
+                }
+              })
+            )
+          );
+          await fetchPatientAdvances(currentRegId);
+          setAppliedAdvanceIds([]);
+          window.dispatchEvent(new CustomEvent('advanceUpdated'));
+        }
+
         showAlert(status === 'draft' ? 'Draft saved successfully!' : 'Bill processed successfully!');
 
         // Show popup to save as package if it's a surgery item
@@ -1856,7 +2274,7 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
         window.dispatchEvent(new CustomEvent('billingUpdated', {
           detail: {
             registrationId: currentRegId,
-            invoiceId: currentRegId
+            invoiceId: result.invoiceId || currentRegId
           }
         }));
       } else {
@@ -2103,6 +2521,16 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
         </div>
 
         <div className="flex-shrink-0 flex items-center gap-3">
+          {!govtInsuranceEnabled && (
+            <Button
+              className="bg-[#1a1a1a] border border-[#D4A574] text-[#D4A574] hover:bg-[#2a2a2a] font-bold h-[38px] disabled:opacity-50"
+              onClick={() => setShowCollectAdvanceModal(true)}
+              disabled={!patient}
+            >
+              <DollarSign className="w-4 h-4 mr-2" />
+              Collect Advance
+            </Button>
+          )}
           <Button
             className="bg-[#D4A574] text-[#0a0a0a] hover:bg-[#C9955E] font-bold h-[38px]"
             onClick={() => setShowCompanyTpaModal(true)}
@@ -2349,21 +2777,13 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
                         <select
                           value={insuranceCompany}
                           onChange={(e) => {
-                            setInsuranceCompany(e.target.value);
-                            // Clear contact info if company changes (optional, but cleaner)
-                            if (!e.target.value) {
-                                setContactName('');
-                                setContactPhone('');
-                                setContactEmail('');
-                                setContactAddress('');
-                            }
-                            setInsuranceTPA('');
+                            applyInsuranceCompanySelection(e.target.value);
                           }}
                           className="w-full bg-[#0a0a0a] border border-[#D4A574]/30 rounded-lg h-10 px-3 text-sm text-white focus:border-[#D4A574]"
                         >
                           <option value="">Select Company</option>
-                          {MOCK_INSURANCE_PLANS[insuranceCategory]?.map((plan) => (
-                            <option key={plan.company} value={plan.company}>{plan.company}</option>
+                          {availableInsuranceCompanies.map((company) => (
+                            <option key={company.name} value={company.name}>{company.name}</option>
                           ))}
                         </select>
                       </div>
@@ -2377,9 +2797,7 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
                             className="w-full bg-[#0a0a0a] border border-[#D4A574]/30 rounded-lg h-10 px-3 text-sm text-white focus:border-[#D4A574]"
                           >
                             <option value="">Select TPA</option>
-                            {MOCK_INSURANCE_PLANS[insuranceCategory]
-                              ?.find(p => p.company === insuranceCompany)
-                              ?.tpas.map((tpa) => (
+                            {(selectedInsuranceCompanyRecord?.tpas || []).map((tpa) => (
                                 <option key={tpa} value={tpa}>{tpa}</option>
                               ))}
                           </select>
@@ -2398,13 +2816,13 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
                         </div>
                       )}
                       {/* Added Contact Person Details Display */}
-                      {insuranceCompany && contactName && (
+                      {insuranceCompany && (selectedInsuranceCompanyRecord?.contactName || contactName) && (
                         <div className="mt-4 p-3 bg-[#1a1a1a] rounded-lg border border-[#D4A574]/20 space-y-1">
                           <p className="text-[10px] text-[#D4A574] uppercase font-bold mb-1">Contact Person</p>
-                          <p className="text-xs text-white font-medium">{contactName}</p>
-                          {contactPhone && <p className="text-[10px] text-[#8B8B8B] flex items-center gap-1">📞 {contactPhone}</p>}
-                          {contactEmail && <p className="text-[10px] text-[#8B8B8B] flex items-center gap-1">✉️ {contactEmail}</p>}
-                          {contactAddress && <p className="text-[10px] text-[#8B8B8B] line-clamp-2">📍 {contactAddress}</p>}
+                          <p className="text-xs text-white font-medium">{selectedInsuranceCompanyRecord?.contactName || contactName}</p>
+                          {(selectedInsuranceCompanyRecord?.contactPhone || contactPhone) && <p className="text-[10px] text-[#8B8B8B] flex items-center gap-1">📞 {selectedInsuranceCompanyRecord?.contactPhone || contactPhone}</p>}
+                          {(selectedInsuranceCompanyRecord?.contactEmail || contactEmail) && <p className="text-[10px] text-[#8B8B8B] flex items-center gap-1">✉️ {selectedInsuranceCompanyRecord?.contactEmail || contactEmail}</p>}
+                          {(selectedInsuranceCompanyRecord?.contactAddress || contactAddress) && <p className="text-[10px] text-[#8B8B8B] line-clamp-2">📍 {selectedInsuranceCompanyRecord?.contactAddress || contactAddress}</p>}
                         </div>
                       )}
                     </>
@@ -2639,38 +3057,107 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
                   ))
                 )}
               </div>
+
+              {isAdvanceSystemEnabled && activeAdvances.length > 0 && (
+                <div className="mb-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[10px] uppercase tracking-[0.2em] text-emerald-300 font-bold">Available Advance</p>
+                      <p className="text-lg font-semibold text-emerald-400 mt-1">₹{availableAdvanceTotal.toLocaleString('en-IN')}</p>
+                      <p className="text-[11px] text-[#8B8B8B] mt-1">{activeAdvances.length} active receipt{activeAdvances.length === 1 ? '' : 's'} available for this patient.</p>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      {appliedAdvanceIds.length > 0 ? (
+                        <>
+                          <Button
+                            className="bg-emerald-500 text-[#0a0a0a] hover:bg-emerald-400 h-9 text-xs font-bold"
+                            onClick={clearAppliedAdvance}
+                          >
+                            Remove Advance
+                          </Button>
+                          <p className="text-[10px] text-emerald-300 text-right">Applied: ₹{advanceAppliedAmount.toLocaleString('en-IN')}</p>
+                        </>
+                      ) : (
+                        <Button
+                          className="bg-emerald-500 text-[#0a0a0a] hover:bg-emerald-400 h-9 text-xs font-bold"
+                          onClick={handleApplyAdvance}
+                          disabled={grandTotal <= 0}
+                        >
+                          Apply Advance
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Bill Totals & Breakdown */}
             <div className="space-y-3 mb-6 pt-4 border-t border-[#D4A574]/30">
-              <div className="flex justify-between text-sm">
-                <span className="text-[#8B8B8B] font-medium">Subtotal</span>
-                <span className="text-white font-bold tracking-tight">₹{subtotal.toLocaleString('en-IN')}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-[#8B8B8B] font-medium">Discount</span>
-                <span className="text-green-500 font-bold tracking-tight">- ₹{(totalDiscount + discountAmount + couponAppliedAmount).toLocaleString('en-IN')}</span>
-              </div>
-
-              {govtInsuranceEnabled && items.some(i => i.category === 'Surgery') && (
-                <div className="pt-2 space-y-2 border-t border-[#D4A574]/10">
-                  <div className="flex justify-between text-[11px]">
-                    <span className="text-blue-400">Insurance Covered</span>
-                    <span className="text-blue-400 font-bold">- ₹{insuranceCovered.toLocaleString('en-IN')}</span>
+              {isFinalSettlementSummaryVisible ? (
+                <>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-[#8B8B8B] font-medium">Total Surgery Cost</span>
+                    <span className="text-white font-bold tracking-tight">₹{finalSettlementData.totalSurgeryCost.toLocaleString('en-IN')}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-[#8B8B8B] font-semibold">Patient Payable</span>
-                    <span className="text-white font-bold">₹{patientPayable.toLocaleString('en-IN')}</span>
+                    <span className="text-blue-400 font-medium">Insurance Approved Amount</span>
+                    <span className="text-blue-400 font-bold tracking-tight">₹{finalSettlementData.insuranceApprovedAmount.toLocaleString('en-IN')}</span>
                   </div>
-                </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-[#8B8B8B] font-medium">Patient's Total Share</span>
+                    <span className="text-white font-bold tracking-tight">₹{finalSettlementPatientShare.toLocaleString('en-IN')}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-[#8B8B8B] font-medium">Security Deposit</span>
+                    <span className="text-[#8B8B8B] font-bold tracking-tight">₹{finalSettlementSecurityDeposit.toLocaleString('en-IN')}</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-[#8B8B8B] font-medium">Subtotal</span>
+                    <span className="text-white font-bold tracking-tight">₹{subtotal.toLocaleString('en-IN')}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-[#8B8B8B] font-medium">Discount</span>
+                    <span className="text-green-500 font-bold tracking-tight">- ₹{(totalDiscount + discountAmount + couponAppliedAmount).toLocaleString('en-IN')}</span>
+                  </div>
+
+                  {isAdvanceSystemEnabled && advanceAppliedAmount > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-emerald-300 font-medium">Advance Applied</span>
+                      <span className="text-emerald-400 font-bold tracking-tight">- ₹{advanceAppliedAmount.toLocaleString('en-IN')}</span>
+                    </div>
+                  )}
+
+                  {govtInsuranceEnabled && items.some(i => i.category === 'Surgery') && (
+                    <div className="pt-2 space-y-2 border-t border-[#D4A574]/10">
+                      <div className="flex justify-between text-[11px]">
+                        <span className="text-blue-400">Insurance Covered</span>
+                        <span className="text-blue-400 font-bold">- ₹{insuranceCovered.toLocaleString('en-IN')}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-[#8B8B8B] font-semibold">Patient Payable</span>
+                        <span className="text-white font-bold">₹{patientPayable.toLocaleString('en-IN')}</span>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
 
               <div className="pt-4 border-t border-[#D4A574]/30 flex justify-between items-end">
                 <span className="text-base font-bold text-white uppercase tracking-tight">
-                  {govtInsuranceEnabled ? 'Patient Payable' : 'Grand Total'}
+                  {isFinalSettlementSummaryVisible
+                    ? 'Balance Payable By Patient'
+                    : govtInsuranceEnabled
+                      ? 'Patient Payable'
+                      : advanceAppliedAmount > 0
+                        ? 'Balance After Advance'
+                        : 'Grand Total'}
                 </span>
                 <span className="text-3xl font-black text-[#D4A574] tracking-tighter">
-                  ₹{(govtInsuranceEnabled ? patientPayable : grandTotal).toLocaleString('en-IN')}
+                  ₹{summaryCollectAmount.toLocaleString('en-IN')}
                 </span>
               </div>
             </div>
@@ -2705,9 +3192,9 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
               <Button
                 className="w-full bg-[#D4A574] text-[#0a0a0a] hover:bg-[#C9955E] h-12 font-bold text-base shadow-xl shadow-[#D4A574]/20 rounded-xl"
                 onClick={() => handleSaveBill('paid')}
-                disabled={items.length === 0}
+                disabled={items.length === 0 || (isFinalSettlementSummaryVisible && summaryCollectAmount <= 0)}
               >
-                COLLECT ₹{(govtInsuranceEnabled ? patientPayable : grandTotal).toLocaleString('en-IN')}
+                COLLECT ₹{summaryCollectAmount.toLocaleString('en-IN')}
               </Button>
               <Button
                 className="w-full bg-transparent border border-[#D4A574]/40 text-[#D4A574] hover:bg-[#1a1a1a] h-11 font-bold text-sm rounded-xl"
@@ -2804,6 +3291,94 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
           </Card>
         </div>
       </div >
+
+      {showCollectAdvanceModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 px-4">
+          <div className="w-full max-w-md bg-[#0f0f0f] border border-[#D4A574]/40 rounded-2xl shadow-2xl shadow-black/50 p-6">
+            <div className="flex items-start justify-between gap-4 mb-5">
+              <div>
+                <h3 className="text-xl font-bold text-white">Collect Advance</h3>
+                <p className="text-sm text-[#8B8B8B] mt-1">Record a booking deposit for the selected patient. This stays disabled for government insurance billing.</p>
+              </div>
+              <button
+                type="button"
+                className="text-[#8B8B8B] hover:text-white transition-colors"
+                onClick={() => setShowCollectAdvanceModal(false)}
+                disabled={isSavingAdvance}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-[0.16em] text-[#D4A574] mb-2">Patient</label>
+                <div className="rounded-xl border border-[#D4A574]/20 bg-[#151515] px-4 py-3 text-sm text-white">
+                  <div className="font-semibold">{patient?.name || patient?.patientDetails?.name || 'Unknown Patient'}</div>
+                  <div className="text-[#8B8B8B] text-xs mt-1">Registration ID: {currentRegId || '-'}</div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-[0.16em] text-[#D4A574] mb-2">Advance Amount</label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={collectAdvanceAmount}
+                  onChange={(e) => setCollectAdvanceAmount(e.target.value)}
+                  placeholder="Enter advance amount"
+                  className="h-11 bg-[#151515] border-[#D4A574]/20 text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-[0.16em] text-[#D4A574] mb-2">Payment Method</label>
+                <select
+                  value={advancePaymentMethod}
+                  onChange={(e) => setAdvancePaymentMethod(e.target.value as 'Cash' | 'Card' | 'UPI' | 'Bank Transfer')}
+                  className="w-full h-11 rounded-xl bg-[#151515] border border-[#D4A574]/20 text-white px-3 focus:outline-none focus:border-[#D4A574]"
+                >
+                  <option value="Cash">Cash</option>
+                  <option value="Card">Card</option>
+                  <option value="UPI">UPI</option>
+                  <option value="Bank Transfer">Bank Transfer</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-[0.16em] text-[#D4A574] mb-2">Remarks</label>
+                <textarea
+                  value={collectAdvanceRemarks}
+                  onChange={(e) => setCollectAdvanceRemarks(e.target.value)}
+                  placeholder="Optional note for surgery booking, estimate, or follow-up"
+                  className="w-full min-h-[96px] rounded-xl bg-[#151515] border border-[#D4A574]/20 text-white px-3 py-3 focus:outline-none focus:border-[#D4A574] resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1 border-[#D4A574]/30 text-[#D4A574] bg-transparent hover:bg-[#D4A574]/10"
+                onClick={() => setShowCollectAdvanceModal(false)}
+                disabled={isSavingAdvance}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                className="flex-1 bg-[#D4A574] text-[#0a0a0a] hover:bg-[#C9955E] font-bold"
+                onClick={handleCollectAdvance}
+                disabled={isSavingAdvance || !collectAdvanceAmount.trim()}
+              >
+                {isSavingAdvance ? 'Saving...' : 'Collect Advance'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Save as Package Popup Modal */}
       {
@@ -2949,45 +3524,16 @@ export function IndividualBillingView({ registrationId: initialRegistrationId, o
 
               <div className="flex gap-3">
                 <button
-                  onClick={() => {
-                    if (newCompanyName.trim()) {
-                      setInsuranceCompany(newCompanyName);
-                      if (newTpaNames.trim()) {
-                        setInsuranceTPA(newTpaNames.split(',')[0].trim());
-                      }
-                      // Set Contact Info
-                      setContactName(newContactName);
-                      setContactEmail(newContactEmail);
-                      setContactPhone(newContactPhone);
-                      setContactAddress(newContactAddress);
-
-                      setShowCompanyTpaModal(false);
-                      setNewCompanyName('');
-                      setNewTpaNames('');
-                      setNewContactName('');
-                      setNewContactEmail('');
-                      setNewContactPhone('');
-                      setNewContactAddress('');
-                      showAlert('Company and Contact Details added successfully!');
-                    } else {
-                      showAlert('Please enter a company name');
-                    }
-                  }}
-                  className="flex-1 bg-[#D4A574] text-[#0a0a0a] py-2 rounded-lg hover:bg-[#C9955E] font-medium"
+                  onClick={handleSaveInsuranceCompany}
+                  disabled={isSavingInsuranceCompany}
+                  className="flex-1 bg-[#D4A574] text-[#0a0a0a] py-2 rounded-lg hover:bg-[#C9955E] font-medium disabled:opacity-50"
                 >
-                  Add Details
+                  {isSavingInsuranceCompany ? 'Saving...' : 'Add Details'}
                 </button>
                 <button
-                  onClick={() => {
-                    setShowCompanyTpaModal(false);
-                    setNewCompanyName('');
-                    setNewTpaNames('');
-                    setNewContactName('');
-                    setNewContactEmail('');
-                    setNewContactPhone('');
-                    setNewContactAddress('');
-                  }}
-                  className="flex-1 bg-[#2a2a2a] text-[#D4A574] py-2 rounded-lg hover:bg-[#3a3a3a] font-medium"
+                  onClick={resetInsuranceCompanyModal}
+                  disabled={isSavingInsuranceCompany}
+                  className="flex-1 bg-[#2a2a2a] text-[#D4A574] py-2 rounded-lg hover:bg-[#3a3a3a] font-medium disabled:opacity-50"
                 >
                   Cancel
                 </button>

@@ -308,25 +308,25 @@ export function PayrollManagementView() {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--theme-bg)] text-[var(--theme-text)] p-6 ml-16">
+    <div className="ml-16 min-h-screen w-full bg-[var(--theme-bg)] p-8 xl:p-10 text-[var(--theme-text)]">
       {toast ? (
-        <div className={`fixed top-6 right-6 z-[60] px-4 py-3 rounded-xl border text-sm font-medium shadow-lg ${toast.type === 'success' ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400' : 'bg-red-500/15 border-red-500/30 text-red-400'}`}>
+        <div className={`fixed top-6 right-6 z-[60] rounded-xl border px-5 py-4 text-base font-medium shadow-lg ${toast.type === 'success' ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400' : 'bg-red-500/15 border-red-500/30 text-red-400'}`}>
           {toast.message}
         </div>
       ) : null}
 
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-light tracking-tight">Payroll Management</h1>
-          <p className="text-[var(--theme-text-muted)] text-sm mt-0.5">Manage employees, gross salary, leaves, advances, and monthly payroll records</p>
+          <h1 className="text-4xl font-light tracking-tight">Payroll Management</h1>
+          <p className="mt-2 text-base text-[var(--theme-text-muted)]">Manage employees, gross salary, leaves, advances, and monthly payroll records</p>
         </div>
         <div className="flex items-center gap-3">
-          <label className="flex items-center gap-2 rounded-xl bg-[var(--theme-bg-secondary)] border border-[var(--theme-accent)]/20 px-4 py-2.5 text-sm text-[var(--theme-text-muted)]">
+          <label className="flex items-center gap-3 rounded-xl border border-[var(--theme-accent)]/20 bg-[var(--theme-bg-secondary)] px-5 py-3 text-base text-[var(--theme-text-muted)]">
             <span>Month</span>
             <select
               value={selectedMonth}
               onChange={(event) => setSelectedMonth(event.target.value)}
-              className="bg-transparent text-[var(--theme-text)] outline-none"
+              className="bg-transparent text-base text-[var(--theme-text)] outline-none"
             >
               {monthOptions.map((month) => (
                 <option key={month} value={month} className="bg-[var(--theme-bg-secondary)] text-[var(--theme-text)]">
@@ -337,55 +337,55 @@ export function PayrollManagementView() {
           </label>
           <button
             onClick={() => setIsAddModalOpen(true)}
-            className="px-4 py-2 rounded-xl bg-gradient-to-r from-[var(--theme-accent)] to-[var(--theme-accent-hover)] text-[var(--theme-bg)] text-sm font-semibold hover:shadow-lg transition-all flex items-center gap-1.5"
+            className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-[var(--theme-accent)] to-[var(--theme-accent-hover)] px-6 py-3 text-base font-semibold text-[var(--theme-bg)] transition-all hover:shadow-lg"
           >
-            <Plus className="w-4 h-4" />Add Employee
+            <Plus className="h-5 w-5" />Add Employee
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="rounded-xl border border-[var(--theme-accent)]/20 bg-[var(--theme-bg-secondary)] p-4">
-          <div className="flex items-center gap-2 text-[var(--theme-text-muted)] text-xs uppercase tracking-wider mb-2">
-            <Users className="w-4 h-4 text-[var(--theme-accent)]" />Employees
+      <div className="mb-7 grid grid-cols-1 gap-5 md:grid-cols-4">
+        <div className="rounded-xl border border-[var(--theme-accent)]/20 bg-[var(--theme-bg-secondary)] p-6">
+          <div className="mb-3 flex items-center gap-2 text-sm uppercase tracking-wider text-[var(--theme-text-muted)]">
+            <Users className="h-5 w-5 text-[var(--theme-accent)]" />Employees
           </div>
-          <div className="text-2xl font-semibold text-[var(--theme-text)]">{payrollSummary.totalEmployees}</div>
+          <div className="text-3xl font-semibold text-[var(--theme-text)]">{payrollSummary.totalEmployees}</div>
         </div>
-        <div className="rounded-xl border border-[var(--theme-accent)]/20 bg-[var(--theme-bg-secondary)] p-4">
-          <div className="flex items-center gap-2 text-[var(--theme-text-muted)] text-xs uppercase tracking-wider mb-2">
-            <BadgeIndianRupee className="w-4 h-4 text-[var(--theme-accent)]" />Gross Payroll
+        <div className="rounded-xl border border-[var(--theme-accent)]/20 bg-[var(--theme-bg-secondary)] p-6">
+          <div className="mb-3 flex items-center gap-2 text-sm uppercase tracking-wider text-[var(--theme-text-muted)]">
+            <BadgeIndianRupee className="h-5 w-5 text-[var(--theme-accent)]" />Gross Payroll
           </div>
-          <div className="text-xl font-semibold text-[var(--theme-text)]">{formatCurrency(payrollSummary.totalGrossSalary)}</div>
+          <div className="text-2xl font-semibold text-[var(--theme-text)]">{formatCurrency(payrollSummary.totalGrossSalary)}</div>
         </div>
-        <div className="rounded-xl border border-[var(--theme-accent)]/20 bg-[var(--theme-bg-secondary)] p-4">
-          <div className="flex items-center gap-2 text-[var(--theme-text-muted)] text-xs uppercase tracking-wider mb-2">
-            <BadgeIndianRupee className="w-4 h-4 text-[var(--theme-accent)]" />Net Payroll
+        <div className="rounded-xl border border-[var(--theme-accent)]/20 bg-[var(--theme-bg-secondary)] p-6">
+          <div className="mb-3 flex items-center gap-2 text-sm uppercase tracking-wider text-[var(--theme-text-muted)]">
+            <BadgeIndianRupee className="h-5 w-5 text-[var(--theme-accent)]" />Net Payroll
           </div>
-          <div className="text-xl font-semibold text-[var(--theme-accent)]">{formatCurrency(payrollSummary.totalNetSalary)}</div>
+          <div className="text-2xl font-semibold text-[var(--theme-accent)]">{formatCurrency(payrollSummary.totalNetSalary)}</div>
         </div>
-        <div className="rounded-xl border border-[var(--theme-accent)]/20 bg-[var(--theme-bg-secondary)] p-4">
-          <div className="flex items-center gap-2 text-[var(--theme-text-muted)] text-xs uppercase tracking-wider mb-2">
-            <Users className="w-4 h-4 text-[var(--theme-accent)]" />Total CTC
+        <div className="rounded-xl border border-[var(--theme-accent)]/20 bg-[var(--theme-bg-secondary)] p-6">
+          <div className="mb-3 flex items-center gap-2 text-sm uppercase tracking-wider text-[var(--theme-text-muted)]">
+            <Users className="h-5 w-5 text-[var(--theme-accent)]" />Total CTC
           </div>
-          <div className="text-xl font-semibold text-[var(--theme-text)]">{formatCurrency(payrollSummary.totalCtc)}</div>
+          <div className="text-2xl font-semibold text-[var(--theme-text)]">{formatCurrency(payrollSummary.totalCtc)}</div>
         </div>
       </div>
 
       <div className="rounded-xl border border-[var(--theme-accent)]/20 overflow-hidden bg-[var(--theme-bg)] shadow-sm">
-        <div className="px-4 py-3 border-b border-[var(--theme-accent)]/10 bg-[var(--theme-bg-secondary)] flex items-center justify-between">
+        <div className="flex items-center justify-between border-b border-[var(--theme-accent)]/10 bg-[var(--theme-bg-secondary)] px-6 py-4">
           <div>
-            <h2 className="text-base font-semibold text-[var(--theme-text)]">Employee Payroll Table</h2>
-            <p className="text-xs text-[var(--theme-text-muted)] mt-0.5">Gross salary, leaves, and advance flow into automatic salary and CTC calculations. Click a row for the full breakdown.</p>
+            <h2 className="text-lg font-semibold text-[var(--theme-text)]">Employee Payroll Table</h2>
+            <p className="mt-1 text-sm text-[var(--theme-text-muted)]">Gross salary, leaves, and advance flow into automatic salary and CTC calculations. Click a row for the full breakdown.</p>
           </div>
-          <div className="text-xs text-[var(--theme-text-muted)]">{isReadOnlyMonth ? 'Historical months are read-only' : 'Manual leave entry persists automatically'}</div>
+          <div className="text-sm text-[var(--theme-text-muted)]">{isReadOnlyMonth ? 'Historical months are read-only' : 'Manual leave entry persists automatically'}</div>
         </div>
         {selectedMonth !== currentPayrollMonth && !hasSavedPayrollRecords ? (
-          <div className="px-4 py-3 border-b border-[var(--theme-accent)]/10 bg-amber-500/10 text-xs text-amber-700 dark:text-amber-300">
+          <div className="border-b border-[var(--theme-accent)]/10 bg-amber-500/10 px-6 py-4 text-sm text-amber-700 dark:text-amber-300">
             Payroll not generated for this month. Showing live employee payroll.
           </div>
         ) : null}
         {loading ? (
-          <div className="px-4 py-12 text-center text-sm text-[var(--theme-text-muted)]">Loading payroll employees...</div>
+          <div className="px-6 py-14 text-center text-base text-[var(--theme-text-muted)]">Loading payroll employees...</div>
         ) : (
           <EmployeeTable
             employees={displayedEmployees}

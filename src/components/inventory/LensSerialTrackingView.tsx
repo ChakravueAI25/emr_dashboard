@@ -36,9 +36,9 @@ export function LensSerialTrackingView({ rows, submitting, onSubmit }: LensSeria
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <SectionCard title="Link Lens To Surgery">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-6">
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-3 xl:grid-cols-6">
           <div>
             <label className={labelClass}>Serial Number</label>
             <select className={inputClass} value={serialNumber} onChange={(event) => setSerialNumber(event.target.value)}>
@@ -72,8 +72,8 @@ export function LensSerialTrackingView({ rows, submitting, onSubmit }: LensSeria
             </select>
           </div>
         </div>
-        <div className="mt-5 flex justify-end">
-          <button onClick={() => void submit()} disabled={submitting} className="rounded-xl bg-[var(--theme-accent)] px-5 py-2.5 text-sm font-semibold text-[var(--theme-bg)] disabled:opacity-60">
+        <div className="mt-6 flex justify-end">
+          <button onClick={() => void submit()} disabled={submitting} className="rounded-xl bg-[var(--theme-accent)] px-6 py-3 text-base font-semibold text-[var(--theme-bg)] disabled:opacity-60">
             {submitting ? 'Linking Lens...' : 'Record Lens Usage'}
           </button>
         </div>
@@ -81,7 +81,7 @@ export function LensSerialTrackingView({ rows, submitting, onSubmit }: LensSeria
 
       <SectionCard title="Lens Serial Tracking">
         <div className="overflow-x-auto rounded-xl border border-[var(--theme-accent)]/10">
-          <table className="w-full min-w-[980px] border-collapse text-sm">
+          <table className="w-full min-w-[980px] border-collapse text-base">
             <thead>
               <tr className="bg-[var(--theme-bg)]">
                 {['Serial Number', 'Lens Model', 'Status', 'Patient', 'Doctor', 'Eye', 'Surgery Date', 'Expiry'].map((header) => (
@@ -95,7 +95,7 @@ export function LensSerialTrackingView({ rows, submitting, onSubmit }: LensSeria
                   <td className={tableCellClass}>{row.serial_number}</td>
                   <td className={tableCellClass}>{row.lens_model}</td>
                   <td className={tableCellClass}>
-                    <span className={`rounded-full px-2.5 py-1 text-xs ${row.status === 'USED' ? 'bg-red-500/10 text-red-400' : 'bg-emerald-500/10 text-emerald-400'}`}>
+                    <span className={`rounded-full px-3 py-1.5 text-xs font-semibold ${row.status === 'USED' ? 'bg-red-500/10 text-red-400' : 'bg-emerald-500/10 text-emerald-400'}`}>
                       {row.status}
                     </span>
                   </td>

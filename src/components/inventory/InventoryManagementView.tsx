@@ -246,27 +246,27 @@ export function InventoryManagementView() {
   ];
 
   return (
-    <div className="ml-16 min-h-screen bg-[var(--theme-bg)] p-6 text-[var(--theme-text)]">
+    <div className="ml-16 min-h-screen w-full bg-[var(--theme-bg)] p-8 xl:p-10 text-[var(--theme-text)]">
       {message ? (
-        <div className={`fixed right-6 top-6 z-[70] rounded-xl border px-4 py-3 text-sm shadow-lg ${message.type === 'success' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' : 'border-red-500/30 bg-red-500/10 text-red-400'}`}>
+        <div className={`fixed right-6 top-6 z-[70] rounded-xl border px-5 py-4 text-base shadow-lg ${message.type === 'success' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' : 'border-red-500/30 bg-red-500/10 text-red-400'}`}>
           {message.text}
         </div>
       ) : null}
 
       <div className="mb-8 flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-light tracking-tight">Inventory Management</h1>
-          <p className="mt-1 text-sm text-[var(--theme-text-muted)]">Manage purchases, stock balances, consumable usage, lens serials, expiry risk, and movement reports.</p>
+          <h1 className="text-4xl font-light tracking-tight">Inventory Management</h1>
+          <p className="mt-2 text-base text-[var(--theme-text-muted)]">Manage purchases, stock balances, consumable usage, lens serials, expiry risk, and movement reports.</p>
         </div>
-        <button onClick={() => void refreshAll()} className="rounded-xl border border-[var(--theme-accent)]/20 px-4 py-2.5 text-sm text-[var(--theme-text)] hover:bg-[var(--theme-bg-secondary)]">
+        <button onClick={() => void refreshAll()} className="rounded-xl border border-[var(--theme-accent)]/20 px-5 py-3 text-base font-medium text-[var(--theme-text)] hover:bg-[var(--theme-bg-secondary)]">
           Refresh Inventory
         </button>
       </div>
 
-      <div className="mb-6 flex flex-wrap gap-3">
+      <div className="mb-8 flex flex-wrap gap-4">
         {tabs.map(({ key, label, icon: Icon }) => (
           <div key={key} className="inline-flex items-center gap-2">
-            <Icon className="h-4 w-4 text-[var(--theme-accent)]" />
+            <Icon className="h-5 w-5 text-[var(--theme-accent)]" />
             <TabButton active={activeTab === key} label={label} onClick={() => setActiveTab(key)} />
           </div>
         ))}

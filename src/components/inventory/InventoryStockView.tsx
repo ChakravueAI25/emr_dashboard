@@ -43,11 +43,11 @@ export function InventoryStockView({ rows, selectedHistory, historyLoading, proc
   };
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.5fr_1fr]">
+    <div className="space-y-8">
+      <div className="grid grid-cols-1 gap-7 xl:grid-cols-[1.5fr_1fr]">
         <SectionCard title="Current Stock">
           <div className="overflow-x-auto rounded-xl border border-[var(--theme-accent)]/10">
-            <table className="w-full min-w-[920px] border-collapse text-sm">
+            <table className="w-full min-w-[920px] border-collapse text-base">
               <thead>
                 <tr className="bg-[var(--theme-bg)]">
                   {['Description', 'Type', 'Available', 'Unit', 'MRP', 'Min Stock', 'Last Updated', 'Status'].map((header) => (
@@ -72,7 +72,7 @@ export function InventoryStockView({ rows, selectedHistory, historyLoading, proc
                       <td className={tableCellClass}>{row.minimum_stock_level || 0}</td>
                       <td className={tableCellClass}>{formatDate(row.last_updated)}</td>
                       <td className={tableCellClass}>
-                        <span className={`rounded-full px-2.5 py-1 text-xs ${isLow ? 'bg-amber-500/10 text-amber-400' : 'bg-emerald-500/10 text-emerald-400'}`}>
+                        <span className={`rounded-full px-3 py-1.5 text-xs font-semibold ${isLow ? 'bg-amber-500/10 text-amber-400' : 'bg-emerald-500/10 text-emerald-400'}`}>
                           {isLow ? 'LOW' : 'OK'}
                         </span>
                       </td>
@@ -84,9 +84,9 @@ export function InventoryStockView({ rows, selectedHistory, historyLoading, proc
           </div>
         </SectionCard>
 
-        <div className="space-y-6">
+        <div className="space-y-7">
           <SectionCard title="Manual Stock Adjustment">
-            <div className="space-y-3">
+            <div className="space-y-4">
               <div>
                 <label className={labelClass}>Item Description</label>
                 <select className={inputClass} value={selectedDescription} onChange={(event) => setSelectedDescription(event.target.value)}>
@@ -108,14 +108,14 @@ export function InventoryStockView({ rows, selectedHistory, historyLoading, proc
                 <label className={labelClass}>Remarks</label>
                 <input className={inputClass} value={adjustmentRemarks} onChange={(event) => setAdjustmentRemarks(event.target.value)} placeholder="Reason for adjustment" />
               </div>
-              <button onClick={() => void submitAdjustment()} disabled={processing} className="w-full rounded-xl bg-[var(--theme-accent)] px-4 py-2.5 text-sm font-semibold text-[var(--theme-bg)] disabled:opacity-60">
+              <button onClick={() => void submitAdjustment()} disabled={processing} className="w-full rounded-xl bg-[var(--theme-accent)] px-5 py-3 text-base font-semibold text-[var(--theme-bg)] disabled:opacity-60">
                 {processing ? 'Saving...' : 'Apply Adjustment'}
               </button>
             </div>
           </SectionCard>
 
           <SectionCard title="Expired Item Removal">
-            <div className="space-y-3">
+            <div className="space-y-4">
               <div>
                 <label className={labelClass}>Item Description</label>
                 <select className={inputClass} value={selectedDescription} onChange={(event) => setSelectedDescription(event.target.value)}>
@@ -133,7 +133,7 @@ export function InventoryStockView({ rows, selectedHistory, historyLoading, proc
                 <label className={labelClass}>Date</label>
                 <input className={inputClass} type="date" value={expiryDate} onChange={(event) => setExpiryDate(event.target.value)} />
               </div>
-              <button onClick={() => void submitExpiryRemoval()} disabled={processing} className="w-full rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-sm font-semibold text-red-400 disabled:opacity-60">
+              <button onClick={() => void submitExpiryRemoval()} disabled={processing} className="w-full rounded-xl border border-red-500/30 bg-red-500/10 px-5 py-3 text-base font-semibold text-red-400 disabled:opacity-60">
                 {processing ? 'Saving...' : 'Remove Expired Stock'}
               </button>
             </div>
@@ -146,12 +146,12 @@ export function InventoryStockView({ rows, selectedHistory, historyLoading, proc
           {historyLoading ? (
             <div className="text-sm text-[var(--theme-text-muted)]">Loading history...</div>
           ) : selectedHistory ? (
-            <div className="space-y-6">
+            <div className="space-y-7">
               <div>
-                <h3 className="mb-2 text-sm font-semibold text-[var(--theme-text)]">Purchase History</h3>
+                <h3 className="mb-3 text-base font-semibold text-[var(--theme-text)]">Purchase History</h3>
                 <div className="space-y-2">
-                  {selectedHistory.purchase_history.length === 0 ? <div className="text-sm text-[var(--theme-text-muted)]">No purchase history.</div> : selectedHistory.purchase_history.map((row) => (
-                    <div key={`${row.invoice_id}-${row.description}`} className="rounded-xl border border-[var(--theme-accent)]/10 px-4 py-3 text-sm">
+                  {selectedHistory.purchase_history.length === 0 ? <div className="text-base text-[var(--theme-text-muted)]">No purchase history.</div> : selectedHistory.purchase_history.map((row) => (
+                    <div key={`${row.invoice_id}-${row.description}`} className="rounded-xl border border-[var(--theme-accent)]/10 px-5 py-4 text-base">
                       {row.invoice_number} | {row.vendor} | {row.qty + row.free_qty} {row.unit} | {formatDate(row.invoice_date)}
                     </div>
                   ))}
@@ -159,10 +159,10 @@ export function InventoryStockView({ rows, selectedHistory, historyLoading, proc
               </div>
 
               <div>
-                <h3 className="mb-2 text-sm font-semibold text-[var(--theme-text)]">Consumable Usage</h3>
+                <h3 className="mb-3 text-base font-semibold text-[var(--theme-text)]">Consumable Usage</h3>
                 <div className="space-y-2">
-                  {selectedHistory.consumable_usage_history.length === 0 ? <div className="text-sm text-[var(--theme-text-muted)]">No consumable usage records.</div> : selectedHistory.consumable_usage_history.map((row) => (
-                    <div key={row.usage_id || `${row.description}-${row.date}`} className="rounded-xl border border-[var(--theme-accent)]/10 px-4 py-3 text-sm">
+                  {selectedHistory.consumable_usage_history.length === 0 ? <div className="text-base text-[var(--theme-text-muted)]">No consumable usage records.</div> : selectedHistory.consumable_usage_history.map((row) => (
+                    <div key={row.usage_id || `${row.description}-${row.date}`} className="rounded-xl border border-[var(--theme-accent)]/10 px-5 py-4 text-base">
                       {formatDate(row.date)} | {row.department} | {row.qty_used} used | {row.remarks || '--'}
                     </div>
                   ))}
@@ -170,10 +170,10 @@ export function InventoryStockView({ rows, selectedHistory, historyLoading, proc
               </div>
 
               <div>
-                <h3 className="mb-2 text-sm font-semibold text-[var(--theme-text)]">Lens Usage</h3>
+                <h3 className="mb-3 text-base font-semibold text-[var(--theme-text)]">Lens Usage</h3>
                 <div className="space-y-2">
-                  {selectedHistory.usage_history.length === 0 ? <div className="text-sm text-[var(--theme-text-muted)]">No lens usage records.</div> : selectedHistory.usage_history.map((row) => (
-                    <div key={row.serial_number} className="rounded-xl border border-[var(--theme-accent)]/10 px-4 py-3 text-sm">
+                  {selectedHistory.usage_history.length === 0 ? <div className="text-base text-[var(--theme-text-muted)]">No lens usage records.</div> : selectedHistory.usage_history.map((row) => (
+                    <div key={row.serial_number} className="rounded-xl border border-[var(--theme-accent)]/10 px-5 py-4 text-base">
                       {row.serial_number} | {row.patient_name} | {row.doctor} | {formatDate(row.surgery_date)}
                     </div>
                   ))}

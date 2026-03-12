@@ -38,6 +38,8 @@ user_collection = db["users"]
 pharmacy_collection = db["pharmacy_medicines"]
 pharmacy_billing_collection = db["pharmacy_billing"]
 coupon_quota_collection = db["coupon_quotas"]
+insurance_companies_collection = db["insurance_companies"]
+billing_advances_collection = db["billing_advances"]
 billing_cases_collection = db["billing_cases"]
 surgery_packages_collection = db["surgery_packages"]
 billing_invoices_collection = db["billing_invoices"]
@@ -59,6 +61,7 @@ inventory_stock_collection = db["stock_collection"]
 lens_usage_collection = db["lens_usage"]
 inventory_usage_collection = db["inventory_usage"]
 inventory_stock_ledger_collection = db["inventory_stock_ledger"]
+expenses_collection = db["expenses"]
 
 
 def _create_index_safe(collection, keys, **kwargs):
@@ -73,6 +76,16 @@ def _create_index_safe(collection, keys, **kwargs):
 
 
 def _ensure_billing_indexes():
+    # insurance companies indexes
+    _create_index_safe(insurance_companies_collection, [("name_lower", 1)], unique=True)
+    _create_index_safe(insurance_companies_collection, [("name", 1)])
+
+    # billing_advances indexes
+    _create_index_safe(billing_advances_collection, [("advance_id", 1)], unique=True)
+    _create_index_safe(billing_advances_collection, [("registration_id", 1)])
+    _create_index_safe(billing_advances_collection, [("status", 1)])
+    _create_index_safe(billing_advances_collection, [("date", -1)])
+
     # billing_invoices indexes
     _create_index_safe(billing_invoices_collection, [("invoiceId", 1)], unique=True)
     _create_index_safe(billing_invoices_collection, [("registrationId", 1)])
@@ -143,6 +156,12 @@ def _ensure_billing_indexes():
     _create_index_safe(inventory_stock_ledger_collection, [("movement_type", 1)])
     _create_index_safe(inventory_stock_ledger_collection, [("date", -1)])
     _create_index_safe(inventory_stock_ledger_collection, [("reference_id", 1)])
+
+    # expenses indexes
+    _create_index_safe(expenses_collection, [("expense_id", 1)], unique=True)
+    _create_index_safe(expenses_collection, [("date", -1)])
+    _create_index_safe(expenses_collection, [("payment_mode", 1)])
+    _create_index_safe(expenses_collection, [("category", 1)])
 
 
 _ensure_billing_indexes()

@@ -1,9 +1,9 @@
-﻿import { Home, TrendingUp, CreditCard, FileText, Bell, Users, CalendarDays, ClipboardList, UserCircle, Activity, Stethoscope, History, Database, Settings, User, ShoppingCart, Layers, Video, Wallet, BadgeIndianRupee, Boxes } from 'lucide-react';
+﻿import { Home, TrendingUp, CreditCard, FileText, Bell, Users, CalendarDays, ClipboardList, UserCircle, Activity, Stethoscope, History, Database, Settings, User, ShoppingCart, Layers, Video, Wallet, BadgeIndianRupee, Boxes, ReceiptText, Landmark } from 'lucide-react';
 import { useIsLightTheme } from '../hooks/useTheme';
 
 interface SidebarProps {
-  currentView: 'dashboard' | 'analytics' | 'billing' | 'billing-dashboard' | 'individual-billing' | 'login' | 'documents' | 'notifications' | 'settings' | 'profile-settings' | 'patients' | 'appointments' | 'appointment-queue' | 'reception-queue' | 'opd-queue' | 'doctor-queue' | 'patient-history' | 'data-repair' | 'pharmacy-billing' | 'medicine-management' | 'invoice-upload' | 'grn-history' | 'payment-setup' | 'organization-login' | 'admin-dashboard' | 'admin-data-management' | 'telemedicine' | 'reception-patient-view' | 'doctor-profile' | 'surgical-record' | 'discharge-summary' | 'pharmacy-finance' | 'vendor-ledger' | 'vendor-list' | 'payroll' | 'inventory';
-  onViewChange: (view: 'dashboard' | 'analytics' | 'billing' | 'billing-dashboard' | 'individual-billing' | 'login' | 'documents' | 'notifications' | 'settings' | 'profile-settings' | 'patients' | 'appointments' | 'appointment-queue' | 'reception-queue' | 'opd-queue' | 'doctor-queue' | 'patient-history' | 'data-repair' | 'pharmacy-billing' | 'medicine-management' | 'invoice-upload' | 'grn-history' | 'payment-setup' | 'organization-login' | 'admin-dashboard' | 'admin-data-management' | 'telemedicine' | 'reception-patient-view' | 'doctor-profile' | 'surgical-record' | 'discharge-summary' | 'pharmacy-finance' | 'vendor-ledger' | 'vendor-list' | 'payroll' | 'inventory') => void;
+  currentView: 'dashboard' | 'analytics' | 'billing' | 'billing-dashboard' | 'individual-billing' | 'login' | 'documents' | 'notifications' | 'settings' | 'profile-settings' | 'patients' | 'appointments' | 'appointment-queue' | 'reception-queue' | 'opd-queue' | 'doctor-queue' | 'patient-history' | 'data-repair' | 'pharmacy-billing' | 'medicine-management' | 'invoice-upload' | 'grn-history' | 'payment-setup' | 'organization-login' | 'admin-dashboard' | 'admin-data-management' | 'telemedicine' | 'reception-patient-view' | 'doctor-profile' | 'surgical-record' | 'discharge-summary' | 'pharmacy-finance' | 'vendor-ledger' | 'vendor-list' | 'payroll' | 'inventory' | 'expenses' | 'finance';
+  onViewChange: (view: 'dashboard' | 'analytics' | 'billing' | 'billing-dashboard' | 'individual-billing' | 'login' | 'documents' | 'notifications' | 'settings' | 'profile-settings' | 'patients' | 'appointments' | 'appointment-queue' | 'reception-queue' | 'opd-queue' | 'doctor-queue' | 'patient-history' | 'data-repair' | 'pharmacy-billing' | 'medicine-management' | 'invoice-upload' | 'grn-history' | 'payment-setup' | 'organization-login' | 'admin-dashboard' | 'admin-data-management' | 'telemedicine' | 'reception-patient-view' | 'doctor-profile' | 'surgical-record' | 'discharge-summary' | 'pharmacy-finance' | 'vendor-ledger' | 'vendor-list' | 'payroll' | 'inventory' | 'expenses' | 'finance') => void;
   userRole?: string;
   notificationCount?: number;
 }
@@ -176,6 +176,40 @@ export function Sidebar({ currentView, onViewChange, userRole, notificationCount
             </div>
           </button>
         )}
+        {(isAdmin || isReception) && (
+          <button
+            onClick={() => onViewChange('expenses')}
+            className={`group relative w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-500 ease-out ${currentView === 'expenses'
+              ? 'bg-gradient-to-br from-[var(--theme-accent)] to-[var(--theme-accent-hover)] text-[var(--theme-bg)] shadow-lg shadow-[var(--theme-accent)]/30'
+              : 'text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg-tertiary)] hover:text-[var(--theme-accent)] hover:scale-105'
+              }`}
+          >
+            <ReceiptText
+              style={{ color: currentView === 'expenses' ? 'var(--theme-bg)' : inactiveCol }}
+              className="w-5 h-5 transition-all duration-500 ease-out group-hover:scale-110"
+            />
+            <div className="absolute left-full ml-3 px-3 py-1.5 bg-[var(--theme-bg-secondary)] text-[var(--theme-text)] text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none whitespace-nowrap border border-[var(--theme-text-muted)]">
+              Expenses
+            </div>
+          </button>
+        )}
+        {isAdmin && (
+          <button
+            onClick={() => onViewChange('finance')}
+            className={`group relative w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-500 ease-out ${currentView === 'finance'
+              ? 'bg-gradient-to-br from-[var(--theme-accent)] to-[var(--theme-accent-hover)] text-[var(--theme-bg)] shadow-lg shadow-[var(--theme-accent)]/30'
+              : 'text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg-tertiary)] hover:text-[var(--theme-accent)] hover:scale-105'
+              }`}
+          >
+            <Landmark
+              style={{ color: currentView === 'finance' ? 'var(--theme-bg)' : inactiveCol }}
+              className="w-5 h-5 transition-all duration-500 ease-out group-hover:scale-110"
+            />
+            <div className="absolute left-full ml-3 px-3 py-1.5 bg-[var(--theme-bg-secondary)] text-[var(--theme-text)] text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none whitespace-nowrap border border-[var(--theme-text-muted)]">
+              Finance
+            </div>
+          </button>
+        )}
         {isDoctor && (
           <button
             onClick={() => onViewChange('telemedicine')}
@@ -267,7 +301,7 @@ export function Sidebar({ currentView, onViewChange, userRole, notificationCount
           </button>
         )}
 
-        {!hideSpecificQueues && (
+        {!hideSpecificQueues && !isAdmin && (
           <button
             onClick={() => onViewChange('appointment-queue')}
             className={`group relative w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-500 ease-out ${currentView === 'appointment-queue'
@@ -305,7 +339,7 @@ export function Sidebar({ currentView, onViewChange, userRole, notificationCount
           </button>
         )}
 
-        {(!hideSpecificQueues || showAllQueues) && !isClinical && (
+        {(!hideSpecificQueues || showAllQueues) && !isClinical && !isAdmin && (
           <button
             onClick={() => onViewChange('opd-queue')}
             className={`group relative w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-500 ease-out ${currentView === 'opd-queue'
@@ -324,7 +358,7 @@ export function Sidebar({ currentView, onViewChange, userRole, notificationCount
           </button>
         )}
 
-        {(!hideSpecificQueues || showAllQueues) && !isClinical && (
+        {(!hideSpecificQueues || showAllQueues) && !isClinical && !isAdmin && (
           <button
             onClick={() => onViewChange('doctor-queue')}
             className={`group relative w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-500 ease-out ${currentView === 'doctor-queue'

@@ -51,6 +51,8 @@ import { VendorLedgerView } from './components/VendorLedgerView';
 import { VendorListView } from './components/VendorListView';
 import { PayrollManagementView } from './components/payroll/PayrollManagementView';
 import { InventoryManagementView } from './components/inventory/InventoryManagementView';
+import { ExpenseManagementView } from './components/expenses/ExpenseManagementView';
+import { FinanceDashboardView } from './components/finance/FinanceDashboardView';
 import { ArrowLeft, Search, Bell, Settings, User, Save, UserPlus, CalendarPlus, Layers, Eye, Stethoscope, CheckCircle, ClipboardList, UserCircle, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ImageWithFallback } from './components/figma/ImageWithFallback';
 import { PatientData, UserRole, ROLES, CARD_ACCESS } from './components/patient';
@@ -154,7 +156,7 @@ export default function App() {
   const [currentUsername, setCurrentUsername] = useState<string | null>(() => localStorage.getItem('current_username'));
 
   // Default to the login view, or restore from storage
-  const [currentView, setCurrentView] = useState<'dashboard' | 'analytics' | 'billing' | 'billing-dashboard' | 'individual-billing' | 'login' | 'documents' | 'notifications' | 'settings' | 'profile-settings' | 'patients' | 'appointments' | 'appointment-queue' | 'reception-queue' | 'opd-queue' | 'doctor-queue' | 'patient-history' | 'data-repair' | 'pharmacy-billing' | 'medicine-management' | 'invoice-upload' | 'grn-history' | 'payment-setup' | 'organization-login' | 'admin-dashboard' | 'admin-data-management' | 'telemedicine' | 'reception-patient-view' | 'doctor-profile' | 'surgical-record' | 'discharge-summary' | 'pharmacy-finance' | 'vendor-ledger' | 'vendor-list' | 'payroll' | 'inventory'>(
+  const [currentView, setCurrentView] = useState<'dashboard' | 'analytics' | 'billing' | 'billing-dashboard' | 'individual-billing' | 'login' | 'documents' | 'notifications' | 'settings' | 'profile-settings' | 'patients' | 'appointments' | 'appointment-queue' | 'reception-queue' | 'opd-queue' | 'doctor-queue' | 'patient-history' | 'data-repair' | 'pharmacy-billing' | 'medicine-management' | 'invoice-upload' | 'grn-history' | 'payment-setup' | 'organization-login' | 'admin-dashboard' | 'admin-data-management' | 'telemedicine' | 'reception-patient-view' | 'doctor-profile' | 'surgical-record' | 'discharge-summary' | 'pharmacy-finance' | 'vendor-ledger' | 'vendor-list' | 'payroll' | 'inventory' | 'expenses' | 'finance'>(
 
     () => (localStorage.getItem('current_view') as any) || 'login'
   );
@@ -2142,6 +2144,10 @@ export default function App() {
               <InventoryManagementView />
             ) : currentView === 'payroll' ? (
               <PayrollManagementView />
+            ) : currentView === 'expenses' ? (
+              <ExpenseManagementView userRole={userRole || undefined} currentUsername={currentUsername || undefined} />
+            ) : currentView === 'finance' ? (
+              <FinanceDashboardView />
             ) : (
               <NotificationsView />
             )}

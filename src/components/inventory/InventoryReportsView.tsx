@@ -13,7 +13,7 @@ function UsageSummaryTable({ title, report }: { title: string; report: UsageRepo
   return (
     <SectionCard title={title}>
       <div className="overflow-x-auto rounded-xl border border-[var(--theme-accent)]/10">
-        <table className="w-full min-w-[520px] border-collapse text-sm">
+        <table className="w-full min-w-[520px] border-collapse text-base">
           <thead>
             <tr className="bg-[var(--theme-bg)]">
               {['Period', 'Total Quantity', 'Entries'].map((header) => (
@@ -38,21 +38,21 @@ function UsageSummaryTable({ title, report }: { title: string; report: UsageRepo
 
 export function InventoryReportsView({ dailyUsage, monthlyUsage, yearlyUsage, purchases, lensUsage }: InventoryReportsViewProps) {
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+    <div className="space-y-8">
+      <div className="grid grid-cols-1 gap-7 xl:grid-cols-3">
         <UsageSummaryTable title="Daily Usage Report" report={dailyUsage} />
         <UsageSummaryTable title="Monthly Usage Report" report={monthlyUsage} />
         <UsageSummaryTable title="Yearly Usage Report" report={yearlyUsage} />
       </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-7 xl:grid-cols-2">
         <SectionCard title="Purchase Report">
-          <div className="mb-4 grid grid-cols-2 gap-4 text-sm text-[var(--theme-text)]">
+          <div className="mb-5 grid grid-cols-2 gap-4 text-base text-[var(--theme-text)]">
             <div>Total Invoices: {purchases.totalInvoices}</div>
             <div>Total Purchase Value: {formatCurrency(purchases.totalPurchaseValue)}</div>
           </div>
           <div className="overflow-x-auto rounded-xl border border-[var(--theme-accent)]/10">
-            <table className="w-full min-w-[780px] border-collapse text-sm">
+            <table className="w-full min-w-[780px] border-collapse text-base">
               <thead>
                 <tr className="bg-[var(--theme-bg)]">
                   {['Invoice ID', 'Vendor', 'Invoice Number', 'Date', 'Value', 'User'].map((header) => (
@@ -77,9 +77,9 @@ export function InventoryReportsView({ dailyUsage, monthlyUsage, yearlyUsage, pu
         </SectionCard>
 
         <SectionCard title="Lens Serial Usage Report">
-          <div className="mb-4 text-sm text-[var(--theme-text)]">Total Used: {lensUsage.totalUsed}</div>
+          <div className="mb-5 text-base text-[var(--theme-text)]">Total Used: {lensUsage.totalUsed}</div>
           <div className="overflow-x-auto rounded-xl border border-[var(--theme-accent)]/10">
-            <table className="w-full min-w-[780px] border-collapse text-sm">
+            <table className="w-full min-w-[780px] border-collapse text-base">
               <thead>
                 <tr className="bg-[var(--theme-bg)]">
                   {['Serial', 'Lens Model', 'Patient', 'Doctor', 'Eye', 'Date', 'User'].map((header) => (

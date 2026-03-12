@@ -80,7 +80,7 @@ export function InventoryInvoiceView({ vendors, submitting, onSubmit }: Inventor
 
   return (
     <SectionCard title="Inventory Invoice Entry">
-      <div className="mb-5 grid grid-cols-1 gap-4 md:grid-cols-4">
+      <div className="mb-6 grid grid-cols-1 gap-5 md:grid-cols-4">
         <div>
           <label className={labelClass}>Vendor Name</label>
           <input className={inputClass} list="inventory-vendors" value={vendor} onChange={(event) => setVendor(event.target.value)} placeholder="Select or type vendor" />
@@ -105,7 +105,7 @@ export function InventoryInvoiceView({ vendors, submitting, onSubmit }: Inventor
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-[var(--theme-accent)]/10">
-        <table className="w-full min-w-[1450px] border-collapse text-sm">
+        <table className="w-full min-w-[1450px] border-collapse text-base">
           <thead>
             <tr className="bg-[var(--theme-bg)]">
               {['S.No', 'Type', 'Description', 'HSN / Serial Number', 'Qty', 'Unit', 'Amount', 'GST', 'MRP', 'Free', 'Min Stock', 'Expiry', ''].map((header) => (
@@ -134,8 +134,8 @@ export function InventoryInvoiceView({ vendors, submitting, onSubmit }: Inventor
                     <input className={`${inputClass} mb-2`} value={row.hsn} onChange={(event) => updateProductRow(row.id, 'hsn', event.target.value)} placeholder="HSN" />
                     {row.itemType === 'SERIAL_TRACKED' ? (
                       <div>
-                        <textarea className={`${inputClass} min-h-[92px] resize-y`} value={row.serialNumbersText} onChange={(event) => updateProductRow(row.id, 'serialNumbersText', event.target.value)} placeholder={'One serial per line\nSN10001\nSN10002'} />
-                        <div className="mt-1 text-[11px] text-[var(--theme-text-muted)]">{enteredSerials.length} entered / {expectedSerials} expected</div>
+                        <textarea className={`${inputClass} min-h-[112px] resize-y`} value={row.serialNumbersText} onChange={(event) => updateProductRow(row.id, 'serialNumbersText', event.target.value)} placeholder={'One serial per line\nSN10001\nSN10002'} />
+                        <div className="mt-1 text-xs text-[var(--theme-text-muted)]">{enteredSerials.length} entered / {expectedSerials} expected</div>
                       </div>
                     ) : null}
                   </td>
@@ -153,7 +153,7 @@ export function InventoryInvoiceView({ vendors, submitting, onSubmit }: Inventor
                   <td className={tableCellClass}><input className={inputClass} type="number" min="0" step="1" value={row.minimumStockLevel} onChange={(event) => updateProductRow(row.id, 'minimumStockLevel', event.target.value)} /></td>
                   <td className={tableCellClass}><input className={inputClass} type="date" value={row.expiryDate} onChange={(event) => updateProductRow(row.id, 'expiryDate', event.target.value)} /></td>
                   <td className={tableCellClass}>
-                    <button onClick={() => removeProductRow(row.id)} className="rounded-lg p-2 text-red-400 hover:bg-red-500/10"><X className="h-4 w-4" /></button>
+                    <button onClick={() => removeProductRow(row.id)} className="rounded-lg p-2.5 text-red-400 hover:bg-red-500/10"><X className="h-5 w-5" /></button>
                   </td>
                 </tr>
               );
@@ -162,11 +162,11 @@ export function InventoryInvoiceView({ vendors, submitting, onSubmit }: Inventor
         </table>
       </div>
 
-      <div className="mt-4 flex items-center justify-between">
-        <button onClick={addProductRow} className="inline-flex items-center gap-2 rounded-xl border border-[var(--theme-accent)]/20 px-4 py-2.5 text-sm text-[var(--theme-text)] hover:bg-[var(--theme-bg)]">
-          <Plus className="h-4 w-4" />Add Product Row
+      <div className="mt-5 flex items-center justify-between">
+        <button onClick={addProductRow} className="inline-flex items-center gap-2 rounded-xl border border-[var(--theme-accent)]/20 px-5 py-3 text-base font-medium text-[var(--theme-text)] hover:bg-[var(--theme-bg)]">
+          <Plus className="h-5 w-5" />Add Product Row
         </button>
-        <button onClick={() => void submit()} disabled={submitting} className="rounded-xl bg-[var(--theme-accent)] px-5 py-2.5 text-sm font-semibold text-[var(--theme-bg)] disabled:opacity-60">
+        <button onClick={() => void submit()} disabled={submitting} className="rounded-xl bg-[var(--theme-accent)] px-6 py-3 text-base font-semibold text-[var(--theme-bg)] disabled:opacity-60">
           {submitting ? 'Saving Invoice...' : 'Save Inventory Invoice'}
         </button>
       </div>

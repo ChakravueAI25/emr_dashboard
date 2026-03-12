@@ -28,7 +28,9 @@ import {
   Printer,
   Building2,
   ShieldCheck,
-  FileStack
+  FileStack,
+  Wallet,
+  Users,
 } from 'lucide-react';
 import API_ENDPOINTS, { API_BASE_URL } from '../config/api';
 
@@ -66,6 +68,9 @@ interface AnalyticsViewProps {
 
 export function BillingAnalyticsView({ onBack }: AnalyticsViewProps) {
   const [data, setData] = useState<AnalyticsData | null>(null);
+  const [advanceCollectedToday, setAdvanceCollectedToday] = useState(0);
+  const [activeAdvanceTotal, setActiveAdvanceTotal] = useState(0);
+  const [patientsWithActiveAdvance, setPatientsWithActiveAdvance] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentTab, setCurrentTab] = useState<'daily' | 'monthly' | 'yearly'>('yearly');
@@ -91,12 +96,22 @@ export function BillingAnalyticsView({ onBack }: AnalyticsViewProps) {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch(API_ENDPOINTS.BILLING_DASHBOARD.ANALYTICS);
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `HTTP ${response.status}`);
+      const [analyticsResponse, advancesResponse] = await Promise.all([
+        fetch(API_ENDPOINTS.BILLING_DASHBOARD.ANALYTICS),
+        fetch(API_ENDPOINTS.BILLING_ADVANCES.ANALYTICS),
+      ]);
+
+      if (!analyticsResponse.ok) {
+        const errorData = await analyticsResponse.json().catch(() => ({}));
+        throw new Error(errorData.detail || `HTTP ${analyticsResponse.status}`);
       }
-      const result = await response.json();
+      if (!advancesResponse.ok) {
+        const errorData = await advancesResponse.json().catch(() => ({}));
+        throw new Error(errorData.detail || `HTTP ${advancesResponse.status}`);
+      }
+
+      const result = await analyticsResponse.json();
+      const advanceResult = await advancesResponse.json();
       
       if (result.status === 'success') {
         // Ensure data structure has all required fields with defaults
@@ -109,6 +124,9 @@ export function BillingAnalyticsView({ onBack }: AnalyticsViewProps) {
           totalApprovedInsurance: result.totalApprovedInsurance || 0
         };
         setData(safeData);
+        setAdvanceCollectedToday(Number(advanceResult.advanceCollectedToday) || 0);
+        setActiveAdvanceTotal(Number(advanceResult.activeAdvanceTotal) || 0);
+        setPatientsWithActiveAdvance(Number(advanceResult.patientsWithActiveAdvance) || 0);
       } else {
         throw new Error(result.detail || 'Unknown error from server');
       }
@@ -447,6 +465,37 @@ export function BillingAnalyticsView({ onBack }: AnalyticsViewProps) {
             {picker}
           </div>
         )}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+          <Card className="bg-[#0f0f0f] border-[#D4A574]/30 min-h-[140px]">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-[#8B8B8B]">Advance Collected Today</CardTitle>
+              <Wallet className="h-4 w-4 text-[#D4A574]" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-white">₹{advanceCollectedToday.toLocaleString('en-IN')}</div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-[#0f0f0f] border-[#D4A574]/30 min-h-[140px]">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-[#8B8B8B]">Active Advances Total</CardTitle>
+              <CreditCard className="h-4 w-4 text-blue-400" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-white">₹{activeAdvanceTotal.toLocaleString('en-IN')}</div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-[#0f0f0f] border-[#D4A574]/30 min-h-[140px]">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-[#8B8B8B]">Patients With Active Advance</CardTitle>
+              <Users className="h-4 w-4 text-[#D4A574]" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-white">{patientsWithActiveAdvance.toLocaleString('en-IN')}</div>
+            </CardContent>
+          </Card>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           <Card className="bg-[#0f0f0f] border-[#D4A574]/50 min-h-[140px]">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
