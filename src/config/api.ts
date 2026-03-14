@@ -5,8 +5,8 @@
  * Centralized API endpoint management for easy deployment across environments
  */
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string) ?? '';
-const AI_RAG_BASE_URL = (import.meta.env.VITE_AI_RAG_BASE_URL as string) ?? '';
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string) ?? 'http://localhost:8008';
+const AI_RAG_BASE_URL = (import.meta.env.VITE_AI_RAG_BASE_URL as string) ?? 'http://localhost:8008';
 
 export { API_BASE_URL, AI_RAG_BASE_URL };
 

@@ -186,6 +186,52 @@ def timed_aggregate(collection: Any, pipeline: list[dict[str, Any]], label: Opti
         lambda docs: len(docs),
         {"label": label, "pipelineLength": len(pipeline)} if label else {"pipelineLength": len(pipeline)},
     )
+    
+async def async_timed_find_list(
+    collection: Any,
+    query: Optional[dict[str, Any]] = None,
+    projection: Optional[dict[str, Any]] = None,
+    sort: Optional[list[tuple[str, int]]] = None,
+    limit: Optional[int] = None,
+    label: Optional[str] = None,
+) -> list[dict[str, Any]]:
+    async def _op():
+        cursor = collection.find(query or {}, projection)
+        if sort:
+            cursor = cursor.sort(sort)
+        if limit:
+            cursor = cursor.limit(limit)
+        return await cursor.to_list(length=None)
+
+    return await async_timed_call(
+        collection,
+        "find",
+        _op,
+        lambda docs: len(docs),
+        {"label": label, "query": str(query)[:500]} if label else {"query": str(query)[:500]},
+    )
+
+
+async def async_timed_call(collection: Any, query_type: str, operation: Callable[[], Any], returned_docs: Callable[[Any], int], details: Optional[dict[str, Any]] = None) -> Any:
+    started = time.perf_counter()
+    result = await operation()
+    duration_ms = (time.perf_counter() - started) * 1000
+    _record_mongo(collection.name, query_type, duration_ms, returned_docs(result), details)
+    return result
+
+async def async_timed_aggregate(collection: Any, pipeline: list[dict[str, Any]], label: Optional[str] = None) -> list[dict[str, Any]]:
+    async def _op():
+        cursor = collection.aggregate(pipeline)
+        return await cursor.to_list(length=None) 
+
+    return await async_timed_call(
+        collection,
+        "aggregate",
+        _op,
+        lambda docs: len(docs),
+        {"label": label, "pipelineLength": len(pipeline)} if label else {"pipelineLength": len(pipeline)},
+    )
+
 
 
 def timed_find_list(

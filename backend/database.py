@@ -85,29 +85,40 @@ def _ensure_billing_indexes():
     _create_index_safe(billing_advances_collection, [("registration_id", 1)])
     _create_index_safe(billing_advances_collection, [("status", 1)])
     _create_index_safe(billing_advances_collection, [("date", -1)])
+    # Compound: dashboard queries (status=ACTIVE) and date-based range
+    _create_index_safe(billing_advances_collection, [("status", 1), ("date", -1)])
 
     # billing_invoices indexes
     _create_index_safe(billing_invoices_collection, [("invoiceId", 1)], unique=True)
     _create_index_safe(billing_invoices_collection, [("registrationId", 1)])
     _create_index_safe(billing_invoices_collection, [("status", 1)])
     _create_index_safe(billing_invoices_collection, [("createdAt", -1)])
+    # Compound: status filtering (e.g. pending/paid) + sorting by date
+    _create_index_safe(billing_invoices_collection, [("status", 1), ("createdAt", -1)])
+    _create_index_safe(billing_invoices_collection, [("date", -1), ("status", 1)]) # For income aggregations
 
     # initial_surgery_bills indexes
     _create_index_safe(initial_surgery_bills_collection, [("billId", 1)], unique=True)
     _create_index_safe(initial_surgery_bills_collection, [("registrationId", 1)])
     _create_index_safe(initial_surgery_bills_collection, [("status", 1)])
     _create_index_safe(initial_surgery_bills_collection, [("createdAt", -1)])
+    _create_index_safe(initial_surgery_bills_collection, [("status", 1), ("createdAt", -1)])
 
     # final_surgery_bills indexes
     _create_index_safe(final_surgery_bills_collection, [("billId", 1)], unique=True)
     _create_index_safe(final_surgery_bills_collection, [("registrationId", 1)])
     _create_index_safe(final_surgery_bills_collection, [("status", 1)])
     _create_index_safe(final_surgery_bills_collection, [("createdAt", -1)])
+    # Compound: status filtering + sorting by date
+    _create_index_safe(final_surgery_bills_collection, [("status", 1), ("createdAt", -1)])
+    _create_index_safe(final_surgery_bills_collection, [("billType", 1), ("status", 1)]) # For union match
 
     # pharmacy_billing indexes
     _create_index_safe(pharmacy_billing_collection, [("registrationId", 1)])
     _create_index_safe(pharmacy_billing_collection, [("status", 1)])
     _create_index_safe(pharmacy_billing_collection, [("billDate", -1)])
+    # Compound: status filtering + sorting by date
+    _create_index_safe(pharmacy_billing_collection, [("status", 1), ("billDate", -1)])
 
     # patient_documents indexes
     _create_index_safe(patient_documents_collection, [("registrationId", 1)])
@@ -173,3 +184,12 @@ async_db = async_client[DATABASE_NAME]
 # Async Collections (Lazy load as needed or define here)
 async_patient_collection = async_db["patients"]
 async_patient_queue_collection = async_db["patient_queue"]
+async_billing_invoices_collection = async_db["billing_invoices"]
+async_expenses_collection = async_db["expenses"]
+async_appointments_collection = async_db["appointments"]
+async_users_collection = async_db["users"]
+async_pharmacy_collection = async_db["pharmacy_medicines"]
+async_pharmacy_billing_collection = async_db["pharmacy_bills"]
+async_initial_surgery_bills_collection = async_db["initial_surgery_bills"]
+async_final_surgery_bills_collection = async_db["final_surgery_bills"]
+async_billing_advances_collection = async_db["billing_advances"]

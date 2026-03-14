@@ -21,6 +21,7 @@ export function SlitLampView({ onBack, patientId, patientName, doctorName }: Sli
   const [isSaving, setIsSaving] = useState(false);
   const [notes, setNotes] = useState('');
   const [eyeSide, setEyeSide] = useState<'Left' | 'Right' | 'Both'>('Both');
+  const [cameraError, setCameraError] = useState<string | null>(null);
 
   const stopCamera = useCallback(() => {
     if (streamRef.current) {
@@ -40,21 +41,43 @@ export function SlitLampView({ onBack, patientId, patientName, doctorName }: Sli
     setStream(null);
   }, []);
 
-  // Load available cameras
+  // Initialize camera permissions and load devices
   useEffect(() => {
-    async function getDevices() {
+    async function initCamera() {
+      // Check for HTTPS
+      if (location.protocol !== "https:" && location.hostname !== "localhost") {
+        console.warn("Camera access requires HTTPS in modern browsers.");
+      }
+
       try {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+           throw new Error("Camera API not supported in this browser.");
+        }
+
+        // Request initial permission to ensure prompt appears
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false
+        });
+
+        // Stop the tracks immediately - we just wanted the permission grant
+        stream.getTracks().forEach(track => track.stop());
+
+        // Now we can enumerate devices with labels
         const devs = await navigator.mediaDevices.enumerateDevices();
         const videoDevs = devs.filter(d => d.kind === 'videoinput');
         setDevices(videoDevs);
+        
         if (videoDevs.length > 0) {
-          setSelectedDeviceId(videoDevs[0].deviceId);
+           setSelectedDeviceId(prev => prev || videoDevs[0].deviceId);
         }
       } catch (err) {
-        console.error("Error enumerating devices:", err);
+        console.error("Camera permission error:", err);
+        setCameraError("Unable to access camera. Please allow camera permission.");
       }
     }
-    getDevices();
+
+    initCamera();
   }, []);
 
   // Start selected camera
@@ -168,7 +191,7 @@ export function SlitLampView({ onBack, patientId, patientName, doctorName }: Sli
   };
 
   return (
-    <div className="h-[calc(100vh-100px)] flex flex-col p-6 animate-in fade-in zoom-in-95 duration-500">
+    <div className="min-h-screen flex flex-col p-6 animate-in fade-in zoom-in-95 duration-500 overflow-visible">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
            <Button onClick={() => { stopCamera(); onBack(); }} className="flex items-center justify-center w-10 h-10 p-0 bg-[var(--theme-accent)] text-white force-text-white rounded-full shadow-lg hover:opacity-90 transition-all flex-shrink-0">
@@ -196,32 +219,44 @@ export function SlitLampView({ onBack, patientId, patientName, doctorName }: Sli
         </div>
       </div>
 
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-8 overflow-hidden min-h-0">
+      <div className="flex-grow flex flex-col gap-4 h-auto overflow-visible">
         {/* Main Viewfinder */}
-        <div className="bg-black rounded-3xl border border-[#222] overflow-hidden relative flex items-center justify-center group shadow-2xl min-h-[400px]">
+        <div className="flex-shrink-0 bg-black rounded-3xl border border-[#222] overflow-hidden relative flex items-center justify-center group shadow-2xl min-h-[400px]">
            {!capturedImage ? (
              <>
-               <video 
-                 ref={videoRef} 
-                 autoPlay 
-                 playsInline
-                 muted 
-                 className="w-full h-full object-contain bg-black"
-               />
-               <canvas ref={canvasRef} className="hidden" />
-               
-               <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-6">
-                  <button 
-                    onClick={captureImage}
-                    className="w-20 h-20 rounded-full border-4 border-white/20 bg-white/10 backdrop-blur-md flex items-center justify-center hover:scale-105 active:scale-95 transition-all group-hover:border-[#D4A574]"
-                  >
-                     <div className="w-16 h-16 rounded-full bg-white group-hover:bg-[#D4A574] transition-colors shadow-lg"></div>
-                  </button>
-               </div>
-               
-               <div className="absolute top-4 left-4 px-3 py-1 bg-red-500/80 backdrop-blur text-white text-[10px] font-bold uppercase tracking-widest rounded-full animate-pulse">
-                  Live Feed
-               </div>
+               {cameraError ? (
+                  <div className="flex flex-col items-center justify-center p-8 text-center bg-[#0a0a0a] rounded-xl border border-red-900/30">
+                     <Camera className="w-12 h-12 text-red-500 mb-4 opacity-50" />
+                     <div className="text-red-400 font-medium mb-2">{cameraError}</div>
+                     <p className="text-[#666] text-xs max-w-xs mx-auto">
+                        Please check your browser permissions or ensure no other application is using the camera.
+                     </p>
+                  </div>
+               ) : (
+                 <>
+                   <video 
+                     ref={videoRef} 
+                     autoPlay 
+                     playsInline
+                     muted 
+                     className="w-full h-full object-contain bg-black"
+                   />
+                   <canvas ref={canvasRef} className="hidden" />
+                   
+                   <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-6">
+                      <button 
+                        onClick={captureImage}
+                        className="w-20 h-20 rounded-full border-4 border-white/20 bg-white/10 backdrop-blur-md flex items-center justify-center hover:scale-105 active:scale-95 transition-all group-hover:border-[#D4A574]"
+                      >
+                         <div className="w-16 h-16 rounded-full bg-white group-hover:bg-[#D4A574] transition-colors shadow-lg"></div>
+                      </button>
+                   </div>
+                   
+                   <div className="absolute top-4 left-4 px-3 py-1 bg-red-500/80 backdrop-blur text-white text-[10px] font-bold uppercase tracking-widest rounded-full animate-pulse">
+                      Live Feed
+                   </div>
+                 </>
+               )}
              </>
            ) : (
              <div className="relative w-full h-full">
@@ -236,21 +271,21 @@ export function SlitLampView({ onBack, patientId, patientName, doctorName }: Sli
         </div>
 
         {/* Sidebar Controls */}
-        <div className="flex flex-col gap-4 overflow-y-auto">
+        <div className="flex-grow flex flex-col gap-4 overflow-visible w-full min-h-0">
            {/* Patient Context */}
-           <div className="bg-[#111] p-5 rounded-3xl border border-[#222]">
+           <div className="bg-[#111] p-5 rounded-3xl border border-[#222] flex-grow flex flex-col justify-between">
               <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
                  <FileImage className="w-4 h-4 text-[#D4A574]" />
                  Context
               </h3>
               
-              <div className="space-y-4">
-                 <div>
+              <div className="space-y-4 flex-grow flex flex-col">
+                 <div className="flex-shrink-0">
                     <label className="text-[10px] uppercase text-[#666] font-bold tracking-wider">Patient ID</label>
-                    <div className="text-sm text-white font-mono mt-1">{patientId || 'Not Selected'}</div>
+                    <div className="text-sm text-white font-mono mt-1 break-all whitespace-normal">{patientId || 'Not Selected'}</div>
                  </div>
                  
-                 <div>
+                 <div className="flex-shrink-0">
                     <label className="text-[10px] uppercase text-[#666] font-bold tracking-wider mb-2 block">Available Eyes</label>
                     <div className="flex p-1 bg-[#0a0a0a] rounded-xl border border-[#222]">
                        {(['Left', 'Both', 'Right'] as const).map(side => (
@@ -267,13 +302,13 @@ export function SlitLampView({ onBack, patientId, patientName, doctorName }: Sli
                     </div>
                  </div>
 
-                 <div>
-                    <label className="text-[10px] uppercase text-[#666] font-bold tracking-wider mb-2 block">Clinical Notes</label>
+                 <div className="flex-grow flex flex-col">
+                    <label className="text-[10px] uppercase text-[#666] font-bold tracking-wider mb-2 block flex-shrink-0">Clinical Notes</label>
                     <textarea 
                        value={notes}
                        onChange={e => setNotes(e.target.value)}
                        placeholder="Describe findings (e.g. Corneal Opacity at 3 o'clock)..."
-                       className="w-full h-32 bg-[#0a0a0a] border border-[#222] rounded-xl p-3 text-sm text-white focus:border-[#D4A574] outline-none resize-none placeholder:text-[#333]"
+                       className="w-full h-full min-h-[100px] flex-grow bg-[#0a0a0a] border border-[#222] rounded-xl p-3 text-sm text-white focus:border-[#D4A574] outline-none resize-none placeholder:text-[#333]"
                     />
                  </div>
               </div>
@@ -282,7 +317,7 @@ export function SlitLampView({ onBack, patientId, patientName, doctorName }: Sli
            <Button 
              disabled={!capturedImage || isSaving}
              onClick={saveRecord}
-             className="h-14 rounded-2xl bg-gradient-to-r from-[#D4A574] to-[#b38556] hover:from-[#E5B685] hover:to-[#c49667] text-black font-bold text-sm uppercase tracking-widest shadow-xl shadow-[#D4A574]/10 transition-all active:scale-[0.98]"
+             className="h-14 flex-shrink-0 rounded-2xl bg-gradient-to-r from-[#D4A574] to-[#b38556] hover:from-[#E5B685] hover:to-[#c49667] text-black font-bold text-sm uppercase tracking-widest shadow-xl shadow-[#D4A574]/10 transition-all active:scale-[0.98]"
            >
               {isSaving ? 'Uploading...' : 'Save to Record'}
               {!isSaving && <Upload className="w-4 h-4 ml-2" />}

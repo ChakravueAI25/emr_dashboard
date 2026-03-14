@@ -183,8 +183,8 @@ export function PharmacyFinanceDashboardView({ onBack, onNavigate }: PharmacyFin
               <tbody className="divide-y divide-[var(--theme-accent)]/10">
                 {pageData.length === 0 ? (
                   <tr><td colSpan={7} className="px-4 py-12 text-center text-sm text-[var(--theme-text-muted)]">No vendors found</td></tr>
-                ) : pageData.map(v => (
-                  <tr key={v.vendorId} className="hover:bg-[var(--theme-bg-secondary)]/50 transition-colors">
+                ) : pageData.map((v, index) => (
+                  <tr key={`${v.vendorId}-${index}`} className="hover:bg-[var(--theme-bg-secondary)]/50 transition-colors">
                     <td className="px-4 py-3 text-sm font-medium">{v.vendorName}</td>
                     <td className="px-4 py-3 text-sm text-red-400 font-mono">{fmt(v.totalPurchase)}</td>
                     <td className="px-4 py-3 text-sm text-emerald-400 font-mono">{fmt(v.totalPaid)}</td>

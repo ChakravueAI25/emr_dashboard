@@ -3,6 +3,24 @@ import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, R
 import { TrendingUp, Eye, Activity, Users, Calendar } from 'lucide-react';
 import API_ENDPOINTS from '../config/api';
 
+const convertVA = (value: string | undefined): number | null => {
+  if (!value) return null;
+  // Handle "6/6" format, including "6/6p", "6/6-", etc.
+  if (typeof value === 'string' && value.includes('/')) {
+    const parts = value.split('/');
+    // Extract numeric part from numerator/denominator
+    const num = parseFloat(parts[0]);
+    const den = parseFloat(parts[1]);
+    
+    if (!isNaN(num) && !isNaN(den) && den !== 0) {
+      return Number((num / den).toFixed(2));
+    }
+  }
+  // Handle decimal format or simple numbers
+  const parsed = parseFloat(value);
+  return isNaN(parsed) ? null : parsed;
+};
+
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     return (
@@ -50,13 +68,26 @@ export function AnalyticsView({ registrationId }: AnalyticsViewProps) {
       ]);
 
       const iop = await iopRes.json();
-      const va = await vaRes.json();
+      const rawVa = await vaRes.json();
       const visits = await visitsRes.json();
       const iopDist = await iopDistRes.json();
       const procs = await procsRes.json();
 
       setIopData(iop || []);
-      setVisualAcuityData(va || []);
+      
+      // Process Visual Acuity data
+      const processedVA = (rawVa || [])
+        .map((v: any) => ({
+          date: v.date,
+          // Extract VA from OD/OS fields provided by the backend (which now handles the deep extraction)
+          // Handles strings like "6/6", "6/9" and converts to numeric values
+          od: convertVA(v.od),
+          os: convertVA(v.os),
+        }))
+        // Filter out entries with no valid VA data to prevent empty graph points
+        .filter((v: any) => v.od !== null || v.os !== null);
+
+      setVisualAcuityData(processedVA);
       setVisitsData(visits || []);
 
       // Transform IOP distribution into histogram bins
@@ -393,7 +424,7 @@ export function AnalyticsView({ registrationId }: AnalyticsViewProps) {
                     stroke="#8B8B8B"
                     style={{ fontSize: '11px' }}
                     tick={{ fill: '#8B8B8B' }}
-                    domain={[0, 1]}
+                    domain={[0, 'auto']}
                   />
                   <Tooltip
                     content={({ active, payload }: any) => {

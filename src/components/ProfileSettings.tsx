@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User, CheckCircle2, Circle, Plus, TrendingUp, Users, Activity, IndianRupee, Pill, Zap, CalendarPlus } from 'lucide-react';
 import { useIsLightTheme } from '../hooks/useTheme';
+import { API_ENDPOINTS } from '../config/api';
 
 type PortalView = 'dashboard' | 'booking';
 
@@ -52,10 +53,11 @@ export function ProfileSettings({ username, role }: ProfileSettingsProps) {
       const fetchData = async () => {
          try {
             const res = await fetch(API_ENDPOINTS.APPOINTMENTS);
-            if (res.ok) {
-               const data = await res.json();
-               setAllAppointments(data.appointments || []);
+            if (!res.ok) {
+               throw new Error(`Failed to fetch appointments: ${res.status}`);
             }
+            const data = await res.json();
+            setAllAppointments(data.appointments || []);
          } catch (err) {
             console.error('Failed to fetch appointments', err);
          }
@@ -74,13 +76,13 @@ export function ProfileSettings({ username, role }: ProfileSettingsProps) {
       if (selectedCalendarDate) {
          const dayStr = String(selectedCalendarDate).padStart(2, '0');
          const dateStr = `${year}-${month}-${dayStr}`;
-         filteredAppts = allAppointments.filter((a: any) => a.appointmentDate && a.appointmentDate.startsWith(dateStr));
+         filteredAppts = allAppointments.filter((a: any) => a?.appointmentDate?.startsWith?.(dateStr));
       } else {
          const monthStr = `${year}-${month}`;
-         filteredAppts = allAppointments.filter((a: any) => a.appointmentDate && a.appointmentDate.startsWith(monthStr));
+         filteredAppts = allAppointments.filter((a: any) => a?.appointmentDate?.startsWith?.(monthStr));
       }
 
-      const uniquePatients = new Set(filteredAppts.map((a: any) => a.patientId || a.patientName || a.name)).size;
+      const uniquePatients = new Set(filteredAppts.map((a: any) => a?.patientId || a?.patientName || a?.name || 'Unknown')).size;
       const totalPatients = uniquePatients;
       const statsConsultations = filteredAppts.length;
       

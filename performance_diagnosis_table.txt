@@ -1,0 +1,39 @@
+﻿Complete live diagnosis for chakravue.co.in is below, using real requests from this machine against your deployed frontend domain and frontend-routed API paths.
+
+| Layer | Test | Samples | Result | Status |
+|---|---|---:|---|---|
+| Network | Ping RTT to chakravue.co.in | 20 | Min 50ms, Avg 51ms, Max 52ms, Loss 0% | Good |
+| Network path | Traceroute | 1 run | Final hop around 51ms, few intermediate timeout hops (normal ICMP filtering), no major persistent routing issue seen | Good |
+| Frontend document | GET / total time | 20 | Min 0.368s, Avg 0.474s, P95 0.578s, Max 0.588s | Acceptable |
+| Frontend static JS | /assets/index-nueN-wG2.js (~3.62MB) | 10 | Min 0.617s, Avg 0.675s, P95 0.769s, Max 0.769s | Heavy bundle |
+| Frontend static CSS | /assets/index-D7uRV3H9.css (~254KB) | 10 | Min 0.295s, Avg 0.332s, P95 0.355s, Max 0.355s | Good |
+
+| API endpoint via frontend domain | Samples | Success | Min | Avg | P95 | Max | Diagnosis |
+|---|---:|---:|---:|---:|---:|---:|---|
+| /api/billing/analytics | 15 | 15/15 | 1.894s | 2.127s | 3.921s | 3.921s | Slow for EMR interactive use |
+| /api/finance/summary | 15 | 15/15 | 1.886s | 2.434s | 6.430s | 6.430s | Very high tail latency |
+| /api/billing/dashboard/stats | 15 | 15/15 | 2.440s | 2.802s | 3.921s | 3.921s | Consistently slow |
+| /api/billing/advances/analytics | 15 | 15/15 | 0.935s | 1.440s | 3.691s | 3.691s | Better, but tail still high |
+
+| Concurrency test (same endpoint: /api/billing/analytics) | Virtual users (burst) | Success | Min | Avg | P95 | Max | Diagnosis |
+|---|---:|---:|---:|---:|---:|---:|---|
+| Low burst | 10 | 10/10 | 3.213s | 7.243s | 11.140s | 11.140s | Degrades sharply under light concurrency |
+| Medium burst | 20 | 20/20 | 2.727s | 11.383s | 17.190s | 17.335s | Severe queueing/contention |
+| Higher burst | 40 | 40/40 | 1.900s | 18.090s | 38.735s | 39.564s | Near saturation; major backlog |
+
+| Area | Finding | Severity |
+|---|---|---|
+| Core network | RTT is healthy (~51ms), so internet latency is not the primary bottleneck | Low |
+| Frontend delivery | Main JS bundle is large (~3.62MB), increasing first-load delay | Medium |
+| Backend/API performance | Single-user API latency mostly 1.9s to 2.8s, with high tails up to 6.43s | High |
+| Scalability | Latency explodes under 10 to 40 concurrent requests, indicating backend/resource contention | Critical |
+| User experience risk | For EMR workflows, current response profile is above target for responsive operations | Critical |
+
+| Priority | Action | Expected impact |
+|---|---|---|
+| 1 | Profile slow API handlers and DB queries for billing/finance endpoints; add indexed fields for sort/filter keys | Largest reduction in avg and P95 API latency |
+| 2 | Add backend caching for expensive dashboard/summary aggregates (short TTL) | Big tail-latency improvement |
+| 3 | Increase backend worker/process capacity and tune DB connection pool | Better concurrency stability |
+| 4 | Introduce request time budgets and optimize heavy synchronous paths | Reduces long-tail spikes |
+| 5 | Split and compress frontend JS (code-splitting/lazy-load) | Faster first load |
+| 6 | Add continuous synthetic monitoring for P50/P95/P99 by region | Prevents regressions |

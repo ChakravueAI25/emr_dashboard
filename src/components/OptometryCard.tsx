@@ -424,7 +424,7 @@ export function OptometryCard({
     updateField(['currentGlasses', 'rows', rowKey, eye, field], value);
   };
 
-  const updateKeratometry = (eye: 'rightEye' | 'leftEye', k: 'k1' | 'k2', field: 'axis' | 'mm', value: string) => {
+  const updateKeratometry = (eye: 'rightEye' | 'leftEye', k: 'k1' | 'k2', field: 'axis' | 'mm'|'d', value: string) => {
     updateField(['keratometry', eye, k, field], value);
   };
 
@@ -532,6 +532,7 @@ export function OptometryCard({
                     onSave={(val) => updateFinalGlasses('D.V', 'rightEye', 'sph', val)}
                     className="text-white text-sm font-medium text-center"
                     isEditable={isEditable}
+                    evalField="finalGlasses.rows.D.V.rightEye.sph"
                   />
                 );
               })()}
@@ -546,6 +547,7 @@ export function OptometryCard({
                     onSave={(val) => updateFinalGlasses('D.V', 'leftEye', 'sph', val)}
                     className="text-white text-sm font-medium text-center"
                     isEditable={isEditable}
+                    evalField="finalGlasses.rows.D.V.leftEye.sph"
                   />
                 );
               })()}
@@ -778,8 +780,8 @@ export function OptometryCard({
                   <td className="p-1 text-center border-r border-[#D4A574]">
                     <NumericInput
                       value={String((keratometry as any)?.rightEye?.[rowKey]?.d || '')}
-                      onChange={() => {}}
-                      isEditable={false}
+                      onChange={(v) => updateKeratometry('rightEye', rowKey, 'd', v as any)}
+                      isEditable={canEdit}
                     />
                   </td>
                   <td className="p-1 text-center border-r border-[#D4A574]">
@@ -800,8 +802,8 @@ export function OptometryCard({
                   <td className="p-1 text-center border-r border-[#D4A574]">
                     <NumericInput
                       value={String((keratometry as any)?.leftEye?.[rowKey]?.d || '')}
-                      onChange={() => {}}
-                      isEditable={false}
+                      onChange={(v) => updateKeratometry('leftEye', rowKey, 'd', v as any)}
+                      isEditable={canEdit}
                     />
                   </td>
                   <td className="p-1 text-center border-r border-[#D4A574]">

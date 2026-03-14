@@ -7,6 +7,7 @@ import random
 import string
 import os
 import time
+import asyncio
 import uuid
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
@@ -32,9 +33,18 @@ from database import (
     patient_documents_collection,
     user_collection, 
     db, 
-    async_patient_collection, # Added async collections
+    async_patient_collection, 
     async_patient_queue_collection,
-    pharmacy_collection, 
+    async_billing_invoices_collection,
+    async_expenses_collection,
+    async_appointments_collection,
+    async_users_collection,
+    async_pharmacy_collection,
+    async_pharmacy_billing_collection,
+    async_initial_surgery_bills_collection,
+    async_final_surgery_bills_collection,
+    async_billing_advances_collection,
+    pharmacy_collection,  
     pharmacy_billing_collection, 
     coupon_quota_collection,
     insurance_companies_collection,
@@ -100,10 +110,20 @@ from perf_runtime import (
     snapshot_metrics,
     summarize_latencies,
     timed_aggregate,
+    async_timed_aggregate,
+    async_timed_find_list,
     timed_count_documents,
+
     timed_find_list,
     timed_find_one,
 )
+
+from cache_utils import AsyncTTL
+
+# Initialize caches
+dashboard_stats_cache = AsyncTTL(time_to_live=60 * 5) # 5 minutes
+analytics_cache = AsyncTTL(time_to_live=60 * 15) # 15 minutes
+finance_cache = AsyncTTL(time_to_live=60 * 60) # 1 hour
 
 app = FastAPI()
 
@@ -472,7 +492,29 @@ async def patient_visual_acuity(reg_id: str, limit: int = 12):
     rows = []
     for e in encs:
         dt = _parse_encounter_date(e)
+        # Check classic visualAcuity
         va = e.get("visualAcuity") or {}
+        
+        # Check doctor > vision > unaided (new schema)
+        if not va:
+             doctor_vision = e.get("doctor", {}).get("vision", {}).get("unaided", {})
+             if doctor_vision:
+                 # Map rightEye/leftEye to expected format
+                 va = {
+                     "od": doctor_vision.get("rightEye"),
+                     "os": doctor_vision.get("leftEye") 
+                 }
+
+        # Check optometry > vision > unaided (new schema fallback)
+        if not va:
+             optom_vision = e.get("optometry", {}).get("vision", {}).get("unaided", {})
+             if optom_vision:
+                 # Map rightEye/leftEye to expected format
+                 va = {
+                     "od": optom_vision.get("rightEye"),
+                     "os": optom_vision.get("leftEye") 
+                 }
+
         od = None; os = None; odText = None; osText = None
         try:
             od = va.get("od") if isinstance(va, dict) else None
@@ -4805,6 +4847,7 @@ def mark_pharmacy_insurance_received(bill_id: str, payment_data: dict = Body(...
 
 # ============ AGGREGATED BILLING DASHBOARD ENDPOINT ============
 @app.get("/api/billing/dashboard/stats")
+@dashboard_stats_cache
 async def get_billing_dashboard_stats(page: int = 1, limit: int = 50):
     """Get aggregated billing statistics for the dashboard.
     Returns aggregated data across ALL patients for KPI cards and billing records table.
@@ -4994,9 +5037,96 @@ async def get_billing_dashboard_stats(page: int = 1, limit: int = 50):
         ]
 
         # Execute Aggregations
-        inv_stats = timed_aggregate(billing_invoices_collection, invoice_pipeline, label="billing.dashboard.invoice_kpi")
-        final_surg_stats = timed_aggregate(final_surgery_bills_collection, final_surgery_pipeline, label="billing.dashboard.final_surgery_kpi")
-        pharm_stats = timed_aggregate(pharmacy_billing_collection, pharmacy_pipeline, label="billing.dashboard.pharmacy_kpi")
+        today_key = datetime.utcnow().strftime("%Y-%m-%d")
+        fetch_limit = max(limit, 5)
+
+        (inv_stats, final_surg_stats, pharm_stats, 
+         active_advance_docs, advance_today_docs,
+         invoice_views, surgery_views, pharmacy_views) = await asyncio.gather(
+            async_timed_aggregate(async_billing_invoices_collection, invoice_pipeline, label="billing.dashboard.invoice_kpi"),
+            async_timed_aggregate(async_final_surgery_bills_collection, final_surgery_pipeline, label="billing.dashboard.final_surgery_kpi"),
+            async_timed_aggregate(async_pharmacy_billing_collection, pharmacy_pipeline, label="billing.dashboard.pharmacy_kpi"),
+            async_billing_advances_collection.find({"status": "ACTIVE"}, {"amount": 1, "registration_id": 1, "_id": 0}).to_list(None),
+            async_billing_advances_collection.find({"date": _parse_date_only(today_key, "date")}, {"amount": 1, "_id": 0}).to_list(None),
+            async_timed_aggregate(
+                async_billing_invoices_collection,
+                [
+                    {"$facet": {
+                        "recent": [
+                            {"$sort": {"createdAt": -1}},
+                            {"$limit": fetch_limit},
+                        ],
+                        "pending": [
+                            {"$match": {"status": {"$nin": ["paid", "refunded"]}}},
+                            {"$sort": {"createdAt": -1}},
+                        ],
+                    }}
+                ],
+                label="billing.dashboard.invoice_views"
+            ),
+             async_timed_aggregate(
+                async_final_surgery_bills_collection,
+                [
+                    {"$project": {
+                        "billId": 1,
+                        "registrationId": 1,
+                        "patientName": 1,
+                        "surgeryName": 1,
+                        "status": 1,
+                        "patientTotalShare": 1,
+                        "balancePayable": 1,
+                        "refundAmount": 1,
+                        "createdAt": 1,
+                        "billType": {"$literal": "final"}
+                    }},
+                    {"$unionWith": {
+                        "coll": "initial_surgery_bills",
+                        "pipeline": [
+                            {"$project": {
+                                "billId": 1,
+                                "registrationId": 1,
+                                "patientName": 1,
+                                "surgeryName": 1,
+                                "status": 1,
+                                "estimatedPatientShare": 1,
+                                "createdAt": 1,
+                                "billType": {"$literal": "initial"}
+                            }}
+                        ]
+                    }},
+                    {"$facet": {
+                        "recent": [
+                            {"$sort": {"createdAt": -1}},
+                            {"$limit": fetch_limit},
+                        ],
+                        "pending": [
+                            {"$match": {
+                                "billType": "final",
+                                "status": {"$in": ["balance_due", "partially_paid"]}
+                            }},
+                            {"$sort": {"createdAt": -1}},
+                        ],
+                    }}
+                ],
+                label="billing.dashboard.surgery_views"
+            ),
+            async_timed_aggregate(
+                async_pharmacy_billing_collection,
+                [
+                    {"$facet": {
+                        "recent": [
+                            {"$sort": {"billDate": -1}},
+                            {"$limit": fetch_limit},
+                        ],
+                        "pending": [
+                            {"$match": {"status": {"$ne": "completed"}}},
+                            {"$sort": {"billDate": -1}},
+                        ],
+                    }}
+                ],
+                label="billing.dashboard.pharmacy_views"
+            )
+        )
 
         # Sum up results
         # Calculate settled vs unsettled first, then derive total so settled + unsettled = total always
@@ -5019,19 +5149,10 @@ async def get_billing_dashboard_stats(page: int = 1, limit: int = 50):
                               (final_surg_stats[0]["pendingBills"] if final_surg_stats else 0) + \
                               (pharm_stats[0]["pendingBills"] if pharm_stats else 0)
 
-        today_key = datetime.utcnow().strftime("%Y-%m-%d")
-        active_advance_docs = list(
-            billing_advances_collection.find(
-                {"status": "ACTIVE"},
-                {"amount": 1, "registration_id": 1, "_id": 0},
-            )
-        )
-        advance_today_docs = list(
-            billing_advances_collection.find(
-                {"date": _parse_date_only(today_key, "date")},
-                {"amount": 1, "_id": 0},
-            )
-        )
+        # today_key was moved up
+        # active_advance_docs = list(...) # Moved to gather
+        # advance_today_docs = list(...) # Moved to gather
+        
         active_advances_total = _round_currency(sum(float(doc.get("amount", 0) or 0) for doc in active_advance_docs))
         advance_collected_today = _round_currency(sum(float(doc.get("amount", 0) or 0) for doc in advance_today_docs))
         patients_with_active_advance = len({str(doc.get("registration_id") or "").strip() for doc in active_advance_docs if str(doc.get("registration_id") or "").strip()})
@@ -5041,91 +5162,11 @@ async def get_billing_dashboard_stats(page: int = 1, limit: int = 50):
                         (final_surg_stats[0]["refunds"] if final_surg_stats else 0)
         
         # --- 2. Fetch Recent Records + Pending Bills (faceted source queries) ---
-        fetch_limit = max(limit, 5)
+        # fetch_limit = max(limit, 5) # Moved up
 
-        invoice_views = timed_aggregate(
-            billing_invoices_collection,
-            [
-                {"$facet": {
-                    "recent": [
-                        {"$sort": {"createdAt": -1}},
-                        {"$limit": fetch_limit},
-                    ],
-                    # Matches unsettled calc exactly: NOT paid AND NOT refunded
-                    "pending": [
-                        {"$match": {"status": {"$nin": ["paid", "refunded"]}}},
-                        {"$sort": {"createdAt": -1}},
-                    ],
-                }}
-            ],
-            label="billing.dashboard.invoice_views",
-        )
-
-        surgery_views = timed_aggregate(
-            final_surgery_bills_collection,
-            [
-                {"$project": {
-                    "billId": 1,
-                    "registrationId": 1,
-                    "patientName": 1,
-                    "surgeryName": 1,
-                    "status": 1,
-                    "patientTotalShare": 1,
-                    "balancePayable": 1,
-                    "refundAmount": 1,
-                    "createdAt": 1,
-                    "billType": {"$literal": "final"}
-                }},
-                {"$unionWith": {
-                    "coll": "initial_surgery_bills",
-                    "pipeline": [
-                        {"$project": {
-                            "billId": 1,
-                            "registrationId": 1,
-                            "patientName": 1,
-                            "surgeryName": 1,
-                            "status": 1,
-                            "estimatedPatientShare": 1,
-                            "createdAt": 1,
-                            "billType": {"$literal": "initial"}
-                        }}
-                    ]
-                }},
-                {"$facet": {
-                    "recent": [
-                        {"$sort": {"createdAt": -1}},
-                        {"$limit": fetch_limit},
-                    ],
-                    # Matches unsettled calc exactly: only FINAL bills with balance_due or partially_paid
-                    "pending": [
-                        {"$match": {
-                            "billType": "final",
-                            "status": {"$in": ["balance_due", "partially_paid"]}
-                        }},
-                        {"$sort": {"createdAt": -1}},
-                    ],
-                }}
-            ],
-            label="billing.dashboard.surgery_views",
-        )
-
-        pharmacy_views = timed_aggregate(
-            pharmacy_billing_collection,
-            [
-                {"$facet": {
-                    "recent": [
-                        {"$sort": {"billDate": -1}},
-                        {"$limit": fetch_limit},
-                    ],
-                    # Matches unsettled calc exactly: status != completed
-                    "pending": [
-                        {"$match": {"status": {"$ne": "completed"}}},
-                        {"$sort": {"billDate": -1}},
-                    ],
-                }}
-            ],
-            label="billing.dashboard.pharmacy_views",
-        )
+        # invoice_views = timed_aggregate(...) # Moved to gather
+        # surgery_views = timed_aggregate(...) # Moved to gather
+        # pharmacy_views = timed_aggregate(...) # Moved to gather
 
         invoice_views = invoice_views[0] if invoice_views else {"recent": [], "pending": []}
         surgery_views = surgery_views[0] if surgery_views else {"recent": [], "pending": []}
@@ -5283,6 +5324,7 @@ async def get_billing_advance_analytics():
 
 # ============ ANALYTICS ENDPOINT ============
 @app.get("/api/billing/analytics")
+@analytics_cache
 async def get_billing_analytics():
     """
     Get detailed analytics for OP, Surgery, Lab, and Pharmacy.
@@ -5428,13 +5470,17 @@ async def get_billing_analytics():
         ]
 
         # Execute Queries
-        invoice_data = timed_aggregate(billing_invoices_collection, pipeline_invoices, label="billing.analytics.invoices")
-        surgery_data = timed_aggregate(final_surgery_bills_collection, pipeline_surgery, label="billing.analytics.surgery")
-        pharmacy_data = timed_aggregate(pharmacy_billing_collection, pipeline_pharmacy, label="billing.analytics.pharmacy")
-        insurance_surgery_data = timed_aggregate(final_surgery_bills_collection, pipeline_insurance_surgery, label="billing.analytics.insurance_surgery")
-        insurance_pharmacy_data = timed_aggregate(pharmacy_billing_collection, pipeline_insurance_pharmacy, label="billing.analytics.insurance_pharmacy")
-        insurance_status_surgery_data = timed_aggregate(final_surgery_bills_collection, pipeline_insurance_status_surgery, label="billing.analytics.insurance_status_surgery")
-        insurance_status_pharmacy_data = timed_aggregate(pharmacy_billing_collection, pipeline_insurance_status_pharmacy, label="billing.analytics.insurance_status_pharmacy")
+        (invoice_data, surgery_data, pharmacy_data,
+         insurance_surgery_data, insurance_pharmacy_data,
+         insurance_status_surgery_data, insurance_status_pharmacy_data) = await asyncio.gather(
+            async_timed_aggregate(async_billing_invoices_collection, pipeline_invoices, label="billing.analytics.invoices"),
+            async_timed_aggregate(async_final_surgery_bills_collection, pipeline_surgery, label="billing.analytics.surgery"),
+            async_timed_aggregate(async_pharmacy_billing_collection, pipeline_pharmacy, label="billing.analytics.pharmacy"),
+            async_timed_aggregate(async_final_surgery_bills_collection, pipeline_insurance_surgery, label="billing.analytics.insurance_surgery"),
+            async_timed_aggregate(async_pharmacy_billing_collection, pipeline_insurance_pharmacy, label="billing.analytics.insurance_pharmacy"),
+            async_timed_aggregate(async_final_surgery_bills_collection, pipeline_insurance_status_surgery, label="billing.analytics.insurance_status_surgery"),
+            async_timed_aggregate(async_pharmacy_billing_collection, pipeline_insurance_status_pharmacy, label="billing.analytics.insurance_status_pharmacy")
+        )
 
         # Process Data in Python
         # Structure: { "YYYY-MM-DD": { "op": {amount, count}, "lab": {...}, "surgery": {...}, "pharmacy": {...} } }
@@ -5739,110 +5785,137 @@ def _build_expense_summary_from_docs(expense_docs: list[dict]) -> dict:
     return summary
 
 
-def _aggregate_income_by_day(start: datetime, end: datetime) -> dict[str, float]:
+async def _aggregate_income_by_day(start: datetime, end: datetime) -> dict[str, float]:
     daily_income: dict[str, float] = {}
 
-    def add_income(date_value, amount_value):
-        amount = float(amount_value or 0)
-        if amount == 0:
-            return
-        dt = _to_datetime(date_value)
-        if not dt:
-            return
-        if dt < start or dt >= end:
-            return
-        key = dt.strftime("%Y-%m-%d")
-        daily_income[key] = round(daily_income.get(key, 0.0) + amount, 2)
+    # Define pipelines
+    invoice_pipeline = [
+        {"$match": {
+            "$or": [
+                {"date": {"$gte": start, "$lt": end}},
+                {"$and": [{"date": {"$exists": False}}, {"createdAt": {"$gte": start, "$lt": end}}]}
+            ]
+        }},
+        {"$project": {
+            "day": {"$dateToString": {"format": "%Y-%m-%d", "date": {"$ifNull": ["$date", "$createdAt"]}}},
+            "amount": {
+                "$cond": [
+                    {"$gt": [{"$ifNull": ["$patientPaidAmount", 0]}, 0]},
+                    "$patientPaidAmount",
+                    {"$cond": [{"$eq": ["$status", "paid"]}, "$patientResponsibility", 0]}
+                ]
+            }
+        }},
+        {"$group": {"_id": "$day", "total": {"$sum": "$amount"}}}
+    ]
 
-    invoice_rows = list(
-        billing_invoices_collection.find(
-            {},
-            {"date": 1, "createdAt": 1, "status": 1, "patientResponsibility": 1, "patientPaidAmount": 1, "_id": 0},
-        )
-    )
-    for row in invoice_rows:
-        paid_amount = float(row.get("patientPaidAmount", 0) or 0)
-        if paid_amount <= 0 and row.get("status") == "paid":
-            paid_amount = float(row.get("patientResponsibility", 0) or 0)
-        add_income(row.get("date") or row.get("createdAt"), paid_amount)
+    surgery_pipeline = [
+        {"$match": {"createdAt": {"$gte": start, "$lt": end}}},
+        {"$project": {
+            "day": {"$dateToString": {"format": "%Y-%m-%d", "date": "$createdAt"}},
+            "amount": {
+                "$cond": [
+                    {"$gt": [{"$ifNull": ["$patientPaymentReceived", 0]}, 0]},
+                    "$patientPaymentReceived",
+                    {"$cond": [
+                        {"$eq": ["$status", "settled"]},
+                        "$patientTotalShare",
+                        {"$cond": [
+                            {"$in": ["$status", ["balance_due", "partially_paid"]]},
+                            {"$max": [{"$subtract": ["$patientTotalShare", "$balancePayable"]}, 0]},
+                            0
+                        ]}
+                    ]}
+                ]
+            }
+        }},
+        {"$group": {"_id": "$day", "total": {"$sum": "$amount"}}}
+    ]
 
-    surgery_rows = list(
-        final_surgery_bills_collection.find(
-            {},
-            {
-                "createdAt": 1,
-                "status": 1,
-                "patientTotalShare": 1,
-                "balancePayable": 1,
-                "patientPaymentReceived": 1,
-                "_id": 0,
-            },
-        )
-    )
-    for row in surgery_rows:
-        status = str(row.get("status") or "").strip().lower()
-        received = float(row.get("patientPaymentReceived", 0) or 0)
-        total_share = float(row.get("patientTotalShare", 0) or 0)
-        balance_payable = float(row.get("balancePayable", 0) or 0)
-        if received > 0:
-            amount = received
-        elif status == "settled":
-            amount = total_share
-        elif status in {"balance_due", "partially_paid"}:
-            amount = max(total_share - balance_payable, 0)
-        else:
-            amount = 0
-        add_income(row.get("createdAt"), amount)
+    pharmacy_pipeline = [
+        {"$match": {"billDate": {"$gte": start, "$lt": end}}},
+        {"$project": {
+            "day": {"$dateToString": {"format": "%Y-%m-%d", "date": "$billDate"}},
+            "amount": {
+                "$cond": [
+                    {"$gt": [{"$ifNull": ["$paidAmount", 0]}, 0]},
+                    "$paidAmount",
+                    {"$cond": [{"$eq": ["$status", "completed"]}, "$totalAmount", 0]}
+                ]
+            }
+        }},
+        {"$group": {"_id": "$day", "total": {"$sum": "$amount"}}}
+    ]
 
-    pharmacy_rows = list(
-        pharmacy_billing_collection.find(
-            {},
-            {"billDate": 1, "status": 1, "totalAmount": 1, "paidAmount": 1, "_id": 0},
-        )
-    )
-    for row in pharmacy_rows:
-        paid_amount = float(row.get("paidAmount", 0) or 0)
-        if paid_amount <= 0 and str(row.get("status") or "").strip().lower() == "completed":
-            paid_amount = float(row.get("totalAmount", 0) or 0)
-        add_income(row.get("billDate"), paid_amount)
+    advances_pipeline = [
+        {"$facet": {
+            "inflows": [
+                {"$match": {"date": {"$gte": start, "$lt": end}}},
+                {"$project": {
+                    "day": {"$dateToString": {"format": "%Y-%m-%d", "date": "$date"}},
+                    "amount": 1
+                }},
+                {"$group": {"_id": "$day", "total": {"$sum": "$amount"}}}
+            ],
+            "outflows": [
+                {"$match": {"status": "REFUNDED", "refunded_at": {"$gte": start, "$lt": end}}},
+                {"$project": {
+                    "day": {"$dateToString": {"format": "%Y-%m-%d", "date": "$refunded_at"}},
+                    "amount": 1
+                }},
+                {"$group": {"_id": "$day", "total": {"$sum": "$amount"}}}
+            ]
+        }}
+    ]
 
-    advance_rows = list(
-        billing_advances_collection.find(
-            {},
-            {
-                "date": 1,
-                "created_at": 1,
-                "status": 1,
-                "amount": 1,
-                "refunded_at": 1,
-                "_id": 0,
-            },
-        )
+    # Execute all
+    inv_res, surg_res, pharm_res, adv_res = await asyncio.gather(
+        async_timed_aggregate(async_billing_invoices_collection, invoice_pipeline, label="income.invoices"),
+        async_timed_aggregate(async_final_surgery_bills_collection, surgery_pipeline, label="income.surgery"),
+        async_timed_aggregate(async_pharmacy_billing_collection, pharmacy_pipeline, label="income.pharmacy"),
+        async_timed_aggregate(async_billing_advances_collection, advances_pipeline, label="income.advances")
     )
-    for row in advance_rows:
-        amount = float(row.get("amount", 0) or 0)
-        add_income(row.get("date") or row.get("created_at"), amount)
-        if str(row.get("status") or "").strip().upper() == "REFUNDED":
-            add_income(row.get("refunded_at"), -amount)
+
+    # Merge results
+    def _merge(rows):
+        for r in rows:
+            d = r["_id"]
+            if d: # filter nulls
+                daily_income[d] = round(daily_income.get(d, 0.0) + float(r.get("total", 0)), 2)
+
+    _merge(inv_res)
+    _merge(surg_res)
+    _merge(pharm_res)
+    
+    if adv_res and adv_res[0]:
+        _merge(adv_res[0].get("inflows", []))
+        # Outflows are negative
+        for r in adv_res[0].get("outflows", []):
+            d = r["_id"]
+            if d:
+                daily_income[d] = round(daily_income.get(d, 0.0) - float(r.get("total", 0)), 2)
 
     return daily_income
 
 
-def _aggregate_expenses_by_day(start: datetime, end: datetime) -> dict[str, float]:
-    rows = list(
-        expenses_collection.find(
-            {"date": {"$gte": start, "$lt": end}},
-            {"date": 1, "amount": 1, "_id": 0},
-        )
-    )
-
+async def _aggregate_expenses_by_day(start: datetime, end: datetime) -> dict[str, float]:
     daily_expense: dict[str, float] = {}
-    for row in rows:
-        dt = _to_datetime(row.get("date"))
-        if not dt:
-            continue
-        key = dt.strftime("%Y-%m-%d")
-        daily_expense[key] = round(daily_expense.get(key, 0.0) + float(row.get("amount", 0) or 0), 2)
+    
+    pipeline = [
+        {"$match": {"date": {"$gte": start, "$lt": end}}},
+        {"$group": {
+            "_id": {"$dateToString": {"format": "%Y-%m-%d", "date": "$date"}},
+            "total": {"$sum": "$amount"}
+        }}
+    ]
+    
+    rows = await async_timed_aggregate(async_expenses_collection, pipeline, label="finance.expenses_by_day")
+    
+    for r in rows:
+        d = r["_id"]
+        if d:
+            daily_expense[d] = round(float(r.get("total", 0)), 2)
+            
     return daily_expense
 
 
@@ -5991,7 +6064,8 @@ def get_expense_summary(
 
 
 @app.get("/api/finance/summary")
-def get_finance_summary(
+@finance_cache
+async def get_finance_summary(
     period: str = "month",
     day: Optional[str] = None,
     month: Optional[str] = None,
@@ -6001,8 +6075,11 @@ def get_finance_summary(
 ):
     try:
         start, end = _resolve_period_bounds(period, day, month, year, from_date, to_date)
-        income_by_day = _aggregate_income_by_day(start, end)
-        expense_by_day = _aggregate_expenses_by_day(start, end)
+        
+        income_by_day, expense_by_day = await asyncio.gather(
+            _aggregate_income_by_day(start, end),
+            _aggregate_expenses_by_day(start, end)
+        )
 
         today_key = datetime.utcnow().strftime("%Y-%m-%d")
         income_today = round(float(income_by_day.get(today_key, 0) or 0), 2)
@@ -6028,7 +6105,8 @@ def get_finance_summary(
 
 
 @app.get("/api/finance/cash-flow")
-def get_finance_cash_flow(
+@finance_cache
+async def get_finance_cash_flow(
     period: str = "month",
     day: Optional[str] = None,
     month: Optional[str] = None,
@@ -6038,8 +6116,11 @@ def get_finance_cash_flow(
 ):
     try:
         start, end = _resolve_period_bounds(period, day, month, year, from_date, to_date)
-        income_by_day = _aggregate_income_by_day(start, end)
-        expense_by_day = _aggregate_expenses_by_day(start, end)
+        
+        income_by_day, expense_by_day = await asyncio.gather(
+            _aggregate_income_by_day(start, end),
+            _aggregate_expenses_by_day(start, end)
+        )
 
         all_dates = sorted(set(income_by_day.keys()) | set(expense_by_day.keys()))
         rows = []
@@ -6498,7 +6579,8 @@ async def update_bill_with_dates(registration_id: str, bill_data: dict = Body(..
                 "$set": invoice_data,
                 "$setOnInsert": {
                     "createdAt": datetime.utcnow().isoformat(),
-                    "_id": ObjectId()
+                    "_id": ObjectId(),
+                    "invoiceId": f"INV-{uuid.uuid4().hex[:8].upper()}"
                 }
             },
             upsert=True

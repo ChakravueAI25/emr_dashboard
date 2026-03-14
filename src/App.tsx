@@ -5,6 +5,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { produce } from 'immer'
 import API_ENDPOINTS from './config/api';
+import { ErrorBoundary } from './components/ErrorBoundary'; // Issue 3
 import { Sidebar } from './components/Sidebar';
 import { EditableText } from './components/EditableText';
 import Navbar from './components/Navbar';
