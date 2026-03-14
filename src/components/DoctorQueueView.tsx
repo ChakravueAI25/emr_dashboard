@@ -95,17 +95,23 @@ export function DoctorQueueView({ userRole, onPatientSelected, hideDetailView }:
         history: { severity: '', onset: '', aggravating: '', relieving: '', associated: '' },
         timeline: []
       },
-      medicalHistory: rdMedicalHistory.medical ? rdMedicalHistory : {
+      medicalHistory: od.medicalHistory?.medical ? od.medicalHistory : (rdMedicalHistory.medical ? rdMedicalHistory : {
         medical: [],
         surgical: [],
         familyHistory: '',
         socialHistory: { smoking: '', alcohol: '', exercise: '' }
-      },
-      drugHistory: rdDrugHistory.allergies ? rdDrugHistory : {
+      }),
+      drugHistory: od.drugHistory?.allergies ? od.drugHistory : (rdDrugHistory.allergies ? rdDrugHistory : {
         allergies: [],
         currentMeds: [],
         compliance: { adherenceRate: '', missedDoses: '', lastRefill: '' },
         previousMeds: ''
+      }),
+      vitalSigns: od.vitalSigns || {
+        temperature: { value: '', unit: 'C', time: '' },
+        pulse: { value: '', unit: 'bpm' },
+        respiratoryRate: { value: '', unit: 'breaths/min' },
+        bloodPressure: { systolic: '', diastolic: '', unit: 'mmHg' }
       },
       // OPD data from THIS VISIT's opdData
       optometry: od.optometry || {},

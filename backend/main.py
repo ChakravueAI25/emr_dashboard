@@ -1487,6 +1487,7 @@ async def create_new_patient(patient_data: NewPatient = Body(...)):
         ).model_dump(),
         # Persist any drug/medication history supplied by the receptionist form.
         "drugHistory": patient_data.drugHistory if hasattr(patient_data, 'drugHistory') else {},
+        "vitalSigns": patient_data.vitalSigns if hasattr(patient_data, 'vitalSigns') else {},
     }
 
     # Hash the password

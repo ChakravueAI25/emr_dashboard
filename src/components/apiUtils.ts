@@ -10,5 +10,6 @@ export function transformPatientDataForAPI(patientData: PatientData) {
     presentingComplaints: patientData.presentingComplaints,
     medicalHistory: patientData.medicalHistory,
     drugHistory: patientData.drugHistory,
+    vitalSigns: patientData.vitalSigns,
   };
 }

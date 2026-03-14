@@ -793,6 +793,8 @@ export default function App() {
       // Step 1: Save OPD data to patient document
       const opdPayload = {
         presentingComplaints: activePatientData.presentingComplaints || {},
+        vitalSigns: activePatientData.vitalSigns || {},
+        medicalHistory: activePatientData.medicalHistory || {},
         optometry: activePatientData.optometry || {},
         iop: activePatientData.iop || {},
         ophthalmicInvestigations: activePatientData.ophthalmicInvestigations || {},
@@ -921,6 +923,14 @@ export default function App() {
       // Step 1: Collect doctor data from activePatientData
       const doctorPayload: any = {
         doctorName: currentUsername || 'Unknown',
+        presentingComplaints: activePatientData.presentingComplaints || {},
+        vitalSigns: activePatientData.vitalSigns || {},
+        medicalHistory: activePatientData.medicalHistory || {},
+        drugHistory: activePatientData.drugHistory || {},
+        optometry: activePatientData.optometry || {},
+        iop: activePatientData.iop || {},
+        ophthalmicInvestigations: activePatientData.ophthalmicInvestigations || {},
+        systemicInvestigations: activePatientData.systemicInvestigations || {},
         ophthalmologistExam: (activePatientData as any).ophthalmologistExamination || {},
         prescription: (activePatientData as any).medicationPrescribed || {},
         specialExamination: (activePatientData as any).specialExamination || {},
@@ -1138,13 +1148,19 @@ export default function App() {
           timeline: []
         };
       })(),
-      medicalHistory: {
+      medicalHistory: doc.medicalHistory || {
         medical: Array.isArray(history.medical) ? history.medical.map((m: any, i: number) => typeof m === 'string' ? { id: `m-${i}`, condition: m, status: '', year: '' } : m) : [],
         surgical: Array.isArray(history.surgical) ? history.surgical.map((s: any, i: number) => typeof s === 'string' ? { id: `s-${i}`, procedure: s, eye: 'Both', year: '' } : s) : [],
         familyHistory: history.family || '',
         socialHistory: { smoking: '', alcohol: '', exercise: '' }
       },
       drugHistory: doc.drugHistory || { allergies: [], currentMeds: [], compliance: { adherenceRate: '', missedDoses: '', lastRefill: '' }, previousMeds: '' },
+      vitalSigns: doc.vitalSigns || {
+        temperature: { value: '', unit: 'C', time: '' },
+        pulse: { value: '', unit: 'bpm' },
+        respiratoryRate: { value: '', unit: 'breaths/min' },
+        bloodPressure: { systolic: '', diastolic: '', unit: 'mmHg' }
+      },
       optometry: (() => {
         const opt = doc.optometry || {};
         const vision = opt.vision || {};

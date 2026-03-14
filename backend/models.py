@@ -112,6 +112,7 @@ class NewPatient(BaseModel):
     # Typing as Optional[dict] keeps the model permissive while allowing
     # the backend to persist medication-related receptionist input.
     drugHistory: Optional[dict] = None
+    vitalSigns: Optional[dict] = None
 
 # --- Encounter Models ---
 
